@@ -1,0 +1,2469 @@
+Compiled from "MixinConfig.java"
+final class org.spongepowered.asm.mixin.transformer.MixinConfig implements java.lang.Comparable<org.spongepowered.asm.mixin.transformer.MixinConfig>, org.spongepowered.asm.mixin.extensibility.IMixinConfig {
+  private static int configOrder;
+
+  private static final java.util.Set<java.lang.String> globalMixinList;
+
+  private final org.spongepowered.asm.logging.ILogger logger;
+
+  private final transient java.util.Map<java.lang.String, java.util.List<org.spongepowered.asm.mixin.transformer.MixinInfo>> mixinMapping;
+
+  private final transient java.util.Set<java.lang.String> unhandledTargets;
+
+  private final transient java.util.List<org.spongepowered.asm.mixin.transformer.MixinInfo> pendingMixins;
+
+  private final transient java.util.List<org.spongepowered.asm.mixin.transformer.MixinInfo> mixins;
+
+  private transient org.spongepowered.asm.mixin.transformer.Config handle;
+
+  private transient org.spongepowered.asm.mixin.transformer.MixinConfig parent;
+
+  private java.lang.String parentName;
+
+  private java.lang.String selector;
+
+  private java.lang.String version;
+
+  private java.util.List<java.lang.String> requiredFeatures;
+
+  private java.lang.String compatibility;
+
+  private java.lang.Boolean requiredValue;
+
+  private transient boolean required;
+
+  private int priority;
+
+  private int mixinPriority;
+
+  private java.lang.String mixinPackage;
+
+  private java.util.List<java.lang.String> mixinClasses;
+
+  private java.util.List<java.lang.String> mixinClassesClient;
+
+  private java.util.List<java.lang.String> mixinClassesServer;
+
+  private boolean setSourceFile;
+
+  private java.lang.String refMapperConfig;
+
+  private java.lang.String refMapperWrapper;
+
+  private boolean verboseLogging;
+
+  private final transient int order;
+
+  private final transient java.util.List<org.spongepowered.asm.mixin.transformer.MixinConfig$IListener> listeners;
+
+  private transient org.spongepowered.asm.service.IMixinService service;
+
+  private transient org.spongepowered.asm.mixin.MixinEnvironment env;
+
+  private transient java.lang.String name;
+
+  private transient org.spongepowered.asm.mixin.extensibility.IMixinConfigSource source;
+
+  private java.lang.String pluginClassName;
+
+  private org.spongepowered.asm.mixin.transformer.MixinConfig$InjectorOptions injectorOptions;
+
+  private org.spongepowered.asm.mixin.transformer.MixinConfig$OverwriteOptions overwriteOptions;
+
+  private transient org.spongepowered.asm.mixin.transformer.PluginHandle plugin;
+
+  private transient org.spongepowered.asm.mixin.refmap.IReferenceMapper refMapper;
+
+  private transient boolean initialised;
+
+  private transient boolean prepared;
+
+  private transient boolean visited;
+
+  private transient org.spongepowered.asm.mixin.MixinEnvironment$CompatibilityLevel compatibilityLevel;
+
+  private transient int warnedClassVersion;
+
+  private transient java.util.Map<java.lang.String, java.lang.Object> decorations;
+
+  private org.spongepowered.asm.mixin.transformer.MixinConfig();
+    Code:
+         0: aload_0
+         1: invokespecial #199                // Method java/lang/Object."<init>":()V
+         4: aload_0
+         5: invokestatic  #289                // Method org/spongepowered/asm/service/MixinService.getService:()Lorg/spongepowered/asm/service/IMixinService;
+         8: ldc           #42                 // String mixin
+        10: invokeinterface #335,  2          // InterfaceMethod org/spongepowered/asm/service/IMixinService.getLogger:(Ljava/lang/String;)Lorg/spongepowered/asm/logging/ILogger;
+        15: putfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+        18: aload_0
+        19: new           #74                 // class java/util/HashMap
+        22: dup
+        23: invokespecial #220                // Method java/util/HashMap."<init>":()V
+        26: putfield      #148                // Field mixinMapping:Ljava/util/Map;
+        29: aload_0
+        30: new           #75                 // class java/util/HashSet
+        33: dup
+        34: invokespecial #221                // Method java/util/HashSet."<init>":()V
+        37: putfield      #172                // Field unhandledTargets:Ljava/util/Set;
+        40: aload_0
+        41: new           #71                 // class java/util/ArrayList
+        44: dup
+        45: invokespecial #217                // Method java/util/ArrayList."<init>":()V
+        48: putfield      #157                // Field pendingMixins:Ljava/util/List;
+        51: aload_0
+        52: new           #71                 // class java/util/ArrayList
+        55: dup
+        56: invokespecial #217                // Method java/util/ArrayList."<init>":()V
+        59: putfield      #151                // Field mixins:Ljava/util/List;
+        62: aload_0
+        63: iconst_m1
+        64: putfield      #161                // Field priority:I
+        67: aload_0
+        68: iconst_m1
+        69: putfield      #150                // Field mixinPriority:I
+        72: aload_0
+        73: iconst_0
+        74: putfield      #170                // Field setSourceFile:Z
+        77: aload_0
+        78: getstatic     #136                // Field configOrder:I
+        81: dup
+        82: iconst_1
+        83: iadd
+        84: putstatic     #136                // Field configOrder:I
+        87: putfield      #153                // Field order:I
+        90: aload_0
+        91: new           #71                 // class java/util/ArrayList
+        94: dup
+        95: invokespecial #217                // Method java/util/ArrayList."<init>":()V
+        98: putfield      #143                // Field listeners:Ljava/util/List;
+       101: aload_0
+       102: iconst_0
+       103: putfield      #141                // Field initialised:Z
+       106: aload_0
+       107: iconst_0
+       108: putfield      #160                // Field prepared:Z
+       111: aload_0
+       112: iconst_0
+       113: putfield      #175                // Field visited:Z
+       116: aload_0
+       117: getstatic     #127                // Field org/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel.DEFAULT:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+       120: putfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+       123: aload_0
+       124: iconst_0
+       125: putfield      #176                // Field warnedClassVersion:I
+       128: return
+
+  private boolean onLoad(org.spongepowered.asm.service.IMixinService, java.lang.String, org.spongepowered.asm.mixin.MixinEnvironment, org.spongepowered.asm.mixin.extensibility.IMixinConfigSource);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: putfield      #169                // Field service:Lorg/spongepowered/asm/service/IMixinService;
+         5: aload_0
+         6: aload_2
+         7: putfield      #152                // Field name:Ljava/lang/String;
+        10: aload_0
+        11: aload         4
+        13: putfield      #171                // Field source:Lorg/spongepowered/asm/mixin/extensibility/IMixinConfigSource;
+        16: aload_0
+        17: getfield      #156                // Field parentName:Ljava/lang/String;
+        20: invokestatic  #294                // Method org/spongepowered/include/com/google/common/base/Strings.isNullOrEmpty:(Ljava/lang/String;)Z
+        23: ifne          28
+        26: iconst_1
+        27: ireturn
+        28: aload_0
+        29: aload_0
+        30: aload_0
+        31: getfield      #168                // Field selector:Ljava/lang/String;
+        34: aload_3
+        35: invokespecial #266                // Method parseSelector:(Ljava/lang/String;Lorg/spongepowered/asm/mixin/MixinEnvironment;)Lorg/spongepowered/asm/mixin/MixinEnvironment;
+        38: putfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+        41: aload_0
+        42: dup
+        43: getfield      #173                // Field verboseLogging:Z
+        46: aload_0
+        47: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+        50: getstatic     #129                // Field org/spongepowered/asm/mixin/MixinEnvironment$Option.DEBUG_VERBOSE:Lorg/spongepowered/asm/mixin/MixinEnvironment$Option;
+        53: invokevirtual #231                // Method org/spongepowered/asm/mixin/MixinEnvironment.getOption:(Lorg/spongepowered/asm/mixin/MixinEnvironment$Option;)Z
+        56: ior
+        57: putfield      #173                // Field verboseLogging:Z
+        60: aload_0
+        61: aload_0
+        62: getfield      #167                // Field requiredValue:Ljava/lang/Boolean;
+        65: ifnull        95
+        68: aload_0
+        69: getfield      #167                // Field requiredValue:Ljava/lang/Boolean;
+        72: invokevirtual #188                // Method java/lang/Boolean.booleanValue:()Z
+        75: ifeq          95
+        78: aload_0
+        79: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+        82: getstatic     #131                // Field org/spongepowered/asm/mixin/MixinEnvironment$Option.IGNORE_REQUIRED:Lorg/spongepowered/asm/mixin/MixinEnvironment$Option;
+        85: invokevirtual #231                // Method org/spongepowered/asm/mixin/MixinEnvironment.getOption:(Lorg/spongepowered/asm/mixin/MixinEnvironment$Option;)Z
+        88: ifne          95
+        91: iconst_1
+        92: goto          96
+        95: iconst_0
+        96: putfield      #165                // Field required:Z
+        99: aload_0
+       100: sipush        1000
+       103: sipush        1000
+       106: invokespecial #262                // Method initPriority:(II)V
+       109: aload_0
+       110: getfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+       113: ifnonnull     127
+       116: aload_0
+       117: new           #108                // class org/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions
+       120: dup
+       121: invokespecial #270                // Method org/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions."<init>":()V
+       124: putfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+       127: aload_0
+       128: getfield      #154                // Field overwriteOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions;
+       131: ifnonnull     145
+       134: aload_0
+       135: new           #109                // class org/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions
+       138: dup
+       139: invokespecial #272                // Method org/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions."<init>":()V
+       142: putfield      #154                // Field overwriteOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions;
+       145: aload_0
+       146: invokespecial #267                // Method postInit:()Z
+       149: ireturn
+
+  java.lang.String getParentName();
+    Code:
+         0: aload_0
+         1: getfield      #156                // Field parentName:Ljava/lang/String;
+         4: areturn
+
+  boolean assignParent(org.spongepowered.asm.mixin.transformer.Config);
+    Code:
+         0: aload_0
+         1: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+         4: ifnull        42
+         7: new           #86                 // class org/spongepowered/asm/launch/MixinInitialisationError
+        10: dup
+        11: new           #68                 // class java/lang/StringBuilder
+        14: dup
+        15: invokespecial #211                // Method java/lang/StringBuilder."<init>":()V
+        18: ldc           #17                 // String Mixin config
+        20: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        23: aload_0
+        24: getfield      #152                // Field name:Ljava/lang/String;
+        27: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        30: ldc           #7                  // String  was already initialised
+        32: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        35: invokevirtual #214                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+        38: invokespecial #227                // Method org/spongepowered/asm/launch/MixinInitialisationError."<init>":(Ljava/lang/String;)V
+        41: athrow
+        42: aload_1
+        43: invokevirtual #250                // Method org/spongepowered/asm/mixin/transformer/Config.get:()Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+        46: aload_0
+        47: if_acmpne     85
+        50: new           #86                 // class org/spongepowered/asm/launch/MixinInitialisationError
+        53: dup
+        54: new           #68                 // class java/lang/StringBuilder
+        57: dup
+        58: invokespecial #211                // Method java/lang/StringBuilder."<init>":()V
+        61: ldc           #17                 // String Mixin config
+        63: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        66: aload_0
+        67: getfield      #152                // Field name:Ljava/lang/String;
+        70: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        73: ldc           #4                  // String  cannot be its own parent
+        75: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        78: invokevirtual #214                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+        81: invokespecial #227                // Method org/spongepowered/asm/launch/MixinInitialisationError."<init>":(Ljava/lang/String;)V
+        84: athrow
+        85: aload_0
+        86: aload_1
+        87: invokevirtual #250                // Method org/spongepowered/asm/mixin/transformer/Config.get:()Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+        90: putfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+        93: aload_0
+        94: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+        97: getfield      #141                // Field initialised:Z
+       100: ifne          138
+       103: new           #86                 // class org/spongepowered/asm/launch/MixinInitialisationError
+       106: dup
+       107: new           #68                 // class java/lang/StringBuilder
+       110: dup
+       111: invokespecial #211                // Method java/lang/StringBuilder."<init>":()V
+       114: ldc           #17                 // String Mixin config
+       116: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       119: aload_0
+       120: getfield      #152                // Field name:Ljava/lang/String;
+       123: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       126: ldc           #3                  // String  attempted to assign uninitialised parent config. This probably means that there is an indirect loop in the mixin configs: child -> parent -> child
+       128: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       131: invokevirtual #214                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+       134: invokespecial #227                // Method org/spongepowered/asm/launch/MixinInitialisationError."<init>":(Ljava/lang/String;)V
+       137: athrow
+       138: aload_0
+       139: aload_0
+       140: aload_0
+       141: getfield      #168                // Field selector:Ljava/lang/String;
+       144: aload_0
+       145: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+       148: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+       151: invokespecial #266                // Method parseSelector:(Ljava/lang/String;Lorg/spongepowered/asm/mixin/MixinEnvironment;)Lorg/spongepowered/asm/mixin/MixinEnvironment;
+       154: putfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+       157: aload_0
+       158: dup
+       159: getfield      #173                // Field verboseLogging:Z
+       162: aload_0
+       163: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+       166: getstatic     #129                // Field org/spongepowered/asm/mixin/MixinEnvironment$Option.DEBUG_VERBOSE:Lorg/spongepowered/asm/mixin/MixinEnvironment$Option;
+       169: invokevirtual #231                // Method org/spongepowered/asm/mixin/MixinEnvironment.getOption:(Lorg/spongepowered/asm/mixin/MixinEnvironment$Option;)Z
+       172: ior
+       173: putfield      #173                // Field verboseLogging:Z
+       176: aload_0
+       177: aload_0
+       178: getfield      #167                // Field requiredValue:Ljava/lang/Boolean;
+       181: ifnonnull     194
+       184: aload_0
+       185: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+       188: getfield      #165                // Field required:Z
+       191: goto          222
+       194: aload_0
+       195: getfield      #167                // Field requiredValue:Ljava/lang/Boolean;
+       198: invokevirtual #188                // Method java/lang/Boolean.booleanValue:()Z
+       201: ifeq          221
+       204: aload_0
+       205: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+       208: getstatic     #131                // Field org/spongepowered/asm/mixin/MixinEnvironment$Option.IGNORE_REQUIRED:Lorg/spongepowered/asm/mixin/MixinEnvironment$Option;
+       211: invokevirtual #231                // Method org/spongepowered/asm/mixin/MixinEnvironment.getOption:(Lorg/spongepowered/asm/mixin/MixinEnvironment$Option;)Z
+       214: ifne          221
+       217: iconst_1
+       218: goto          222
+       221: iconst_0
+       222: putfield      #165                // Field required:Z
+       225: aload_0
+       226: aload_0
+       227: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+       230: getfield      #161                // Field priority:I
+       233: aload_0
+       234: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+       237: getfield      #150                // Field mixinPriority:I
+       240: invokespecial #262                // Method initPriority:(II)V
+       243: aload_0
+       244: getfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+       247: ifnonnull     264
+       250: aload_0
+       251: aload_0
+       252: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+       255: getfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+       258: putfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+       261: goto          278
+       264: aload_0
+       265: getfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+       268: aload_0
+       269: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+       272: getfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+       275: invokevirtual #271                // Method org/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions.mergeFrom:(Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;)V
+       278: aload_0
+       279: getfield      #154                // Field overwriteOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions;
+       282: ifnonnull     299
+       285: aload_0
+       286: aload_0
+       287: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+       290: getfield      #154                // Field overwriteOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions;
+       293: putfield      #154                // Field overwriteOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions;
+       296: goto          313
+       299: aload_0
+       300: getfield      #154                // Field overwriteOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions;
+       303: aload_0
+       304: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+       307: getfield      #154                // Field overwriteOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions;
+       310: invokevirtual #273                // Method org/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions.mergeFrom:(Lorg/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions;)V
+       313: aload_0
+       314: dup
+       315: getfield      #170                // Field setSourceFile:Z
+       318: aload_0
+       319: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+       322: getfield      #170                // Field setSourceFile:Z
+       325: ior
+       326: putfield      #170                // Field setSourceFile:Z
+       329: aload_0
+       330: dup
+       331: getfield      #173                // Field verboseLogging:Z
+       334: aload_0
+       335: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+       338: getfield      #173                // Field verboseLogging:Z
+       341: ior
+       342: putfield      #173                // Field verboseLogging:Z
+       345: aload_0
+       346: invokespecial #267                // Method postInit:()Z
+       349: ireturn
+
+  private void initPriority(int, int);
+    Code:
+         0: aload_0
+         1: getfield      #161                // Field priority:I
+         4: ifge          12
+         7: aload_0
+         8: iload_1
+         9: putfield      #161                // Field priority:I
+        12: aload_0
+        13: getfield      #150                // Field mixinPriority:I
+        16: ifge          24
+        19: aload_0
+        20: iload_2
+        21: putfield      #150                // Field mixinPriority:I
+        24: return
+
+  private boolean postInit() throws org.spongepowered.asm.launch.MixinInitialisationError;
+    Code:
+         0: aload_0
+         1: getfield      #141                // Field initialised:Z
+         4: ifeq          42
+         7: new           #86                 // class org/spongepowered/asm/launch/MixinInitialisationError
+        10: dup
+        11: new           #68                 // class java/lang/StringBuilder
+        14: dup
+        15: invokespecial #211                // Method java/lang/StringBuilder."<init>":()V
+        18: ldc           #17                 // String Mixin config
+        20: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        23: aload_0
+        24: getfield      #152                // Field name:Ljava/lang/String;
+        27: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        30: ldc           #8                  // String  was already initialised.
+        32: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        35: invokevirtual #214                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+        38: invokespecial #227                // Method org/spongepowered/asm/launch/MixinInitialisationError."<init>":(Ljava/lang/String;)V
+        41: athrow
+        42: aload_0
+        43: iconst_1
+        44: putfield      #141                // Field initialised:Z
+        47: aload_0
+        48: invokespecial #258                // Method initCompatibilityLevel:()V
+        51: aload_0
+        52: invokespecial #260                // Method initExtensions:()V
+        55: aload_0
+        56: invokespecial #252                // Method checkVersion:()Z
+        59: ifeq          73
+        62: aload_0
+        63: invokespecial #251                // Method checkFeatures:()Z
+        66: ifeq          73
+        69: iconst_1
+        70: goto          74
+        73: iconst_0
+        74: ireturn
+
+  private void initCompatibilityLevel();
+    Code:
+         0: aload_0
+         1: invokestatic  #228                // Method org/spongepowered/asm/mixin/MixinEnvironment.getCompatibilityLevel:()Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+         4: putfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+         7: aload_0
+         8: getfield      #134                // Field compatibility:Ljava/lang/String;
+        11: ifnonnull     15
+        14: return
+        15: aload_0
+        16: getfield      #134                // Field compatibility:Ljava/lang/String;
+        19: invokevirtual #210                // Method java/lang/String.trim:()Ljava/lang/String;
+        22: getstatic     #123                // Field java/util/Locale.ROOT:Ljava/util/Locale;
+        25: invokevirtual #209                // Method java/lang/String.toUpperCase:(Ljava/util/Locale;)Ljava/lang/String;
+        28: astore_1
+        29: aload_0
+        30: aload_1
+        31: invokestatic  #241                // Method org/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel.valueOf:(Ljava/lang/String;)Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+        34: putfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+        37: goto          69
+        40: astore_2
+        41: new           #86                 // class org/spongepowered/asm/launch/MixinInitialisationError
+        44: dup
+        45: ldc           #20                 // String Mixin config %s specifies compatibility level %s which is not recognised
+        47: iconst_2
+        48: anewarray     #64                 // class java/lang/Object
+        51: dup
+        52: iconst_0
+        53: aload_0
+        54: getfield      #152                // Field name:Ljava/lang/String;
+        57: aastore
+        58: dup
+        59: iconst_1
+        60: aload_1
+        61: aastore
+        62: invokestatic  #203                // Method java/lang/String.format:(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+        65: invokespecial #227                // Method org/spongepowered/asm/launch/MixinInitialisationError."<init>":(Ljava/lang/String;)V
+        68: athrow
+        69: invokestatic  #228                // Method org/spongepowered/asm/mixin/MixinEnvironment.getCompatibilityLevel:()Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+        72: astore_2
+        73: aload_0
+        74: getfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+        77: aload_2
+        78: if_acmpne     82
+        81: return
+        82: aload_2
+        83: aload_0
+        84: getfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+        87: invokevirtual #239                // Method org/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel.isAtLeast:(Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;)Z
+        90: ifeq          135
+        93: aload_2
+        94: aload_0
+        95: getfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+        98: invokevirtual #237                // Method org/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel.canSupport:(Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;)Z
+       101: ifne          135
+       104: new           #86                 // class org/spongepowered/asm/launch/MixinInitialisationError
+       107: dup
+       108: ldc           #19                 // String Mixin config %s requires compatibility level %s which is too old
+       110: iconst_2
+       111: anewarray     #64                 // class java/lang/Object
+       114: dup
+       115: iconst_0
+       116: aload_0
+       117: getfield      #152                // Field name:Ljava/lang/String;
+       120: aastore
+       121: dup
+       122: iconst_1
+       123: aload_0
+       124: getfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+       127: aastore
+       128: invokestatic  #203                // Method java/lang/String.format:(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+       131: invokespecial #227                // Method org/spongepowered/asm/launch/MixinInitialisationError."<init>":(Ljava/lang/String;)V
+       134: athrow
+       135: aload_2
+       136: aload_0
+       137: getfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+       140: invokevirtual #236                // Method org/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel.canElevateTo:(Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;)Z
+       143: ifne          181
+       146: new           #86                 // class org/spongepowered/asm/launch/MixinInitialisationError
+       149: dup
+       150: ldc           #18                 // String Mixin config %s requires compatibility level %s which is prohibited by %s
+       152: iconst_3
+       153: anewarray     #64                 // class java/lang/Object
+       156: dup
+       157: iconst_0
+       158: aload_0
+       159: getfield      #152                // Field name:Ljava/lang/String;
+       162: aastore
+       163: dup
+       164: iconst_1
+       165: aload_0
+       166: getfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+       169: aastore
+       170: dup
+       171: iconst_2
+       172: aload_2
+       173: aastore
+       174: invokestatic  #203                // Method java/lang/String.format:(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+       177: invokespecial #227                // Method org/spongepowered/asm/launch/MixinInitialisationError."<init>":(Ljava/lang/String;)V
+       180: athrow
+       181: invokestatic  #230                // Method org/spongepowered/asm/mixin/MixinEnvironment.getMinCompatibilityLevel:()Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+       184: astore_3
+       185: aload_0
+       186: getfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+       189: aload_3
+       190: invokevirtual #240                // Method org/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel.isLessThan:(Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;)Z
+       193: ifeq          242
+       196: aload_0
+       197: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+       200: aload_0
+       201: getfield      #173                // Field verboseLogging:Z
+       204: ifeq          213
+       207: getstatic     #125                // Field org/spongepowered/asm/logging/Level.INFO:Lorg/spongepowered/asm/logging/Level;
+       210: goto          216
+       213: getstatic     #124                // Field org/spongepowered/asm/logging/Level.DEBUG:Lorg/spongepowered/asm/logging/Level;
+       216: ldc           #14                 // String Compatibility level {} specified by {} is lower than the default level supported by the current mixin service ({}).
+       218: iconst_3
+       219: anewarray     #64                 // class java/lang/Object
+       222: dup
+       223: iconst_0
+       224: aload_0
+       225: getfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+       228: aastore
+       229: dup
+       230: iconst_1
+       231: aload_0
+       232: aastore
+       233: dup
+       234: iconst_2
+       235: aload_3
+       236: aastore
+       237: invokeinterface #324,  4          // InterfaceMethod org/spongepowered/asm/logging/ILogger.log:(Lorg/spongepowered/asm/logging/Level;Ljava/lang/String;[Ljava/lang/Object;)V
+       242: getstatic     #128                // Field org/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel.MAX_SUPPORTED:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+       245: aload_0
+       246: getfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+       249: invokevirtual #240                // Method org/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel.isLessThan:(Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;)Z
+       252: ifeq          303
+       255: aload_0
+       256: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+       259: aload_0
+       260: getfield      #173                // Field verboseLogging:Z
+       263: ifeq          272
+       266: getstatic     #126                // Field org/spongepowered/asm/logging/Level.WARN:Lorg/spongepowered/asm/logging/Level;
+       269: goto          275
+       272: getstatic     #124                // Field org/spongepowered/asm/logging/Level.DEBUG:Lorg/spongepowered/asm/logging/Level;
+       275: ldc           #13                 // String Compatibility level {} specified by {} is higher than the maximum level supported by this version of mixin ({}).
+       277: iconst_3
+       278: anewarray     #64                 // class java/lang/Object
+       281: dup
+       282: iconst_0
+       283: aload_0
+       284: getfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+       287: aastore
+       288: dup
+       289: iconst_1
+       290: aload_0
+       291: aastore
+       292: dup
+       293: iconst_2
+       294: getstatic     #128                // Field org/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel.MAX_SUPPORTED:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+       297: aastore
+       298: invokeinterface #324,  4          // InterfaceMethod org/spongepowered/asm/logging/ILogger.log:(Lorg/spongepowered/asm/logging/Level;Ljava/lang/String;[Ljava/lang/Object;)V
+       303: aload_0
+       304: getfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+       307: invokestatic  #235                // Method org/spongepowered/asm/mixin/MixinEnvironment.setCompatibilityLevel:(Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;)V
+       310: return
+      Exception table:
+         from    to  target type
+            29    37    40   Class java/lang/IllegalArgumentException
+
+  void checkCompatibilityLevel(org.spongepowered.asm.mixin.transformer.MixinInfo, int, int);
+    Code:
+         0: iload_2
+         1: aload_0
+         2: getfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+         5: invokevirtual #238                // Method org/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel.getClassMajorVersion:()I
+         8: if_icmpgt     12
+        11: return
+        12: aload_0
+        13: getfield      #173                // Field verboseLogging:Z
+        16: ifeq          33
+        19: iload_2
+        20: aload_0
+        21: getfield      #176                // Field warnedClassVersion:I
+        24: if_icmple     33
+        27: getstatic     #126                // Field org/spongepowered/asm/logging/Level.WARN:Lorg/spongepowered/asm/logging/Level;
+        30: goto          36
+        33: getstatic     #124                // Field org/spongepowered/asm/logging/Level.DEBUG:Lorg/spongepowered/asm/logging/Level;
+        36: astore        4
+        38: iload_2
+        39: getstatic     #128                // Field org/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel.MAX_SUPPORTED:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+        42: invokevirtual #238                // Method org/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel.getClassMajorVersion:()I
+        45: if_icmple     53
+        48: ldc           #46                 // String the current version of Mixin
+        50: goto          55
+        53: ldc           #47                 // String the declared compatibility level
+        55: astore        5
+        57: aload_0
+        58: iload_2
+        59: putfield      #176                // Field warnedClassVersion:I
+        62: aload_0
+        63: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+        66: aload         4
+        68: ldc           #49                 // String {}: Class version {} required is higher than the class version supported by {} ({} supports class version {})
+        70: iconst_5
+        71: anewarray     #64                 // class java/lang/Object
+        74: dup
+        75: iconst_0
+        76: aload_1
+        77: aastore
+        78: dup
+        79: iconst_1
+        80: iload_2
+        81: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+        84: aastore
+        85: dup
+        86: iconst_2
+        87: aload         5
+        89: aastore
+        90: dup
+        91: iconst_3
+        92: aload_0
+        93: getfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+        96: aastore
+        97: dup
+        98: iconst_4
+        99: aload_0
+       100: getfield      #135                // Field compatibilityLevel:Lorg/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel;
+       103: invokevirtual #238                // Method org/spongepowered/asm/mixin/MixinEnvironment$CompatibilityLevel.getClassMajorVersion:()I
+       106: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       109: aastore
+       110: invokeinterface #324,  4          // InterfaceMethod org/spongepowered/asm/logging/ILogger.log:(Lorg/spongepowered/asm/logging/Level;Ljava/lang/String;[Ljava/lang/Object;)V
+       115: return
+
+  private org.spongepowered.asm.mixin.MixinEnvironment parseSelector(java.lang.String, org.spongepowered.asm.mixin.MixinEnvironment);
+    Code:
+         0: aload_1
+         1: ifnull        103
+         4: aload_1
+         5: ldc           #33                 // String [&\\| ]
+         7: invokevirtual #207                // Method java/lang/String.split:(Ljava/lang/String;)[Ljava/lang/String;
+        10: astore_3
+        11: aload_3
+        12: astore        4
+        14: aload         4
+        16: arraylength
+        17: istore        5
+        19: iconst_0
+        20: istore        6
+        22: iload         6
+        24: iload         5
+        26: if_icmpge     86
+        29: aload         4
+        31: iload         6
+        33: aaload
+        34: astore        7
+        36: aload         7
+        38: invokevirtual #210                // Method java/lang/String.trim:()Ljava/lang/String;
+        41: astore        7
+        43: ldc           #35                 // String ^@env(?:ironment)?\\(([A-Z]+)\\)$
+        45: invokestatic  #225                // Method java/util/regex/Pattern.compile:(Ljava/lang/String;)Ljava/util/regex/Pattern;
+        48: astore        8
+        50: aload         8
+        52: aload         7
+        54: invokevirtual #226                // Method java/util/regex/Pattern.matcher:(Ljava/lang/CharSequence;)Ljava/util/regex/Matcher;
+        57: astore        9
+        59: aload         9
+        61: invokevirtual #224                // Method java/util/regex/Matcher.matches:()Z
+        64: ifeq          80
+        67: aload         9
+        69: iconst_1
+        70: invokevirtual #223                // Method java/util/regex/Matcher.group:(I)Ljava/lang/String;
+        73: invokestatic  #243                // Method org/spongepowered/asm/mixin/MixinEnvironment$Phase.forName:(Ljava/lang/String;)Lorg/spongepowered/asm/mixin/MixinEnvironment$Phase;
+        76: invokestatic  #229                // Method org/spongepowered/asm/mixin/MixinEnvironment.getEnvironment:(Lorg/spongepowered/asm/mixin/MixinEnvironment$Phase;)Lorg/spongepowered/asm/mixin/MixinEnvironment;
+        79: areturn
+        80: iinc          6, 1
+        83: goto          22
+        86: aload_1
+        87: invokestatic  #243                // Method org/spongepowered/asm/mixin/MixinEnvironment$Phase.forName:(Ljava/lang/String;)Lorg/spongepowered/asm/mixin/MixinEnvironment$Phase;
+        90: astore        4
+        92: aload         4
+        94: ifnull        103
+        97: aload         4
+        99: invokestatic  #229                // Method org/spongepowered/asm/mixin/MixinEnvironment.getEnvironment:(Lorg/spongepowered/asm/mixin/MixinEnvironment$Phase;)Lorg/spongepowered/asm/mixin/MixinEnvironment;
+       102: areturn
+       103: aload_2
+       104: areturn
+
+  private void initExtensions();
+    Code:
+         0: aload_0
+         1: getfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+         4: getfield      #181                // Field org/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions.injectionPoints:Ljava/util/List;
+         7: ifnull        57
+        10: aload_0
+        11: getfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+        14: getfield      #181                // Field org/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions.injectionPoints:Ljava/util/List;
+        17: invokeinterface #309,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        22: astore_1
+        23: aload_1
+        24: invokeinterface #303,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        29: ifeq          57
+        32: aload_1
+        33: invokeinterface #304,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        38: checkcast     #67                 // class java/lang/String
+        41: astore_2
+        42: aload_0
+        43: aload_2
+        44: aload_0
+        45: getfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+        48: getfield      #183                // Field org/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions.namespace:Ljava/lang/String;
+        51: invokespecial #261                // Method initInjectionPoint:(Ljava/lang/String;Ljava/lang/String;)V
+        54: goto          23
+        57: aload_0
+        58: getfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+        61: getfield      #180                // Field org/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions.dynamicSelectors:Ljava/util/List;
+        64: ifnull        114
+        67: aload_0
+        68: getfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+        71: getfield      #180                // Field org/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions.dynamicSelectors:Ljava/util/List;
+        74: invokeinterface #309,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        79: astore_1
+        80: aload_1
+        81: invokeinterface #303,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        86: ifeq          114
+        89: aload_1
+        90: invokeinterface #304,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        95: checkcast     #67                 // class java/lang/String
+        98: astore_2
+        99: aload_0
+       100: aload_2
+       101: aload_0
+       102: getfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+       105: getfield      #183                // Field org/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions.namespace:Ljava/lang/String;
+       108: invokespecial #259                // Method initDynamicSelector:(Ljava/lang/String;Ljava/lang/String;)V
+       111: goto          80
+       114: return
+
+  private void initInjectionPoint(java.lang.String, java.lang.String);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: ldc           #97                 // class org/spongepowered/asm/mixin/injection/InjectionPoint
+         4: ldc           #41                 // String injection point
+         6: invokespecial #254                // Method findExtensionClass:(Ljava/lang/String;Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Class;
+         9: astore_3
+        10: aload_3
+        11: ifnull        79
+        14: aload_3
+        15: ldc           #40                 // String find
+        17: iconst_3
+        18: anewarray     #56                 // class java/lang/Class
+        21: dup
+        22: iconst_0
+        23: ldc           #67                 // class java/lang/String
+        25: aastore
+        26: dup
+        27: iconst_1
+        28: ldc           #85                 // class org/objectweb/asm/tree/InsnList
+        30: aastore
+        31: dup
+        32: iconst_2
+        33: ldc           #72                 // class java/util/Collection
+        35: aastore
+        36: invokevirtual #190                // Method java/lang/Class.getMethod:(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;
+        39: pop
+        40: goto          74
+        43: astore        4
+        45: aload_0
+        46: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+        49: ldc           #30                 // String Unable to register injection point {} for {}, the class is not compatible with this version of Mixin
+        51: iconst_3
+        52: anewarray     #64                 // class java/lang/Object
+        55: dup
+        56: iconst_0
+        57: aload_1
+        58: aastore
+        59: dup
+        60: iconst_1
+        61: aload_0
+        62: aastore
+        63: dup
+        64: iconst_2
+        65: aload         4
+        67: aastore
+        68: invokeinterface #323,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.error:(Ljava/lang/String;[Ljava/lang/Object;)V
+        73: return
+        74: aload_3
+        75: aload_2
+        76: invokestatic  #245                // Method org/spongepowered/asm/mixin/injection/InjectionPoint.register:(Ljava/lang/Class;Ljava/lang/String;)V
+        79: goto          93
+        82: astore_3
+        83: aload_0
+        84: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+        87: aload_3
+        88: invokeinterface #320,  2          // InterfaceMethod org/spongepowered/asm/logging/ILogger.catching:(Ljava/lang/Throwable;)V
+        93: return
+      Exception table:
+         from    to  target type
+            14    40    43   Class java/lang/NoSuchMethodException
+             0    73    82   Class java/lang/Throwable
+            74    79    82   Class java/lang/Throwable
+
+  private void initDynamicSelector(java.lang.String, java.lang.String);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: ldc           #98                 // class org/spongepowered/asm/mixin/injection/selectors/ITargetSelectorDynamic
+         4: ldc           #39                 // String dynamic selector
+         6: invokespecial #254                // Method findExtensionClass:(Ljava/lang/String;Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Class;
+         9: astore_3
+        10: aload_3
+        11: ifnull        19
+        14: aload_3
+        15: aload_2
+        16: invokestatic  #246                // Method org/spongepowered/asm/mixin/injection/selectors/TargetSelector.register:(Ljava/lang/Class;Ljava/lang/String;)V
+        19: goto          33
+        22: astore_3
+        23: aload_0
+        24: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+        27: aload_3
+        28: invokeinterface #320,  2          // InterfaceMethod org/spongepowered/asm/logging/ILogger.catching:(Ljava/lang/Throwable;)V
+        33: return
+      Exception table:
+         from    to  target type
+             0    19    22   Class java/lang/Throwable
+
+  private java.lang.Class<?> findExtensionClass(java.lang.String, java.lang.Class<?>, java.lang.String);
+    Code:
+         0: aconst_null
+         1: astore        4
+         3: aload_0
+         4: getfield      #169                // Field service:Lorg/spongepowered/asm/service/IMixinService;
+         7: invokeinterface #334,  1          // InterfaceMethod org/spongepowered/asm/service/IMixinService.getClassProvider:()Lorg/spongepowered/asm/service/IClassProvider;
+        12: aload_1
+        13: iconst_1
+        14: invokeinterface #333,  3          // InterfaceMethod org/spongepowered/asm/service/IClassProvider.findClass:(Ljava/lang/String;Z)Ljava/lang/Class;
+        19: astore        4
+        21: goto          60
+        24: astore        5
+        26: aload_0
+        27: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+        30: ldc           #32                 // String Unable to register {} {} for {}, the specified class was not found
+        32: iconst_4
+        33: anewarray     #64                 // class java/lang/Object
+        36: dup
+        37: iconst_0
+        38: aload_3
+        39: aastore
+        40: dup
+        41: iconst_1
+        42: aload_1
+        43: aastore
+        44: dup
+        45: iconst_2
+        46: aload_0
+        47: aastore
+        48: dup
+        49: iconst_3
+        50: aload         5
+        52: aastore
+        53: invokeinterface #323,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.error:(Ljava/lang/String;[Ljava/lang/Object;)V
+        58: aconst_null
+        59: areturn
+        60: aload_2
+        61: aload         4
+        63: invokevirtual #191                // Method java/lang/Class.isAssignableFrom:(Ljava/lang/Class;)Z
+        66: ifne          102
+        69: aload_0
+        70: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+        73: ldc           #31                 // String Unable to register {} {} for {}, class is not assignable to {}
+        75: iconst_4
+        76: anewarray     #64                 // class java/lang/Object
+        79: dup
+        80: iconst_0
+        81: aload_3
+        82: aastore
+        83: dup
+        84: iconst_1
+        85: aload_1
+        86: aastore
+        87: dup
+        88: iconst_2
+        89: aload_0
+        90: aastore
+        91: dup
+        92: iconst_3
+        93: aload_2
+        94: aastore
+        95: invokeinterface #323,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.error:(Ljava/lang/String;[Ljava/lang/Object;)V
+       100: aconst_null
+       101: areturn
+       102: aload         4
+       104: areturn
+      Exception table:
+         from    to  target type
+             3    21    24   Class java/lang/ClassNotFoundException
+
+  private boolean checkVersion() throws org.spongepowered.asm.launch.MixinInitialisationError;
+    Code:
+         0: aload_0
+         1: getfield      #174                // Field version:Ljava/lang/String;
+         4: ifnonnull     67
+         7: aload_0
+         8: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+        11: ifnull        26
+        14: aload_0
+        15: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+        18: getfield      #174                // Field version:Ljava/lang/String;
+        21: ifnull        26
+        24: iconst_1
+        25: ireturn
+        26: aload_0
+        27: getfield      #166                // Field requiredFeatures:Ljava/util/List;
+        30: ifnull        45
+        33: aload_0
+        34: getfield      #166                // Field requiredFeatures:Ljava/util/List;
+        37: invokeinterface #308,  1          // InterfaceMethod java/util/List.isEmpty:()Z
+        42: ifeq          67
+        45: aload_0
+        46: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+        49: ldc           #21                 // String Mixin config {} does not specify \"minVersion\" or \"requiredFeatures\" property
+        51: iconst_1
+        52: anewarray     #64                 // class java/lang/Object
+        55: dup
+        56: iconst_0
+        57: aload_0
+        58: getfield      #152                // Field name:Ljava/lang/String;
+        61: aastore
+        62: invokeinterface #321,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.debug:(Ljava/lang/String;[Ljava/lang/Object;)V
+        67: aload_0
+        68: getfield      #174                // Field version:Ljava/lang/String;
+        71: invokestatic  #291                // Method org/spongepowered/asm/util/VersionNumber.parse:(Ljava/lang/String;)Lorg/spongepowered/asm/util/VersionNumber;
+        74: astore_1
+        75: aload_0
+        76: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+        79: invokevirtual #234                // Method org/spongepowered/asm/mixin/MixinEnvironment.getVersion:()Ljava/lang/String;
+        82: invokestatic  #291                // Method org/spongepowered/asm/util/VersionNumber.parse:(Ljava/lang/String;)Lorg/spongepowered/asm/util/VersionNumber;
+        85: astore_2
+        86: aload_1
+        87: aload_2
+        88: invokevirtual #290                // Method org/spongepowered/asm/util/VersionNumber.compareTo:(Lorg/spongepowered/asm/util/VersionNumber;)I
+        91: ifle          172
+        94: aload_0
+        95: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+        98: ldc           #23                 // String Mixin config {} requires mixin subsystem version {} but {} was found. The mixin config will not be applied.
+       100: iconst_3
+       101: anewarray     #64                 // class java/lang/Object
+       104: dup
+       105: iconst_0
+       106: aload_0
+       107: getfield      #152                // Field name:Ljava/lang/String;
+       110: aastore
+       111: dup
+       112: iconst_1
+       113: aload_1
+       114: aastore
+       115: dup
+       116: iconst_2
+       117: aload_2
+       118: aastore
+       119: invokeinterface #325,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.warn:(Ljava/lang/String;[Ljava/lang/Object;)V
+       124: aload_0
+       125: getfield      #165                // Field required:Z
+       128: ifeq          170
+       131: new           #86                 // class org/spongepowered/asm/launch/MixinInitialisationError
+       134: dup
+       135: new           #68                 // class java/lang/StringBuilder
+       138: dup
+       139: invokespecial #211                // Method java/lang/StringBuilder."<init>":()V
+       142: ldc           #28                 // String Required mixin config
+       144: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       147: aload_0
+       148: getfield      #152                // Field name:Ljava/lang/String;
+       151: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       154: ldc           #6                  // String  requires mixin subsystem version
+       156: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       159: aload_1
+       160: invokevirtual #212                // Method java/lang/StringBuilder.append:(Ljava/lang/Object;)Ljava/lang/StringBuilder;
+       163: invokevirtual #214                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+       166: invokespecial #227                // Method org/spongepowered/asm/launch/MixinInitialisationError."<init>":(Ljava/lang/String;)V
+       169: athrow
+       170: iconst_0
+       171: ireturn
+       172: iconst_1
+       173: ireturn
+
+  private boolean checkFeatures() throws org.spongepowered.asm.launch.MixinInitialisationError;
+    Code:
+         0: aload_0
+         1: getfield      #166                // Field requiredFeatures:Ljava/util/List;
+         4: ifnull        19
+         7: aload_0
+         8: getfield      #166                // Field requiredFeatures:Ljava/util/List;
+        11: invokeinterface #308,  1          // InterfaceMethod java/util/List.isEmpty:()Z
+        16: ifeq          21
+        19: iconst_1
+        20: ireturn
+        21: new           #77                 // class java/util/LinkedHashSet
+        24: dup
+        25: invokespecial #222                // Method java/util/LinkedHashSet."<init>":()V
+        28: astore_1
+        29: aload_0
+        30: getfield      #166                // Field requiredFeatures:Ljava/util/List;
+        33: invokeinterface #309,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        38: astore_2
+        39: aload_2
+        40: invokeinterface #303,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        45: ifeq          87
+        48: aload_2
+        49: invokeinterface #304,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        54: checkcast     #67                 // class java/lang/String
+        57: astore_3
+        58: aload_3
+        59: invokevirtual #210                // Method java/lang/String.trim:()Ljava/lang/String;
+        62: getstatic     #123                // Field java/util/Locale.ROOT:Ljava/util/Locale;
+        65: invokevirtual #209                // Method java/lang/String.toUpperCase:(Ljava/util/Locale;)Ljava/lang/String;
+        68: astore_3
+        69: aload_3
+        70: invokestatic  #242                // Method org/spongepowered/asm/mixin/MixinEnvironment$Feature.isActive:(Ljava/lang/String;)Z
+        73: ifne          84
+        76: aload_1
+        77: aload_3
+        78: invokeinterface #316,  2          // InterfaceMethod java/util/Set.add:(Ljava/lang/Object;)Z
+        83: pop
+        84: goto          39
+        87: aload_1
+        88: invokeinterface #318,  1          // InterfaceMethod java/util/Set.isEmpty:()Z
+        93: ifeq          98
+        96: iconst_1
+        97: ireturn
+        98: ldc           #10                 // String ,
+       100: invokestatic  #293                // Method org/spongepowered/include/com/google/common/base/Joiner.on:(Ljava/lang/String;)Lorg/spongepowered/include/com/google/common/base/Joiner;
+       103: aload_1
+       104: invokevirtual #292                // Method org/spongepowered/include/com/google/common/base/Joiner.join:(Ljava/lang/Iterable;)Ljava/lang/String;
+       107: astore_2
+       108: aload_0
+       109: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+       112: ldc           #22                 // String Mixin config {} requires features [{}] which are not available. The mixin config will not be applied.
+       114: iconst_2
+       115: anewarray     #64                 // class java/lang/Object
+       118: dup
+       119: iconst_0
+       120: aload_0
+       121: getfield      #152                // Field name:Ljava/lang/String;
+       124: aastore
+       125: dup
+       126: iconst_1
+       127: aload_2
+       128: aastore
+       129: invokeinterface #325,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.warn:(Ljava/lang/String;[Ljava/lang/Object;)V
+       134: aload_0
+       135: getfield      #165                // Field required:Z
+       138: ifeq          185
+       141: new           #86                 // class org/spongepowered/asm/launch/MixinInitialisationError
+       144: dup
+       145: new           #68                 // class java/lang/StringBuilder
+       148: dup
+       149: invokespecial #211                // Method java/lang/StringBuilder."<init>":()V
+       152: ldc           #28                 // String Required mixin config
+       154: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       157: aload_0
+       158: getfield      #152                // Field name:Ljava/lang/String;
+       161: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       164: ldc           #5                  // String  requires features [
+       166: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       169: aload_2
+       170: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       173: ldc           #9                  // String  which are not available
+       175: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       178: invokevirtual #214                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+       181: invokespecial #227                // Method org/spongepowered/asm/launch/MixinInitialisationError."<init>":(Ljava/lang/String;)V
+       184: athrow
+       185: iconst_0
+       186: ireturn
+
+  void addListener(org.spongepowered.asm.mixin.transformer.MixinConfig$IListener);
+    Code:
+         0: aload_0
+         1: getfield      #143                // Field listeners:Ljava/util/List;
+         4: aload_1
+         5: invokeinterface #306,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        10: pop
+        11: return
+
+  void onSelect();
+    Code:
+         0: aload_0
+         1: new           #111                // class org/spongepowered/asm/mixin/transformer/PluginHandle
+         4: dup
+         5: aload_0
+         6: aload_0
+         7: getfield      #169                // Field service:Lorg/spongepowered/asm/service/IMixinService;
+        10: aload_0
+        11: getfield      #159                // Field pluginClassName:Ljava/lang/String;
+        14: invokespecial #281                // Method org/spongepowered/asm/mixin/transformer/PluginHandle."<init>":(Lorg/spongepowered/asm/mixin/transformer/MixinConfig;Lorg/spongepowered/asm/service/IMixinService;Ljava/lang/String;)V
+        17: putfield      #158                // Field plugin:Lorg/spongepowered/asm/mixin/transformer/PluginHandle;
+        20: aload_0
+        21: getfield      #158                // Field plugin:Lorg/spongepowered/asm/mixin/transformer/PluginHandle;
+        24: aload_0
+        25: getfield      #149                // Field mixinPackage:Ljava/lang/String;
+        28: invokestatic  #295                // Method org/spongepowered/include/com/google/common/base/Strings.nullToEmpty:(Ljava/lang/String;)Ljava/lang/String;
+        31: invokevirtual #285                // Method org/spongepowered/asm/mixin/transformer/PluginHandle.onLoad:(Ljava/lang/String;)V
+        34: aload_0
+        35: getfield      #149                // Field mixinPackage:Ljava/lang/String;
+        38: invokestatic  #294                // Method org/spongepowered/include/com/google/common/base/Strings.isNullOrEmpty:(Ljava/lang/String;)Z
+        41: ifeq          45
+        44: return
+        45: aload_0
+        46: getfield      #149                // Field mixinPackage:Ljava/lang/String;
+        49: ldc           #11                 // String .
+        51: invokevirtual #201                // Method java/lang/String.endsWith:(Ljava/lang/String;)Z
+        54: ifne          83
+        57: new           #68                 // class java/lang/StringBuilder
+        60: dup
+        61: invokespecial #211                // Method java/lang/StringBuilder."<init>":()V
+        64: aload_0
+        65: dup_x1
+        66: getfield      #149                // Field mixinPackage:Ljava/lang/String;
+        69: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        72: ldc           #11                 // String .
+        74: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        77: invokevirtual #214                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+        80: putfield      #149                // Field mixinPackage:Ljava/lang/String;
+        83: iconst_0
+        84: istore_1
+        85: aload_0
+        86: getfield      #163                // Field refMapperConfig:Ljava/lang/String;
+        89: ifnonnull     118
+        92: aload_0
+        93: aload_0
+        94: getfield      #158                // Field plugin:Lorg/spongepowered/asm/mixin/transformer/PluginHandle;
+        97: invokevirtual #284                // Method org/spongepowered/asm/mixin/transformer/PluginHandle.getRefMapperConfig:()Ljava/lang/String;
+       100: putfield      #163                // Field refMapperConfig:Ljava/lang/String;
+       103: aload_0
+       104: getfield      #163                // Field refMapperConfig:Ljava/lang/String;
+       107: ifnonnull     118
+       110: iconst_1
+       111: istore_1
+       112: aload_0
+       113: ldc           #43                 // String mixin.refmap.json
+       115: putfield      #163                // Field refMapperConfig:Ljava/lang/String;
+       118: aload_0
+       119: aload_0
+       120: getfield      #163                // Field refMapperConfig:Ljava/lang/String;
+       123: invokestatic  #247                // Method org/spongepowered/asm/mixin/refmap/ReferenceMapper.read:(Ljava/lang/String;)Lorg/spongepowered/asm/mixin/refmap/ReferenceMapper;
+       126: putfield      #162                // Field refMapper:Lorg/spongepowered/asm/mixin/refmap/IReferenceMapper;
+       129: iload_1
+       130: ifne          184
+       133: aload_0
+       134: getfield      #162                // Field refMapper:Lorg/spongepowered/asm/mixin/refmap/IReferenceMapper;
+       137: invokeinterface #328,  1          // InterfaceMethod org/spongepowered/asm/mixin/refmap/IReferenceMapper.isDefault:()Z
+       142: ifeq          184
+       145: aload_0
+       146: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+       149: getstatic     #130                // Field org/spongepowered/asm/mixin/MixinEnvironment$Option.DISABLE_REFMAP:Lorg/spongepowered/asm/mixin/MixinEnvironment$Option;
+       152: invokevirtual #231                // Method org/spongepowered/asm/mixin/MixinEnvironment.getOption:(Lorg/spongepowered/asm/mixin/MixinEnvironment$Option;)Z
+       155: ifne          184
+       158: aload_0
+       159: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+       162: ldc           #25                 // String Reference map \'{}\' for {} could not be read. If this is a development environment you can ignore this message
+       164: iconst_2
+       165: anewarray     #64                 // class java/lang/Object
+       168: dup
+       169: iconst_0
+       170: aload_0
+       171: getfield      #163                // Field refMapperConfig:Ljava/lang/String;
+       174: aastore
+       175: dup
+       176: iconst_1
+       177: aload_0
+       178: aastore
+       179: invokeinterface #325,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.warn:(Ljava/lang/String;[Ljava/lang/Object;)V
+       184: aload_0
+       185: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+       188: getstatic     #132                // Field org/spongepowered/asm/mixin/MixinEnvironment$Option.REFMAP_REMAP:Lorg/spongepowered/asm/mixin/MixinEnvironment$Option;
+       191: invokevirtual #231                // Method org/spongepowered/asm/mixin/MixinEnvironment.getOption:(Lorg/spongepowered/asm/mixin/MixinEnvironment$Option;)Z
+       194: ifeq          212
+       197: aload_0
+       198: aload_0
+       199: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+       202: aload_0
+       203: getfield      #162                // Field refMapper:Lorg/spongepowered/asm/mixin/refmap/IReferenceMapper;
+       206: invokestatic  #248                // Method org/spongepowered/asm/mixin/refmap/RemappingReferenceMapper.of:(Lorg/spongepowered/asm/mixin/MixinEnvironment;Lorg/spongepowered/asm/mixin/refmap/IReferenceMapper;)Lorg/spongepowered/asm/mixin/refmap/IReferenceMapper;
+       209: putfield      #162                // Field refMapper:Lorg/spongepowered/asm/mixin/refmap/IReferenceMapper;
+       212: aload_0
+       213: getfield      #164                // Field refMapperWrapper:Ljava/lang/String;
+       216: ifnull        392
+       219: new           #68                 // class java/lang/StringBuilder
+       222: dup
+       223: invokespecial #211                // Method java/lang/StringBuilder."<init>":()V
+       226: aload_0
+       227: getfield      #149                // Field mixinPackage:Ljava/lang/String;
+       230: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       233: aload_0
+       234: getfield      #164                // Field refMapperWrapper:Ljava/lang/String;
+       237: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       240: invokevirtual #214                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+       243: astore_2
+       244: aload_0
+       245: getfield      #169                // Field service:Lorg/spongepowered/asm/service/IMixinService;
+       248: invokeinterface #334,  1          // InterfaceMethod org/spongepowered/asm/service/IMixinService.getClassProvider:()Lorg/spongepowered/asm/service/IClassProvider;
+       253: aload_2
+       254: iconst_1
+       255: invokeinterface #333,  3          // InterfaceMethod org/spongepowered/asm/service/IClassProvider.findClass:(Ljava/lang/String;Z)Ljava/lang/Class;
+       260: astore_3
+       261: aload_3
+       262: iconst_2
+       263: anewarray     #56                 // class java/lang/Class
+       266: dup
+       267: iconst_0
+       268: ldc           #89                 // class org/spongepowered/asm/mixin/MixinEnvironment
+       270: aastore
+       271: dup
+       272: iconst_1
+       273: ldc           #101                // class org/spongepowered/asm/mixin/refmap/IReferenceMapper
+       275: aastore
+       276: invokevirtual #189                // Method java/lang/Class.getConstructor:([Ljava/lang/Class;)Ljava/lang/reflect/Constructor;
+       279: astore        4
+       281: aload_0
+       282: aload         4
+       284: iconst_2
+       285: anewarray     #64                 // class java/lang/Object
+       288: dup
+       289: iconst_0
+       290: aload_0
+       291: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+       294: aastore
+       295: dup
+       296: iconst_1
+       297: aload_0
+       298: getfield      #162                // Field refMapper:Lorg/spongepowered/asm/mixin/refmap/IReferenceMapper;
+       301: aastore
+       302: invokevirtual #216                // Method java/lang/reflect/Constructor.newInstance:([Ljava/lang/Object;)Ljava/lang/Object;
+       305: checkcast     #101                // class org/spongepowered/asm/mixin/refmap/IReferenceMapper
+       308: putfield      #162                // Field refMapper:Lorg/spongepowered/asm/mixin/refmap/IReferenceMapper;
+       311: goto          392
+       314: astore_3
+       315: aload_0
+       316: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+       319: ldc           #27                 // String Reference map wrapper \'{}\' could not be found:
+       321: iconst_2
+       322: anewarray     #64                 // class java/lang/Object
+       325: dup
+       326: iconst_0
+       327: aload_2
+       328: aastore
+       329: dup
+       330: iconst_1
+       331: aload_3
+       332: aastore
+       333: invokeinterface #323,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.error:(Ljava/lang/String;[Ljava/lang/Object;)V
+       338: goto          392
+       341: astore_3
+       342: aload_0
+       343: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+       346: ldc           #26                 // String Reference map wrapper \'{}\' could not be created:
+       348: iconst_2
+       349: anewarray     #64                 // class java/lang/Object
+       352: dup
+       353: iconst_0
+       354: aload_2
+       355: aastore
+       356: dup
+       357: iconst_1
+       358: aload_3
+       359: aastore
+       360: invokeinterface #323,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.error:(Ljava/lang/String;[Ljava/lang/Object;)V
+       365: goto          392
+       368: astore_3
+       369: aload_0
+       370: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+       373: ldc           #26                 // String Reference map wrapper \'{}\' could not be created:
+       375: iconst_2
+       376: anewarray     #64                 // class java/lang/Object
+       379: dup
+       380: iconst_0
+       381: aload_2
+       382: aastore
+       383: dup
+       384: iconst_1
+       385: aload_3
+       386: aastore
+       387: invokeinterface #323,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.error:(Ljava/lang/String;[Ljava/lang/Object;)V
+       392: return
+      Exception table:
+         from    to  target type
+           244   311   314   Class java/lang/ClassNotFoundException
+           244   311   341   Class java/lang/ReflectiveOperationException
+           244   311   368   Class java/lang/SecurityException
+
+  void prepare(org.spongepowered.asm.mixin.transformer.ext.Extensions);
+    Code:
+         0: aload_0
+         1: getfield      #160                // Field prepared:Z
+         4: ifeq          8
+         7: return
+         8: aload_0
+         9: iconst_1
+        10: putfield      #160                // Field prepared:Z
+        13: aload_0
+        14: ldc           #44                 // String mixins
+        16: aload_0
+        17: getfield      #145                // Field mixinClasses:Ljava/util/List;
+        20: iconst_0
+        21: aload_1
+        22: invokespecial #268                // Method prepareMixins:(Ljava/lang/String;Ljava/util/List;ZLorg/spongepowered/asm/mixin/transformer/ext/Extensions;)V
+        25: getstatic     #177                // Field org/spongepowered/asm/mixin/transformer/MixinConfig$1.$SwitchMap$org$spongepowered$asm$mixin$MixinEnvironment$Side:[I
+        28: aload_0
+        29: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+        32: invokevirtual #233                // Method org/spongepowered/asm/mixin/MixinEnvironment.getSide:()Lorg/spongepowered/asm/mixin/MixinEnvironment$Side;
+        35: invokevirtual #244                // Method org/spongepowered/asm/mixin/MixinEnvironment$Side.ordinal:()I
+        38: iaload
+        39: tableswitch   { // 1 to 3
+                       1: 64
+                       2: 79
+                       3: 94
+                 default: 94
+            }
+        64: aload_0
+        65: ldc           #36                 // String client
+        67: aload_0
+        68: getfield      #146                // Field mixinClassesClient:Ljava/util/List;
+        71: iconst_0
+        72: aload_1
+        73: invokespecial #268                // Method prepareMixins:(Ljava/lang/String;Ljava/util/List;ZLorg/spongepowered/asm/mixin/transformer/ext/Extensions;)V
+        76: goto          109
+        79: aload_0
+        80: ldc           #45                 // String server
+        82: aload_0
+        83: getfield      #147                // Field mixinClassesServer:Ljava/util/List;
+        86: iconst_0
+        87: aload_1
+        88: invokespecial #268                // Method prepareMixins:(Ljava/lang/String;Ljava/util/List;ZLorg/spongepowered/asm/mixin/transformer/ext/Extensions;)V
+        91: goto          109
+        94: aload_0
+        95: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+        98: ldc           #24                 // String Mixin environment was unable to detect the current side, sided mixins will not be applied
+       100: iconst_0
+       101: anewarray     #64                 // class java/lang/Object
+       104: invokeinterface #325,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.warn:(Ljava/lang/String;[Ljava/lang/Object;)V
+       109: return
+
+  void postInitialise(org.spongepowered.asm.mixin.transformer.ext.Extensions);
+    Code:
+         0: aload_0
+         1: getfield      #158                // Field plugin:Lorg/spongepowered/asm/mixin/transformer/PluginHandle;
+         4: ifnull        24
+         7: aload_0
+         8: getfield      #158                // Field plugin:Lorg/spongepowered/asm/mixin/transformer/PluginHandle;
+        11: invokevirtual #283                // Method org/spongepowered/asm/mixin/transformer/PluginHandle.getMixins:()Ljava/util/List;
+        14: astore_2
+        15: aload_0
+        16: ldc           #37                 // String companion plugin
+        18: aload_2
+        19: iconst_1
+        20: aload_1
+        21: invokespecial #268                // Method prepareMixins:(Ljava/lang/String;Ljava/util/List;ZLorg/spongepowered/asm/mixin/transformer/ext/Extensions;)V
+        24: aload_0
+        25: getfield      #151                // Field mixins:Ljava/util/List;
+        28: invokeinterface #309,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        33: astore_2
+        34: aload_2
+        35: invokeinterface #303,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        40: ifeq          194
+        43: aload_2
+        44: invokeinterface #304,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        49: checkcast     #110                // class org/spongepowered/asm/mixin/transformer/MixinInfo
+        52: astore_3
+        53: aload_3
+        54: invokevirtual #280                // Method org/spongepowered/asm/mixin/transformer/MixinInfo.validate:()V
+        57: aload_0
+        58: getfield      #143                // Field listeners:Ljava/util/List;
+        61: invokeinterface #309,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        66: astore        4
+        68: aload         4
+        70: invokeinterface #303,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        75: ifeq          101
+        78: aload         4
+        80: invokeinterface #304,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        85: checkcast     #107                // class org/spongepowered/asm/mixin/transformer/MixinConfig$IListener
+        88: astore        5
+        90: aload         5
+        92: aload_3
+        93: invokeinterface #331,  2          // InterfaceMethod org/spongepowered/asm/mixin/transformer/MixinConfig$IListener.onInit:(Lorg/spongepowered/asm/mixin/transformer/MixinInfo;)V
+        98: goto          68
+       101: goto          191
+       104: astore        4
+       106: aload_0
+       107: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+       110: new           #68                 // class java/lang/StringBuilder
+       113: dup
+       114: invokespecial #211                // Method java/lang/StringBuilder."<init>":()V
+       117: aload         4
+       119: invokevirtual #288                // Method org/spongepowered/asm/mixin/transformer/throwables/InvalidMixinException.getMixin:()Lorg/spongepowered/asm/mixin/extensibility/IMixinInfo;
+       122: invokevirtual #212                // Method java/lang/StringBuilder.append:(Ljava/lang/Object;)Ljava/lang/StringBuilder;
+       125: ldc           #12                 // String :
+       127: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       130: aload         4
+       132: invokevirtual #287                // Method org/spongepowered/asm/mixin/transformer/throwables/InvalidMixinException.getMessage:()Ljava/lang/String;
+       135: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       138: invokevirtual #214                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+       141: aload         4
+       143: invokeinterface #322,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.error:(Ljava/lang/String;Ljava/lang/Throwable;)V
+       148: aload_0
+       149: aload_3
+       150: invokespecial #269                // Method removeMixin:(Lorg/spongepowered/asm/mixin/transformer/MixinInfo;)V
+       153: aload_2
+       154: invokeinterface #305,  1          // InterfaceMethod java/util/Iterator.remove:()V
+       159: goto          191
+       162: astore        4
+       164: aload_0
+       165: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+       168: aload         4
+       170: invokevirtual #192                // Method java/lang/Exception.getMessage:()Ljava/lang/String;
+       173: aload         4
+       175: invokeinterface #322,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.error:(Ljava/lang/String;Ljava/lang/Throwable;)V
+       180: aload_0
+       181: aload_3
+       182: invokespecial #269                // Method removeMixin:(Lorg/spongepowered/asm/mixin/transformer/MixinInfo;)V
+       185: aload_2
+       186: invokeinterface #305,  1          // InterfaceMethod java/util/Iterator.remove:()V
+       191: goto          34
+       194: return
+      Exception table:
+         from    to  target type
+            53   101   104   Class org/spongepowered/asm/mixin/transformer/throwables/InvalidMixinException
+            53   101   162   Class java/lang/Exception
+
+  private void removeMixin(org.spongepowered.asm.mixin.transformer.MixinInfo);
+    Code:
+         0: aload_0
+         1: getfield      #148                // Field mixinMapping:Ljava/util/Map;
+         4: invokeinterface #315,  1          // InterfaceMethod java/util/Map.values:()Ljava/util/Collection;
+         9: invokeinterface #301,  1          // InterfaceMethod java/util/Collection.iterator:()Ljava/util/Iterator;
+        14: astore_2
+        15: aload_2
+        16: invokeinterface #303,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        21: ifeq          76
+        24: aload_2
+        25: invokeinterface #304,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        30: checkcast     #78                 // class java/util/List
+        33: astore_3
+        34: aload_3
+        35: invokeinterface #309,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        40: astore        4
+        42: aload         4
+        44: invokeinterface #303,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        49: ifeq          73
+        52: aload_1
+        53: aload         4
+        55: invokeinterface #304,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        60: if_acmpne     42
+        63: aload         4
+        65: invokeinterface #305,  1          // InterfaceMethod java/util/Iterator.remove:()V
+        70: goto          42
+        73: goto          15
+        76: return
+
+  private void prepareMixins(java.lang.String, java.util.List<java.lang.String>, boolean, org.spongepowered.asm.mixin.transformer.ext.Extensions);
+    Code:
+         0: aload_2
+         1: ifnonnull     5
+         4: return
+         5: aload_0
+         6: getfield      #149                // Field mixinPackage:Ljava/lang/String;
+         9: invokestatic  #294                // Method org/spongepowered/include/com/google/common/base/Strings.isNullOrEmpty:(Ljava/lang/String;)Z
+        12: ifeq          64
+        15: aload_2
+        16: invokeinterface #310,  1          // InterfaceMethod java/util/List.size:()I
+        21: ifle          63
+        24: aload_0
+        25: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+        28: ldc           #48                 // String {} declares mixin classes in {} but does not specify a package, {} orphaned mixins will not be loaded: {}
+        30: iconst_4
+        31: anewarray     #64                 // class java/lang/Object
+        34: dup
+        35: iconst_0
+        36: aload_0
+        37: aastore
+        38: dup
+        39: iconst_1
+        40: aload_1
+        41: aastore
+        42: dup
+        43: iconst_2
+        44: aload_2
+        45: invokeinterface #310,  1          // InterfaceMethod java/util/List.size:()I
+        50: invokestatic  #196                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+        53: aastore
+        54: dup
+        55: iconst_3
+        56: aload_2
+        57: aastore
+        58: invokeinterface #323,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.error:(Ljava/lang/String;[Ljava/lang/Object;)V
+        63: return
+        64: aload_2
+        65: invokeinterface #309,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        70: astore        5
+        72: aload         5
+        74: invokeinterface #303,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        79: ifeq          307
+        82: aload         5
+        84: invokeinterface #304,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        89: checkcast     #67                 // class java/lang/String
+        92: astore        6
+        94: new           #68                 // class java/lang/StringBuilder
+        97: dup
+        98: invokespecial #211                // Method java/lang/StringBuilder."<init>":()V
+       101: aload_0
+       102: getfield      #149                // Field mixinPackage:Ljava/lang/String;
+       105: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       108: aload         6
+       110: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       113: invokevirtual #214                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+       116: astore        7
+       118: aload         6
+       120: ifnull        72
+       123: getstatic     #139                // Field globalMixinList:Ljava/util/Set;
+       126: aload         7
+       128: invokeinterface #317,  2          // InterfaceMethod java/util/Set.contains:(Ljava/lang/Object;)Z
+       133: ifeq          139
+       136: goto          72
+       139: aconst_null
+       140: astore        8
+       142: aload_0
+       143: getfield      #157                // Field pendingMixins:Ljava/util/List;
+       146: new           #110                // class org/spongepowered/asm/mixin/transformer/MixinInfo
+       149: dup
+       150: aload_0
+       151: getfield      #169                // Field service:Lorg/spongepowered/asm/service/IMixinService;
+       154: aload_0
+       155: aload         6
+       157: aload_0
+       158: getfield      #158                // Field plugin:Lorg/spongepowered/asm/mixin/transformer/PluginHandle;
+       161: iload_3
+       162: aload         4
+       164: invokespecial #274                // Method org/spongepowered/asm/mixin/transformer/MixinInfo."<init>":(Lorg/spongepowered/asm/service/IMixinService;Lorg/spongepowered/asm/mixin/transformer/MixinConfig;Ljava/lang/String;Lorg/spongepowered/asm/mixin/transformer/PluginHandle;ZLorg/spongepowered/asm/mixin/transformer/ext/Extensions;)V
+       167: dup
+       168: astore        8
+       170: invokeinterface #306,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       175: pop
+       176: getstatic     #139                // Field globalMixinList:Ljava/util/Set;
+       179: aload         7
+       181: invokeinterface #316,  2          // InterfaceMethod java/util/Set.add:(Ljava/lang/Object;)Z
+       186: pop
+       187: goto          304
+       190: astore        9
+       192: aload_0
+       193: getfield      #165                // Field required:Z
+       196: ifeq          202
+       199: aload         9
+       201: athrow
+       202: aload_0
+       203: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+       206: aload         9
+       208: invokevirtual #287                // Method org/spongepowered/asm/mixin/transformer/throwables/InvalidMixinException.getMessage:()Ljava/lang/String;
+       211: aload         9
+       213: invokeinterface #322,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.error:(Ljava/lang/String;Ljava/lang/Throwable;)V
+       218: goto          304
+       221: astore        9
+       223: aload_0
+       224: getfield      #165                // Field required:Z
+       227: ifeq          288
+       230: new           #113                // class org/spongepowered/asm/mixin/transformer/throwables/InvalidMixinException
+       233: dup
+       234: aload         8
+       236: new           #68                 // class java/lang/StringBuilder
+       239: dup
+       240: invokespecial #211                // Method java/lang/StringBuilder."<init>":()V
+       243: ldc           #16                 // String Error initialising mixin
+       245: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       248: aload         8
+       250: invokevirtual #212                // Method java/lang/StringBuilder.append:(Ljava/lang/Object;)Ljava/lang/StringBuilder;
+       253: ldc           #2                  // String  -
+       255: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       258: aload         9
+       260: invokevirtual #200                // Method java/lang/Object.getClass:()Ljava/lang/Class;
+       263: invokevirtual #212                // Method java/lang/StringBuilder.append:(Ljava/lang/Object;)Ljava/lang/StringBuilder;
+       266: ldc           #12                 // String :
+       268: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       271: aload         9
+       273: invokevirtual #192                // Method java/lang/Exception.getMessage:()Ljava/lang/String;
+       276: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       279: invokevirtual #214                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+       282: aload         9
+       284: invokespecial #286                // Method org/spongepowered/asm/mixin/transformer/throwables/InvalidMixinException."<init>":(Lorg/spongepowered/asm/mixin/extensibility/IMixinInfo;Ljava/lang/String;Ljava/lang/Throwable;)V
+       287: athrow
+       288: aload_0
+       289: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+       292: aload         9
+       294: invokevirtual #192                // Method java/lang/Exception.getMessage:()Ljava/lang/String;
+       297: aload         9
+       299: invokeinterface #322,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.error:(Ljava/lang/String;Ljava/lang/Throwable;)V
+       304: goto          72
+       307: aload_0
+       308: getfield      #157                // Field pendingMixins:Ljava/util/List;
+       311: invokeinterface #309,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+       316: astore        5
+       318: aload         5
+       320: invokeinterface #303,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+       325: ifeq          609
+       328: aload         5
+       330: invokeinterface #304,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+       335: checkcast     #110                // class org/spongepowered/asm/mixin/transformer/MixinInfo
+       338: astore        6
+       340: aload         6
+       342: invokevirtual #278                // Method org/spongepowered/asm/mixin/transformer/MixinInfo.parseTargets:()V
+       345: aload         6
+       347: invokevirtual #276                // Method org/spongepowered/asm/mixin/transformer/MixinInfo.getTargetClasses:()Ljava/util/List;
+       350: invokeinterface #310,  1          // InterfaceMethod java/util/List.size:()I
+       355: ifle          489
+       358: aload         6
+       360: invokevirtual #276                // Method org/spongepowered/asm/mixin/transformer/MixinInfo.getTargetClasses:()Ljava/util/List;
+       363: invokeinterface #309,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+       368: astore        7
+       370: aload         7
+       372: invokeinterface #303,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+       377: ifeq          432
+       380: aload         7
+       382: invokeinterface #304,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+       387: checkcast     #67                 // class java/lang/String
+       390: astore        8
+       392: aload         8
+       394: bipush        47
+       396: bipush        46
+       398: invokevirtual #205                // Method java/lang/String.replace:(CC)Ljava/lang/String;
+       401: astore        9
+       403: aload_0
+       404: aload         9
+       406: invokespecial #263                // Method mixinsFor:(Ljava/lang/String;)Ljava/util/List;
+       409: aload         6
+       411: invokeinterface #306,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       416: pop
+       417: aload_0
+       418: getfield      #172                // Field unhandledTargets:Ljava/util/Set;
+       421: aload         9
+       423: invokeinterface #316,  2          // InterfaceMethod java/util/Set.add:(Ljava/lang/Object;)Z
+       428: pop
+       429: goto          370
+       432: aload_0
+       433: getfield      #143                // Field listeners:Ljava/util/List;
+       436: invokeinterface #309,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+       441: astore        7
+       443: aload         7
+       445: invokeinterface #303,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+       450: ifeq          477
+       453: aload         7
+       455: invokeinterface #304,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+       460: checkcast     #107                // class org/spongepowered/asm/mixin/transformer/MixinConfig$IListener
+       463: astore        8
+       465: aload         8
+       467: aload         6
+       469: invokeinterface #332,  2          // InterfaceMethod org/spongepowered/asm/mixin/transformer/MixinConfig$IListener.onPrepare:(Lorg/spongepowered/asm/mixin/transformer/MixinInfo;)V
+       474: goto          443
+       477: aload_0
+       478: getfield      #151                // Field mixins:Ljava/util/List;
+       481: aload         6
+       483: invokeinterface #306,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       488: pop
+       489: goto          606
+       492: astore        7
+       494: aload_0
+       495: getfield      #165                // Field required:Z
+       498: ifeq          504
+       501: aload         7
+       503: athrow
+       504: aload_0
+       505: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+       508: aload         7
+       510: invokevirtual #287                // Method org/spongepowered/asm/mixin/transformer/throwables/InvalidMixinException.getMessage:()Ljava/lang/String;
+       513: aload         7
+       515: invokeinterface #322,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.error:(Ljava/lang/String;Ljava/lang/Throwable;)V
+       520: goto          606
+       523: astore        7
+       525: aload_0
+       526: getfield      #165                // Field required:Z
+       529: ifeq          590
+       532: new           #113                // class org/spongepowered/asm/mixin/transformer/throwables/InvalidMixinException
+       535: dup
+       536: aload         6
+       538: new           #68                 // class java/lang/StringBuilder
+       541: dup
+       542: invokespecial #211                // Method java/lang/StringBuilder."<init>":()V
+       545: ldc           #16                 // String Error initialising mixin
+       547: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       550: aload         6
+       552: invokevirtual #212                // Method java/lang/StringBuilder.append:(Ljava/lang/Object;)Ljava/lang/StringBuilder;
+       555: ldc           #2                  // String  -
+       557: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       560: aload         7
+       562: invokevirtual #200                // Method java/lang/Object.getClass:()Ljava/lang/Class;
+       565: invokevirtual #212                // Method java/lang/StringBuilder.append:(Ljava/lang/Object;)Ljava/lang/StringBuilder;
+       568: ldc           #12                 // String :
+       570: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       573: aload         7
+       575: invokevirtual #192                // Method java/lang/Exception.getMessage:()Ljava/lang/String;
+       578: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       581: invokevirtual #214                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+       584: aload         7
+       586: invokespecial #286                // Method org/spongepowered/asm/mixin/transformer/throwables/InvalidMixinException."<init>":(Lorg/spongepowered/asm/mixin/extensibility/IMixinInfo;Ljava/lang/String;Ljava/lang/Throwable;)V
+       589: athrow
+       590: aload_0
+       591: getfield      #144                // Field logger:Lorg/spongepowered/asm/logging/ILogger;
+       594: aload         7
+       596: invokevirtual #192                // Method java/lang/Exception.getMessage:()Ljava/lang/String;
+       599: aload         7
+       601: invokeinterface #322,  3          // InterfaceMethod org/spongepowered/asm/logging/ILogger.error:(Ljava/lang/String;Ljava/lang/Throwable;)V
+       606: goto          318
+       609: aload_0
+       610: getfield      #157                // Field pendingMixins:Ljava/util/List;
+       613: invokeinterface #307,  1          // InterfaceMethod java/util/List.clear:()V
+       618: return
+      Exception table:
+         from    to  target type
+           142   187   190   Class org/spongepowered/asm/mixin/transformer/throwables/InvalidMixinException
+           142   187   221   Class java/lang/Exception
+           340   489   492   Class org/spongepowered/asm/mixin/transformer/throwables/InvalidMixinException
+           340   489   523   Class java/lang/Exception
+
+  void postApply(java.lang.String, org.objectweb.asm.tree.ClassNode);
+    Code:
+         0: aload_0
+         1: getfield      #172                // Field unhandledTargets:Ljava/util/Set;
+         4: aload_1
+         5: invokeinterface #319,  2          // InterfaceMethod java/util/Set.remove:(Ljava/lang/Object;)Z
+        10: pop
+        11: return
+
+  public org.spongepowered.asm.mixin.transformer.Config getHandle();
+    Code:
+         0: aload_0
+         1: getfield      #140                // Field handle:Lorg/spongepowered/asm/mixin/transformer/Config;
+         4: ifnonnull     19
+         7: aload_0
+         8: new           #104                // class org/spongepowered/asm/mixin/transformer/Config
+        11: dup
+        12: aload_0
+        13: invokespecial #249                // Method org/spongepowered/asm/mixin/transformer/Config."<init>":(Lorg/spongepowered/asm/mixin/transformer/MixinConfig;)V
+        16: putfield      #140                // Field handle:Lorg/spongepowered/asm/mixin/transformer/Config;
+        19: aload_0
+        20: getfield      #140                // Field handle:Lorg/spongepowered/asm/mixin/transformer/Config;
+        23: areturn
+
+  public boolean isRequired();
+    Code:
+         0: aload_0
+         1: getfield      #165                // Field required:Z
+         4: ireturn
+
+  public org.spongepowered.asm.mixin.MixinEnvironment getEnvironment();
+    Code:
+         0: aload_0
+         1: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+         4: areturn
+
+  org.spongepowered.asm.mixin.transformer.MixinConfig getParent();
+    Code:
+         0: aload_0
+         1: getfield      #155                // Field parent:Lorg/spongepowered/asm/mixin/transformer/MixinConfig;
+         4: areturn
+
+  public java.lang.String getName();
+    Code:
+         0: aload_0
+         1: getfield      #152                // Field name:Ljava/lang/String;
+         4: areturn
+
+  public org.spongepowered.asm.mixin.extensibility.IMixinConfigSource getSource();
+    Code:
+         0: aload_0
+         1: getfield      #171                // Field source:Lorg/spongepowered/asm/mixin/extensibility/IMixinConfigSource;
+         4: areturn
+
+  public java.lang.String getCleanSourceId();
+    Code:
+         0: aload_0
+         1: getfield      #171                // Field source:Lorg/spongepowered/asm/mixin/extensibility/IMixinConfigSource;
+         4: ifnonnull     9
+         7: aconst_null
+         8: areturn
+         9: aload_0
+        10: getfield      #171                // Field source:Lorg/spongepowered/asm/mixin/extensibility/IMixinConfigSource;
+        13: invokeinterface #326,  1          // InterfaceMethod org/spongepowered/asm/mixin/extensibility/IMixinConfigSource.getId:()Ljava/lang/String;
+        18: astore_1
+        19: aload_1
+        20: ifnonnull     25
+        23: aconst_null
+        24: areturn
+        25: aload_1
+        26: ldc           #34                 // String [^A-Za-z]
+        28: ldc           #1                  // String
+        30: invokevirtual #206                // Method java/lang/String.replaceAll:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+        33: areturn
+
+  public java.lang.String getMixinPackage();
+    Code:
+         0: aload_0
+         1: getfield      #149                // Field mixinPackage:Ljava/lang/String;
+         4: invokestatic  #295                // Method org/spongepowered/include/com/google/common/base/Strings.nullToEmpty:(Ljava/lang/String;)Ljava/lang/String;
+         7: areturn
+
+  public int getPriority();
+    Code:
+         0: aload_0
+         1: getfield      #161                // Field priority:I
+         4: ireturn
+
+  public int getDefaultMixinPriority();
+    Code:
+         0: aload_0
+         1: getfield      #150                // Field mixinPriority:I
+         4: ireturn
+
+  public int getDefaultRequiredInjections();
+    Code:
+         0: aload_0
+         1: getfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+         4: getfield      #179                // Field org/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions.defaultRequireValue:I
+         7: ireturn
+
+  public java.lang.String getDefaultInjectorGroup();
+    Code:
+         0: aload_0
+         1: getfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+         4: getfield      #178                // Field org/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions.defaultGroup:Ljava/lang/String;
+         7: astore_1
+         8: aload_1
+         9: ifnull        23
+        12: aload_1
+        13: invokevirtual #204                // Method java/lang/String.isEmpty:()Z
+        16: ifne          23
+        19: aload_1
+        20: goto          25
+        23: ldc           #38                 // String default
+        25: areturn
+
+  public boolean conformOverwriteVisibility();
+    Code:
+         0: aload_0
+         1: getfield      #154                // Field overwriteOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions;
+         4: getfield      #184                // Field org/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions.conformAccessModifiers:Z
+         7: ireturn
+
+  public boolean requireOverwriteAnnotations();
+    Code:
+         0: aload_0
+         1: getfield      #154                // Field overwriteOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions;
+         4: getfield      #185                // Field org/spongepowered/asm/mixin/transformer/MixinConfig$OverwriteOptions.requireOverwriteAnnotations:Z
+         7: ireturn
+
+  public int getMaxShiftByValue();
+    Code:
+         0: aload_0
+         1: getfield      #142                // Field injectorOptions:Lorg/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions;
+         4: getfield      #182                // Field org/spongepowered/asm/mixin/transformer/MixinConfig$InjectorOptions.maxShiftBy:I
+         7: iconst_0
+         8: invokestatic  #197                // Method java/lang/Math.max:(II)I
+        11: iconst_5
+        12: invokestatic  #198                // Method java/lang/Math.min:(II)I
+        15: ireturn
+
+  public boolean select(org.spongepowered.asm.mixin.MixinEnvironment);
+    Code:
+         0: aload_0
+         1: iconst_1
+         2: putfield      #175                // Field visited:Z
+         5: aload_0
+         6: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+         9: aload_1
+        10: if_acmpne     17
+        13: iconst_1
+        14: goto          18
+        17: iconst_0
+        18: ireturn
+
+  boolean isVisited();
+    Code:
+         0: aload_0
+         1: getfield      #175                // Field visited:Z
+         4: ireturn
+
+  int getDeclaredMixinCount();
+    Code:
+         0: iconst_3
+         1: anewarray     #72                 // class java/util/Collection
+         4: dup
+         5: iconst_0
+         6: aload_0
+         7: getfield      #145                // Field mixinClasses:Ljava/util/List;
+        10: aastore
+        11: dup
+        12: iconst_1
+        13: aload_0
+        14: getfield      #146                // Field mixinClassesClient:Ljava/util/List;
+        17: aastore
+        18: dup
+        19: iconst_2
+        20: aload_0
+        21: getfield      #147                // Field mixinClassesServer:Ljava/util/List;
+        24: aastore
+        25: invokestatic  #255                // Method getCollectionSize:([Ljava/util/Collection;)I
+        28: ireturn
+
+  int getMixinCount();
+    Code:
+         0: aload_0
+         1: getfield      #151                // Field mixins:Ljava/util/List;
+         4: invokeinterface #310,  1          // InterfaceMethod java/util/List.size:()I
+         9: ireturn
+
+  public java.util.List<java.lang.String> getClasses();
+    Code:
+         0: aload_0
+         1: getfield      #149                // Field mixinPackage:Ljava/lang/String;
+         4: invokestatic  #294                // Method org/spongepowered/include/com/google/common/base/Strings.isNullOrEmpty:(Ljava/lang/String;)Z
+         7: ifeq          14
+        10: invokestatic  #218                // Method java/util/Collections.emptyList:()Ljava/util/List;
+        13: areturn
+        14: invokestatic  #296                // Method org/spongepowered/include/com/google/common/collect/ImmutableList.builder:()Lorg/spongepowered/include/com/google/common/collect/ImmutableList$Builder;
+        17: astore_1
+        18: iconst_3
+        19: anewarray     #78                 // class java/util/List
+        22: dup
+        23: iconst_0
+        24: aload_0
+        25: getfield      #145                // Field mixinClasses:Ljava/util/List;
+        28: aastore
+        29: dup
+        30: iconst_1
+        31: aload_0
+        32: getfield      #146                // Field mixinClassesClient:Ljava/util/List;
+        35: aastore
+        36: dup
+        37: iconst_2
+        38: aload_0
+        39: getfield      #147                // Field mixinClassesServer:Ljava/util/List;
+        42: aastore
+        43: astore_2
+        44: aload_2
+        45: arraylength
+        46: istore_3
+        47: iconst_0
+        48: istore        4
+        50: iload         4
+        52: iload_3
+        53: if_icmpge     134
+        56: aload_2
+        57: iload         4
+        59: aaload
+        60: astore        5
+        62: aload         5
+        64: ifnull        128
+        67: aload         5
+        69: invokeinterface #309,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        74: astore        6
+        76: aload         6
+        78: invokeinterface #303,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        83: ifeq          128
+        86: aload         6
+        88: invokeinterface #304,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        93: checkcast     #67                 // class java/lang/String
+        96: astore        7
+        98: aload_1
+        99: new           #68                 // class java/lang/StringBuilder
+       102: dup
+       103: invokespecial #211                // Method java/lang/StringBuilder."<init>":()V
+       106: aload_0
+       107: getfield      #149                // Field mixinPackage:Ljava/lang/String;
+       110: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       113: aload         7
+       115: invokevirtual #213                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       118: invokevirtual #214                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+       121: invokevirtual #297                // Method org/spongepowered/include/com/google/common/collect/ImmutableList$Builder.add:(Ljava/lang/Object;)Lorg/spongepowered/include/com/google/common/collect/ImmutableList$Builder;
+       124: pop
+       125: goto          76
+       128: iinc          4, 1
+       131: goto          50
+       134: aload_1
+       135: invokevirtual #298                // Method org/spongepowered/include/com/google/common/collect/ImmutableList$Builder.build:()Lorg/spongepowered/include/com/google/common/collect/ImmutableList;
+       138: areturn
+
+  public boolean shouldSetSourceFile();
+    Code:
+         0: aload_0
+         1: getfield      #170                // Field setSourceFile:Z
+         4: ireturn
+
+  public org.spongepowered.asm.mixin.refmap.IReferenceMapper getReferenceMapper();
+    Code:
+         0: aload_0
+         1: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+         4: getstatic     #130                // Field org/spongepowered/asm/mixin/MixinEnvironment$Option.DISABLE_REFMAP:Lorg/spongepowered/asm/mixin/MixinEnvironment$Option;
+         7: invokevirtual #231                // Method org/spongepowered/asm/mixin/MixinEnvironment.getOption:(Lorg/spongepowered/asm/mixin/MixinEnvironment$Option;)Z
+        10: ifeq          17
+        13: getstatic     #133                // Field org/spongepowered/asm/mixin/refmap/ReferenceMapper.DEFAULT_MAPPER:Lorg/spongepowered/asm/mixin/refmap/ReferenceMapper;
+        16: areturn
+        17: aload_0
+        18: getfield      #162                // Field refMapper:Lorg/spongepowered/asm/mixin/refmap/IReferenceMapper;
+        21: aload_0
+        22: getfield      #138                // Field env:Lorg/spongepowered/asm/mixin/MixinEnvironment;
+        25: invokevirtual #232                // Method org/spongepowered/asm/mixin/MixinEnvironment.getRefmapObfuscationContext:()Ljava/lang/String;
+        28: invokeinterface #330,  2          // InterfaceMethod org/spongepowered/asm/mixin/refmap/IReferenceMapper.setContext:(Ljava/lang/String;)V
+        33: aload_0
+        34: getfield      #162                // Field refMapper:Lorg/spongepowered/asm/mixin/refmap/IReferenceMapper;
+        37: areturn
+
+  java.lang.String remapClassName(java.lang.String, java.lang.String);
+    Code:
+         0: aload_0
+         1: invokevirtual #257                // Method getReferenceMapper:()Lorg/spongepowered/asm/mixin/refmap/IReferenceMapper;
+         4: astore_3
+         5: aload_3
+         6: instanceof    #100                // class org/spongepowered/asm/mixin/refmap/IClassReferenceMapper
+         9: ifeq          24
+        12: aload_3
+        13: checkcast     #100                // class org/spongepowered/asm/mixin/refmap/IClassReferenceMapper
+        16: aload_1
+        17: aload_2
+        18: invokeinterface #327,  3          // InterfaceMethod org/spongepowered/asm/mixin/refmap/IClassReferenceMapper.remapClassName:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+        23: areturn
+        24: aload_3
+        25: aload_1
+        26: aload_2
+        27: invokeinterface #329,  3          // InterfaceMethod org/spongepowered/asm/mixin/refmap/IReferenceMapper.remap:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+        32: areturn
+
+  public org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin getPlugin();
+    Code:
+         0: aload_0
+         1: getfield      #158                // Field plugin:Lorg/spongepowered/asm/mixin/transformer/PluginHandle;
+         4: invokevirtual #282                // Method org/spongepowered/asm/mixin/transformer/PluginHandle.get:()Lorg/spongepowered/asm/mixin/extensibility/IMixinConfigPlugin;
+         7: areturn
+
+  public java.util.Set<java.lang.String> getTargetsSet();
+    Code:
+         0: aload_0
+         1: getfield      #148                // Field mixinMapping:Ljava/util/Map;
+         4: invokeinterface #313,  1          // InterfaceMethod java/util/Map.keySet:()Ljava/util/Set;
+         9: areturn
+
+  public java.util.Set<java.lang.String> getTargets();
+    Code:
+         0: aload_0
+         1: getfield      #148                // Field mixinMapping:Ljava/util/Map;
+         4: invokeinterface #313,  1          // InterfaceMethod java/util/Map.keySet:()Ljava/util/Set;
+         9: invokestatic  #219                // Method java/util/Collections.unmodifiableSet:(Ljava/util/Set;)Ljava/util/Set;
+        12: areturn
+
+  public java.util.Set<java.lang.String> getUnhandledTargets();
+    Code:
+         0: aload_0
+         1: getfield      #172                // Field unhandledTargets:Ljava/util/Set;
+         4: invokestatic  #219                // Method java/util/Collections.unmodifiableSet:(Ljava/util/Set;)Ljava/util/Set;
+         7: areturn
+
+  public <V> void decorate(java.lang.String, V);
+    Code:
+         0: aload_0
+         1: getfield      #137                // Field decorations:Ljava/util/Map;
+         4: ifnonnull     18
+         7: aload_0
+         8: new           #74                 // class java/util/HashMap
+        11: dup
+        12: invokespecial #220                // Method java/util/HashMap."<init>":()V
+        15: putfield      #137                // Field decorations:Ljava/util/Map;
+        18: aload_0
+        19: getfield      #137                // Field decorations:Ljava/util/Map;
+        22: aload_1
+        23: invokeinterface #311,  2          // InterfaceMethod java/util/Map.containsKey:(Ljava/lang/Object;)Z
+        28: ifeq          56
+        31: new           #60                 // class java/lang/IllegalArgumentException
+        34: dup
+        35: ldc           #15                 // String Decoration with key \'%s\' already exists on config %s
+        37: iconst_2
+        38: anewarray     #64                 // class java/lang/Object
+        41: dup
+        42: iconst_0
+        43: aload_1
+        44: aastore
+        45: dup
+        46: iconst_1
+        47: aload_0
+        48: aastore
+        49: invokestatic  #203                // Method java/lang/String.format:(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+        52: invokespecial #193                // Method java/lang/IllegalArgumentException."<init>":(Ljava/lang/String;)V
+        55: athrow
+        56: aload_0
+        57: getfield      #137                // Field decorations:Ljava/util/Map;
+        60: aload_1
+        61: aload_2
+        62: invokeinterface #314,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+        67: pop
+        68: return
+
+  public boolean hasDecoration(java.lang.String);
+    Code:
+         0: aload_0
+         1: getfield      #137                // Field decorations:Ljava/util/Map;
+         4: ifnull        24
+         7: aload_0
+         8: getfield      #137                // Field decorations:Ljava/util/Map;
+        11: aload_1
+        12: invokeinterface #312,  2          // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+        17: ifnull        24
+        20: iconst_1
+        21: goto          25
+        24: iconst_0
+        25: ireturn
+
+  public <V> V getDecoration(java.lang.String);
+    Code:
+         0: aload_0
+         1: getfield      #137                // Field decorations:Ljava/util/Map;
+         4: ifnonnull     11
+         7: aconst_null
+         8: goto          21
+        11: aload_0
+        12: getfield      #137                // Field decorations:Ljava/util/Map;
+        15: aload_1
+        16: invokeinterface #312,  2          // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+        21: areturn
+
+  public org.spongepowered.asm.logging.Level getLoggingLevel();
+    Code:
+         0: aload_0
+         1: getfield      #173                // Field verboseLogging:Z
+         4: ifeq          13
+         7: getstatic     #125                // Field org/spongepowered/asm/logging/Level.INFO:Lorg/spongepowered/asm/logging/Level;
+        10: goto          16
+        13: getstatic     #124                // Field org/spongepowered/asm/logging/Level.DEBUG:Lorg/spongepowered/asm/logging/Level;
+        16: areturn
+
+  public boolean isVerboseLogging();
+    Code:
+         0: aload_0
+         1: getfield      #173                // Field verboseLogging:Z
+         4: ireturn
+
+  public boolean packageMatch(java.lang.String);
+    Code:
+         0: aload_0
+         1: getfield      #149                // Field mixinPackage:Ljava/lang/String;
+         4: invokestatic  #294                // Method org/spongepowered/include/com/google/common/base/Strings.isNullOrEmpty:(Ljava/lang/String;)Z
+         7: ifne          25
+        10: aload_1
+        11: aload_0
+        12: getfield      #149                // Field mixinPackage:Ljava/lang/String;
+        15: invokevirtual #208                // Method java/lang/String.startsWith:(Ljava/lang/String;)Z
+        18: ifeq          25
+        21: iconst_1
+        22: goto          26
+        25: iconst_0
+        26: ireturn
+
+  public boolean hasMixinsFor(java.lang.String);
+    Code:
+         0: aload_0
+         1: getfield      #148                // Field mixinMapping:Ljava/util/Map;
+         4: aload_1
+         5: invokeinterface #311,  2          // InterfaceMethod java/util/Map.containsKey:(Ljava/lang/Object;)Z
+        10: ireturn
+
+  boolean hasPendingMixinsFor(java.lang.String);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokevirtual #265                // Method packageMatch:(Ljava/lang/String;)Z
+         5: ifeq          10
+         8: iconst_0
+         9: ireturn
+        10: aload_0
+        11: getfield      #157                // Field pendingMixins:Ljava/util/List;
+        14: invokeinterface #309,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        19: astore_2
+        20: aload_2
+        21: invokeinterface #303,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        26: ifeq          52
+        29: aload_2
+        30: invokeinterface #304,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        35: checkcast     #110                // class org/spongepowered/asm/mixin/transformer/MixinInfo
+        38: astore_3
+        39: aload_3
+        40: aload_1
+        41: invokevirtual #277                // Method org/spongepowered/asm/mixin/transformer/MixinInfo.hasDeclaredTarget:(Ljava/lang/String;)Z
+        44: ifeq          49
+        47: iconst_1
+        48: ireturn
+        49: goto          20
+        52: iconst_0
+        53: ireturn
+
+  public java.util.List<org.spongepowered.asm.mixin.transformer.MixinInfo> getMixinsFor(java.lang.String);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokespecial #263                // Method mixinsFor:(Ljava/lang/String;)Ljava/util/List;
+         5: areturn
+
+  private java.util.List<org.spongepowered.asm.mixin.transformer.MixinInfo> mixinsFor(java.lang.String);
+    Code:
+         0: aload_0
+         1: getfield      #148                // Field mixinMapping:Ljava/util/Map;
+         4: aload_1
+         5: invokeinterface #312,  2          // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+        10: checkcast     #78                 // class java/util/List
+        13: astore_2
+        14: aload_2
+        15: ifnonnull     38
+        18: new           #71                 // class java/util/ArrayList
+        21: dup
+        22: invokespecial #217                // Method java/util/ArrayList."<init>":()V
+        25: astore_2
+        26: aload_0
+        27: getfield      #148                // Field mixinMapping:Ljava/util/Map;
+        30: aload_1
+        31: aload_2
+        32: invokeinterface #314,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+        37: pop
+        38: aload_2
+        39: areturn
+
+  public java.util.List<java.lang.String> reloadMixin(java.lang.String, org.objectweb.asm.tree.ClassNode);
+    Code:
+         0: aload_0
+         1: getfield      #151                // Field mixins:Ljava/util/List;
+         4: invokeinterface #309,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+         9: astore_3
+        10: aload_3
+        11: invokeinterface #303,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+        16: ifeq          57
+        19: aload_3
+        20: invokeinterface #304,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        25: checkcast     #110                // class org/spongepowered/asm/mixin/transformer/MixinInfo
+        28: astore        4
+        30: aload         4
+        32: invokevirtual #275                // Method org/spongepowered/asm/mixin/transformer/MixinInfo.getClassName:()Ljava/lang/String;
+        35: aload_1
+        36: invokevirtual #202                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+        39: ifeq          54
+        42: aload         4
+        44: aload_2
+        45: invokevirtual #279                // Method org/spongepowered/asm/mixin/transformer/MixinInfo.reloadMixin:(Lorg/objectweb/asm/tree/ClassNode;)V
+        48: aload         4
+        50: invokevirtual #276                // Method org/spongepowered/asm/mixin/transformer/MixinInfo.getTargetClasses:()Ljava/util/List;
+        53: areturn
+        54: goto          10
+        57: invokestatic  #218                // Method java/util/Collections.emptyList:()Ljava/util/List;
+        60: areturn
+
+  public java.lang.String toString();
+    Code:
+         0: aload_0
+         1: getfield      #152                // Field name:Ljava/lang/String;
+         4: areturn
+
+  public int compareTo(org.spongepowered.asm.mixin.transformer.MixinConfig);
+    Code:
+         0: aload_1
+         1: ifnonnull     6
+         4: iconst_0
+         5: ireturn
+         6: aload_1
+         7: getfield      #161                // Field priority:I
+        10: aload_0
+        11: getfield      #161                // Field priority:I
+        14: if_icmpne     29
+        17: aload_0
+        18: getfield      #153                // Field order:I
+        21: aload_1
+        22: getfield      #153                // Field order:I
+        25: invokestatic  #195                // Method java/lang/Integer.compare:(II)I
+        28: ireturn
+        29: aload_0
+        30: getfield      #161                // Field priority:I
+        33: aload_1
+        34: getfield      #161                // Field priority:I
+        37: if_icmpge     44
+        40: iconst_m1
+        41: goto          45
+        44: iconst_1
+        45: ireturn
+
+  static org.spongepowered.asm.mixin.transformer.Config create(java.lang.String, org.spongepowered.asm.mixin.MixinEnvironment, org.spongepowered.asm.mixin.extensibility.IMixinConfigSource);
+    Code:
+         0: invokestatic  #289                // Method org/spongepowered/asm/service/MixinService.getService:()Lorg/spongepowered/asm/service/IMixinService;
+         3: astore_3
+         4: aload_3
+         5: aload_0
+         6: invokeinterface #336,  2          // InterfaceMethod org/spongepowered/asm/service/IMixinService.getResourceAsStream:(Ljava/lang/String;)Ljava/io/InputStream;
+        11: astore        4
+        13: aload         4
+        15: ifnonnull     39
+        18: new           #60                 // class java/lang/IllegalArgumentException
+        21: dup
+        22: ldc           #29                 // String The specified resource \'%s\' was invalid or could not be read
+        24: iconst_1
+        25: anewarray     #64                 // class java/lang/Object
+        28: dup
+        29: iconst_0
+        30: aload_0
+        31: aastore
+        32: invokestatic  #203                // Method java/lang/String.format:(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+        35: invokespecial #193                // Method java/lang/IllegalArgumentException."<init>":(Ljava/lang/String;)V
+        38: athrow
+        39: new           #54                 // class java/io/InputStreamReader
+        42: dup
+        43: aload         4
+        45: invokespecial #186                // Method java/io/InputStreamReader."<init>":(Ljava/io/InputStream;)V
+        48: astore        5
+        50: new           #122                // class org/spongepowered/include/com/google/gson/Gson
+        53: dup
+        54: invokespecial #299                // Method org/spongepowered/include/com/google/gson/Gson."<init>":()V
+        57: aload         5
+        59: ldc           #105                // class org/spongepowered/asm/mixin/transformer/MixinConfig
+        61: invokevirtual #300                // Method org/spongepowered/include/com/google/gson/Gson.fromJson:(Ljava/io/Reader;Ljava/lang/Class;)Ljava/lang/Object;
+        64: checkcast     #105                // class org/spongepowered/asm/mixin/transformer/MixinConfig
+        67: astore        6
+        69: aload         6
+        71: aload_3
+        72: aload_0
+        73: aload_1
+        74: aload_2
+        75: invokespecial #264                // Method onLoad:(Lorg/spongepowered/asm/service/IMixinService;Ljava/lang/String;Lorg/spongepowered/asm/mixin/MixinEnvironment;Lorg/spongepowered/asm/mixin/extensibility/IMixinConfigSource;)Z
+        78: ifeq          96
+        81: aload         6
+        83: invokevirtual #256                // Method getHandle:()Lorg/spongepowered/asm/mixin/transformer/Config;
+        86: astore        7
+        88: aload         5
+        90: invokevirtual #187                // Method java/io/InputStreamReader.close:()V
+        93: aload         7
+        95: areturn
+        96: aload         5
+        98: invokevirtual #187                // Method java/io/InputStreamReader.close:()V
+       101: goto          126
+       104: astore        6
+       106: aload         5
+       108: invokevirtual #187                // Method java/io/InputStreamReader.close:()V
+       111: goto          123
+       114: astore        7
+       116: aload         6
+       118: aload         7
+       120: invokevirtual #215                // Method java/lang/Throwable.addSuppressed:(Ljava/lang/Throwable;)V
+       123: aload         6
+       125: athrow
+       126: aconst_null
+       127: areturn
+       128: astore_3
+       129: aload_3
+       130: athrow
+       131: astore_3
+       132: new           #60                 // class java/lang/IllegalArgumentException
+       135: dup
+       136: ldc           #29                 // String The specified resource \'%s\' was invalid or could not be read
+       138: iconst_1
+       139: anewarray     #64                 // class java/lang/Object
+       142: dup
+       143: iconst_0
+       144: aload_0
+       145: aastore
+       146: invokestatic  #203                // Method java/lang/String.format:(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+       149: aload_3
+       150: invokespecial #194                // Method java/lang/IllegalArgumentException."<init>":(Ljava/lang/String;Ljava/lang/Throwable;)V
+       153: athrow
+      Exception table:
+         from    to  target type
+            50    88   104   Class java/lang/Throwable
+           106   111   114   Class java/lang/Throwable
+             0    93   128   Class java/lang/IllegalArgumentException
+            96   127   128   Class java/lang/IllegalArgumentException
+             0    93   131   Class java/lang/Exception
+            96   127   131   Class java/lang/Exception
+
+  private static int getCollectionSize(java.util.Collection<?>...);
+    Code:
+         0: iconst_0
+         1: istore_1
+         2: aload_0
+         3: astore_2
+         4: aload_2
+         5: arraylength
+         6: istore_3
+         7: iconst_0
+         8: istore        4
+        10: iload         4
+        12: iload_3
+        13: if_icmpge     43
+        16: aload_2
+        17: iload         4
+        19: aaload
+        20: astore        5
+        22: aload         5
+        24: ifnull        37
+        27: iload_1
+        28: aload         5
+        30: invokeinterface #302,  1          // InterfaceMethod java/util/Collection.size:()I
+        35: iadd
+        36: istore_1
+        37: iinc          4, 1
+        40: goto          10
+        43: iload_1
+        44: ireturn
+
+  public int compareTo(java.lang.Object);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: checkcast     #105                // class org/spongepowered/asm/mixin/transformer/MixinConfig
+         5: invokevirtual #253                // Method compareTo:(Lorg/spongepowered/asm/mixin/transformer/MixinConfig;)I
+         8: ireturn
+
+  static {};
+    Code:
+         0: iconst_0
+         1: putstatic     #136                // Field configOrder:I
+         4: new           #75                 // class java/util/HashSet
+         7: dup
+         8: invokespecial #221                // Method java/util/HashSet."<init>":()V
+        11: putstatic     #139                // Field globalMixinList:Ljava/util/Set;
+        14: return
+}

@@ -1,0 +1,1560 @@
+Compiled from "V1ModMetadataParser.java"
+final class net.fabricmc.loader.impl.metadata.V1ModMetadataParser {
+  static net.fabricmc.loader.impl.metadata.LoaderModMetadata parse(net.fabricmc.loader.impl.lib.gson.JsonReader) throws java.io.IOException, net.fabricmc.loader.impl.metadata.ParseMetadataException;
+    Code:
+         0: new           #89                 // class java/util/ArrayList
+         3: dup
+         4: invokespecial #152                // Method java/util/ArrayList."<init>":()V
+         7: astore_1
+         8: aconst_null
+         9: astore_2
+        10: aconst_null
+        11: astore_3
+        12: new           #89                 // class java/util/ArrayList
+        15: dup
+        16: invokespecial #152                // Method java/util/ArrayList."<init>":()V
+        19: astore        4
+        21: getstatic     #134                // Field net/fabricmc/loader/api/metadata/ModEnvironment.UNIVERSAL:Lnet/fabricmc/loader/api/metadata/ModEnvironment;
+        24: astore        5
+        26: new           #91                 // class java/util/HashMap
+        29: dup
+        30: invokespecial #153                // Method java/util/HashMap."<init>":()V
+        33: astore        6
+        35: new           #89                 // class java/util/ArrayList
+        38: dup
+        39: invokespecial #152                // Method java/util/ArrayList."<init>":()V
+        42: astore        7
+        44: new           #89                 // class java/util/ArrayList
+        47: dup
+        48: invokespecial #152                // Method java/util/ArrayList."<init>":()V
+        51: astore        8
+        53: aconst_null
+        54: astore        9
+        56: new           #89                 // class java/util/ArrayList
+        59: dup
+        60: invokespecial #152                // Method java/util/ArrayList."<init>":()V
+        63: astore        10
+        65: iconst_0
+        66: istore        11
+        68: aconst_null
+        69: astore        12
+        71: aconst_null
+        72: astore        13
+        74: new           #89                 // class java/util/ArrayList
+        77: dup
+        78: invokespecial #152                // Method java/util/ArrayList."<init>":()V
+        81: astore        14
+        83: new           #89                 // class java/util/ArrayList
+        86: dup
+        87: invokespecial #152                // Method java/util/ArrayList."<init>":()V
+        90: astore        15
+        92: aconst_null
+        93: astore        16
+        95: new           #89                 // class java/util/ArrayList
+        98: dup
+        99: invokespecial #152                // Method java/util/ArrayList."<init>":()V
+       102: astore        17
+       104: aconst_null
+       105: astore        18
+       107: new           #91                 // class java/util/HashMap
+       110: dup
+       111: invokespecial #153                // Method java/util/HashMap."<init>":()V
+       114: astore        19
+       116: new           #91                 // class java/util/HashMap
+       119: dup
+       120: invokespecial #153                // Method java/util/HashMap."<init>":()V
+       123: astore        20
+       125: aload_0
+       126: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+       129: ifeq          1339
+       132: aload_0
+       133: invokevirtual #163                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextName:()Ljava/lang/String;
+       136: astore        21
+       138: aload         21
+       140: astore        22
+       142: iconst_m1
+       143: istore        23
+       145: aload         22
+       147: invokevirtual #146                // Method java/lang/String.hashCode:()I
+       150: lookupswitch  { // 24
+             -1929477777: 533
+             -1724546052: 618
+             -1491605892: 720
+             -1380923564: 567
+             -1349088399: 737
+             -1073740782: 465
+              -987494926: 400
+              -801616159: 550
+              -646508472: 635
+              -393139282: 584
+              -313538603: 432
+              -233564169: 352
+               -85904877: 416
+                    3355: 368
+                 3226745: 703
+                 3254712: 448
+                 3373707: 601
+               166757441: 686
+               351608024: 384
+               600573751: 516
+               951526432: 669
+              1187246052: 482
+              1375976184: 652
+              1554151303: 499
+                 default: 751
+            }
+       352: aload         22
+       354: ldc           #78                 // String schemaVersion
+       356: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       359: ifeq          751
+       362: iconst_0
+       363: istore        23
+       365: goto          751
+       368: aload         22
+       370: ldc           #69                 // String id
+       372: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       375: ifeq          751
+       378: iconst_1
+       379: istore        23
+       381: goto          751
+       384: aload         22
+       386: ldc           #82                 // String version
+       388: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       391: ifeq          751
+       394: iconst_2
+       395: istore        23
+       397: goto          751
+       400: aload         22
+       402: ldc           #75                 // String provides
+       404: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       407: ifeq          751
+       410: iconst_3
+       411: istore        23
+       413: goto          751
+       416: aload         22
+       418: ldc           #66                 // String environment
+       420: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       423: ifeq          751
+       426: iconst_4
+       427: istore        23
+       429: goto          751
+       432: aload         22
+       434: ldc           #65                 // String entrypoints
+       436: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       439: ifeq          751
+       442: iconst_5
+       443: istore        23
+       445: goto          751
+       448: aload         22
+       450: ldc           #70                 // String jars
+       452: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       455: ifeq          751
+       458: bipush        6
+       460: istore        23
+       462: goto          751
+       465: aload         22
+       467: ldc           #73                 // String mixins
+       469: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       472: ifeq          751
+       475: bipush        7
+       477: istore        23
+       479: goto          751
+       482: aload         22
+       484: ldc           #52                 // String accessWidener
+       486: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       489: ifeq          751
+       492: bipush        8
+       494: istore        23
+       496: goto          751
+       499: aload         22
+       501: ldc           #63                 // String depends
+       503: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       506: ifeq          751
+       509: bipush        9
+       511: istore        23
+       513: goto          751
+       516: aload         22
+       518: ldc           #76                 // String recommends
+       520: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       523: ifeq          751
+       526: bipush        10
+       528: istore        23
+       530: goto          751
+       533: aload         22
+       535: ldc           #80                 // String suggests
+       537: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       540: ifeq          751
+       543: bipush        11
+       545: istore        23
+       547: goto          751
+       550: aload         22
+       552: ldc           #58                 // String conflicts
+       554: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       557: ifeq          751
+       560: bipush        12
+       562: istore        23
+       564: goto          751
+       567: aload         22
+       569: ldc           #55                 // String breaks
+       571: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       574: ifeq          751
+       577: bipush        13
+       579: istore        23
+       581: goto          751
+       584: aload         22
+       586: ldc           #77                 // String requires
+       588: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       591: ifeq          751
+       594: bipush        14
+       596: istore        23
+       598: goto          751
+       601: aload         22
+       603: ldc           #74                 // String name
+       605: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       608: ifeq          751
+       611: bipush        15
+       613: istore        23
+       615: goto          751
+       618: aload         22
+       620: ldc           #64                 // String description
+       622: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       625: ifeq          751
+       628: bipush        16
+       630: istore        23
+       632: goto          751
+       635: aload         22
+       637: ldc           #54                 // String authors
+       639: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       642: ifeq          751
+       645: bipush        17
+       647: istore        23
+       649: goto          751
+       652: aload         22
+       654: ldc           #60                 // String contributors
+       656: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       659: ifeq          751
+       662: bipush        18
+       664: istore        23
+       666: goto          751
+       669: aload         22
+       671: ldc           #59                 // String contact
+       673: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       676: ifeq          751
+       679: bipush        19
+       681: istore        23
+       683: goto          751
+       686: aload         22
+       688: ldc           #72                 // String license
+       690: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       693: ifeq          751
+       696: bipush        20
+       698: istore        23
+       700: goto          751
+       703: aload         22
+       705: ldc           #68                 // String icon
+       707: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       710: ifeq          751
+       713: bipush        21
+       715: istore        23
+       717: goto          751
+       720: aload         22
+       722: ldc           #71                 // String languageAdapters
+       724: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       727: ifeq          751
+       730: bipush        22
+       732: istore        23
+       734: goto          751
+       737: aload         22
+       739: ldc           #61                 // String custom
+       741: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       744: ifeq          751
+       747: bipush        23
+       749: istore        23
+       751: iload         23
+       753: tableswitch   { // 0 to 23
+                       0: 864
+                       1: 923
+                       2: 952
+                       3: 999
+                       4: 1008
+                       5: 1038
+                       6: 1048
+                       7: 1058
+                       8: 1068
+                       9: 1098
+                      10: 1110
+                      11: 1122
+                      12: 1134
+                      13: 1146
+                      14: 1158
+                      15: 1168
+                      16: 1198
+                      17: 1228
+                      18: 1238
+                      19: 1248
+                      20: 1257
+                      21: 1266
+                      22: 1275
+                      23: 1284
+                 default: 1293
+            }
+       864: aload_0
+       865: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+       868: getstatic     #137                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.NUMBER:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+       871: if_acmpeq     885
+       874: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       877: dup
+       878: ldc           #14                 // String Duplicate \"schemaVersion\" field is not a number
+       880: aload_0
+       881: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       884: athrow
+       885: aload_0
+       886: invokevirtual #162                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextInt:()I
+       889: istore        24
+       891: iload         24
+       893: iconst_1
+       894: if_icmpeq     1336
+       897: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       900: dup
+       901: ldc           #13                 // String Duplicate \"schemaVersion\" field does not match the predicted schema version of 1. Duplicate field value is %s
+       903: iconst_1
+       904: anewarray     #86                 // class java/lang/Object
+       907: dup
+       908: iconst_0
+       909: iload         24
+       911: invokestatic  #142                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       914: aastore
+       915: invokestatic  #145                // Method java/lang/String.format:(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+       918: aload_0
+       919: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       922: athrow
+       923: aload_0
+       924: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+       927: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+       930: if_acmpeq     944
+       933: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       936: dup
+       937: ldc           #40                 // String Mod id must be a non-empty string with a length of 3-64 characters.
+       939: aload_0
+       940: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       943: athrow
+       944: aload_0
+       945: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+       948: astore_2
+       949: goto          1336
+       952: aload_0
+       953: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+       956: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+       959: if_acmpeq     973
+       962: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       965: dup
+       966: ldc           #51                 // String Version must be a non-empty string
+       968: aload_0
+       969: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       972: athrow
+       973: aload_0
+       974: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+       977: iconst_0
+       978: invokestatic  #199                // Method net/fabricmc/loader/impl/util/version/VersionParser.parse:(Ljava/lang/String;Z)Lnet/fabricmc/loader/api/Version;
+       981: astore_3
+       982: goto          1336
+       985: astore        25
+       987: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       990: dup
+       991: ldc           #20                 // String Failed to parse version
+       993: aload         25
+       995: invokespecial #174                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Ljava/lang/Throwable;)V
+       998: athrow
+       999: aload_0
+      1000: aload         4
+      1002: invokestatic  #198                // Method readProvides:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;Ljava/util/List;)V
+      1005: goto          1336
+      1008: aload_0
+      1009: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+      1012: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+      1015: if_acmpeq     1029
+      1018: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+      1021: dup
+      1022: ldc           #19                 // String Environment must be a string
+      1024: aload_0
+      1025: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+      1028: athrow
+      1029: aload_0
+      1030: invokestatic  #191                // Method readEnvironment:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)Lnet/fabricmc/loader/api/metadata/ModEnvironment;
+      1033: astore        5
+      1035: goto          1336
+      1038: aload_1
+      1039: aload_0
+      1040: aload         6
+      1042: invokestatic  #190                // Method readEntrypoints:(Ljava/util/List;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;Ljava/util/Map;)V
+      1045: goto          1336
+      1048: aload_1
+      1049: aload_0
+      1050: aload         7
+      1052: invokestatic  #196                // Method readNestedJarEntries:(Ljava/util/List;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;Ljava/util/List;)V
+      1055: goto          1336
+      1058: aload_1
+      1059: aload_0
+      1060: aload         8
+      1062: invokestatic  #195                // Method readMixinConfigs:(Ljava/util/List;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;Ljava/util/List;)V
+      1065: goto          1336
+      1068: aload_0
+      1069: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+      1072: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+      1075: if_acmpeq     1089
+      1078: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+      1081: dup
+      1082: ldc           #5                  // String Access Widener file must be a string
+      1084: aload_0
+      1085: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+      1088: athrow
+      1089: aload_0
+      1090: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+      1093: astore        9
+      1095: goto          1336
+      1098: aload_0
+      1099: getstatic     #129                // Field net/fabricmc/loader/api/metadata/ModDependency$Kind.DEPENDS:Lnet/fabricmc/loader/api/metadata/ModDependency$Kind;
+      1102: aload         10
+      1104: invokestatic  #189                // Method readDependenciesContainer:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;Lnet/fabricmc/loader/api/metadata/ModDependency$Kind;Ljava/util/List;)V
+      1107: goto          1336
+      1110: aload_0
+      1111: getstatic     #130                // Field net/fabricmc/loader/api/metadata/ModDependency$Kind.RECOMMENDS:Lnet/fabricmc/loader/api/metadata/ModDependency$Kind;
+      1114: aload         10
+      1116: invokestatic  #189                // Method readDependenciesContainer:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;Lnet/fabricmc/loader/api/metadata/ModDependency$Kind;Ljava/util/List;)V
+      1119: goto          1336
+      1122: aload_0
+      1123: getstatic     #131                // Field net/fabricmc/loader/api/metadata/ModDependency$Kind.SUGGESTS:Lnet/fabricmc/loader/api/metadata/ModDependency$Kind;
+      1126: aload         10
+      1128: invokestatic  #189                // Method readDependenciesContainer:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;Lnet/fabricmc/loader/api/metadata/ModDependency$Kind;Ljava/util/List;)V
+      1131: goto          1336
+      1134: aload_0
+      1135: getstatic     #128                // Field net/fabricmc/loader/api/metadata/ModDependency$Kind.CONFLICTS:Lnet/fabricmc/loader/api/metadata/ModDependency$Kind;
+      1138: aload         10
+      1140: invokestatic  #189                // Method readDependenciesContainer:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;Lnet/fabricmc/loader/api/metadata/ModDependency$Kind;Ljava/util/List;)V
+      1143: goto          1336
+      1146: aload_0
+      1147: getstatic     #127                // Field net/fabricmc/loader/api/metadata/ModDependency$Kind.BREAKS:Lnet/fabricmc/loader/api/metadata/ModDependency$Kind;
+      1150: aload         10
+      1152: invokestatic  #189                // Method readDependenciesContainer:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;Lnet/fabricmc/loader/api/metadata/ModDependency$Kind;Ljava/util/List;)V
+      1155: goto          1336
+      1158: iconst_1
+      1159: istore        11
+      1161: aload_0
+      1162: invokevirtual #166                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.skipValue:()V
+      1165: goto          1336
+      1168: aload_0
+      1169: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+      1172: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+      1175: if_acmpeq     1189
+      1178: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+      1181: dup
+      1182: ldc           #41                 // String Mod name must be a string
+      1184: aload_0
+      1185: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+      1188: athrow
+      1189: aload_0
+      1190: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+      1193: astore        12
+      1195: goto          1336
+      1198: aload_0
+      1199: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+      1202: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+      1205: if_acmpeq     1219
+      1208: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+      1211: dup
+      1212: ldc           #39                 // String Mod description must be a string
+      1214: aload_0
+      1215: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+      1218: athrow
+      1219: aload_0
+      1220: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+      1223: astore        13
+      1225: goto          1336
+      1228: aload_1
+      1229: aload_0
+      1230: aload         14
+      1232: invokestatic  #197                // Method readPeople:(Ljava/util/List;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;Ljava/util/List;)V
+      1235: goto          1336
+      1238: aload_1
+      1239: aload_0
+      1240: aload         15
+      1242: invokestatic  #197                // Method readPeople:(Ljava/util/List;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;Ljava/util/List;)V
+      1245: goto          1336
+      1248: aload_0
+      1249: invokestatic  #187                // Method readContactInfo:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)Lnet/fabricmc/loader/api/metadata/ContactInformation;
+      1252: astore        16
+      1254: goto          1336
+      1257: aload_0
+      1258: aload         17
+      1260: invokestatic  #194                // Method readLicense:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;Ljava/util/List;)V
+      1263: goto          1336
+      1266: aload_0
+      1267: invokestatic  #192                // Method readIcon:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)Lnet/fabricmc/loader/impl/metadata/V1ModMetadata$IconEntry;
+      1270: astore        18
+      1272: goto          1336
+      1275: aload_0
+      1276: aload         19
+      1278: invokestatic  #193                // Method readLanguageAdapters:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;Ljava/util/Map;)V
+      1281: goto          1336
+      1284: aload_0
+      1285: aload         20
+      1287: invokestatic  #188                // Method readCustomValues:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;Ljava/util/Map;)V
+      1290: goto          1336
+      1293: getstatic     #139                // Field net/fabricmc/loader/impl/metadata/ModMetadataParser.IGNORED_KEYS:Ljava/util/Set;
+      1296: aload         21
+      1298: invokeinterface #203,  2          // InterfaceMethod java/util/Set.contains:(Ljava/lang/Object;)Z
+      1303: ifne          1332
+      1306: aload_1
+      1307: new           #113                // class net/fabricmc/loader/impl/metadata/ParseWarning
+      1310: dup
+      1311: aload_0
+      1312: invokevirtual #160                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.getLineNumber:()I
+      1315: aload_0
+      1316: invokevirtual #159                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.getColumn:()I
+      1319: aload         21
+      1321: ldc           #48                 // String Unsupported root entry
+      1323: invokespecial #179                // Method net/fabricmc/loader/impl/metadata/ParseWarning."<init>":(IILjava/lang/String;Ljava/lang/String;)V
+      1326: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+      1331: pop
+      1332: aload_0
+      1333: invokevirtual #166                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.skipValue:()V
+      1336: goto          125
+      1339: aload_2
+      1340: ifnonnull     1353
+      1343: new           #112                // class net/fabricmc/loader/impl/metadata/ParseMetadataException$MissingField
+      1346: dup
+      1347: ldc           #69                 // String id
+      1349: invokespecial #177                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException$MissingField."<init>":(Ljava/lang/String;)V
+      1352: athrow
+      1353: aload_3
+      1354: ifnonnull     1367
+      1357: new           #112                // class net/fabricmc/loader/impl/metadata/ParseMetadataException$MissingField
+      1360: dup
+      1361: ldc           #82                 // String version
+      1363: invokespecial #177                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException$MissingField."<init>":(Ljava/lang/String;)V
+      1366: athrow
+      1367: aload_2
+      1368: aload_1
+      1369: invokestatic  #172                // Method net/fabricmc/loader/impl/metadata/ModMetadataParser.logWarningMessages:(Ljava/lang/String;Ljava/util/List;)V
+      1372: new           #115                // class net/fabricmc/loader/impl/metadata/V1ModMetadata
+      1375: dup
+      1376: aload_2
+      1377: aload_3
+      1378: aload         4
+      1380: aload         5
+      1382: aload         6
+      1384: aload         7
+      1386: aload         8
+      1388: aload         9
+      1390: aload         10
+      1392: iload         11
+      1394: aload         12
+      1396: aload         13
+      1398: aload         14
+      1400: aload         15
+      1402: aload         16
+      1404: aload         17
+      1406: aload         18
+      1408: aload         19
+      1410: aload         20
+      1412: invokespecial #181                // Method net/fabricmc/loader/impl/metadata/V1ModMetadata."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/api/Version;Ljava/util/Collection;Lnet/fabricmc/loader/api/metadata/ModEnvironment;Ljava/util/Map;Ljava/util/Collection;Ljava/util/Collection;Ljava/lang/String;Ljava/util/Collection;ZLjava/lang/String;Ljava/lang/String;Ljava/util/Collection;Ljava/util/Collection;Lnet/fabricmc/loader/api/metadata/ContactInformation;Ljava/util/Collection;Lnet/fabricmc/loader/impl/metadata/V1ModMetadata$IconEntry;Ljava/util/Map;Ljava/util/Map;)V
+      1415: areturn
+      Exception table:
+         from    to  target type
+           973   982   985   Class net/fabricmc/loader/api/VersionParsingException
+
+  private static void readProvides(net.fabricmc.loader.impl.lib.gson.JsonReader, java.util.List<java.lang.String>) throws java.io.IOException, net.fabricmc.loader.impl.metadata.ParseMetadataException;
+    Code:
+         0: aload_0
+         1: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         4: getstatic     #135                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.BEGIN_ARRAY:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         7: if_acmpeq     20
+        10: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        13: dup
+        14: ldc           #46                 // String Provides must be an array
+        16: invokespecial #173                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;)V
+        19: athrow
+        20: aload_0
+        21: invokevirtual #155                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginArray:()V
+        24: aload_0
+        25: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+        28: ifeq          66
+        31: aload_0
+        32: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        35: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        38: if_acmpeq     52
+        41: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        44: dup
+        45: ldc           #45                 // String Provided id must be a string
+        47: aload_0
+        48: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        51: athrow
+        52: aload_1
+        53: aload_0
+        54: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+        57: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        62: pop
+        63: goto          24
+        66: aload_0
+        67: invokevirtual #157                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endArray:()V
+        70: return
+
+  private static net.fabricmc.loader.api.metadata.ModEnvironment readEnvironment(net.fabricmc.loader.impl.lib.gson.JsonReader) throws net.fabricmc.loader.impl.metadata.ParseMetadataException, java.io.IOException;
+    Code:
+         0: aload_0
+         1: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+         4: getstatic     #125                // Field java/util/Locale.ROOT:Ljava/util/Locale;
+         7: invokevirtual #148                // Method java/lang/String.toLowerCase:(Ljava/util/Locale;)Ljava/lang/String;
+        10: astore_1
+        11: aload_1
+        12: invokevirtual #147                // Method java/lang/String.isEmpty:()Z
+        15: ifne          27
+        18: aload_1
+        19: ldc           #4                  // String *
+        21: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+        24: ifeq          31
+        27: getstatic     #134                // Field net/fabricmc/loader/api/metadata/ModEnvironment.UNIVERSAL:Lnet/fabricmc/loader/api/metadata/ModEnvironment;
+        30: areturn
+        31: aload_1
+        32: ldc           #56                 // String client
+        34: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+        37: ifeq          44
+        40: getstatic     #132                // Field net/fabricmc/loader/api/metadata/ModEnvironment.CLIENT:Lnet/fabricmc/loader/api/metadata/ModEnvironment;
+        43: areturn
+        44: aload_1
+        45: ldc           #79                 // String server
+        47: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+        50: ifeq          57
+        53: getstatic     #133                // Field net/fabricmc/loader/api/metadata/ModEnvironment.SERVER:Lnet/fabricmc/loader/api/metadata/ModEnvironment;
+        56: areturn
+        57: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        60: dup
+        61: new           #88                 // class java/lang/StringBuilder
+        64: dup
+        65: invokespecial #149                // Method java/lang/StringBuilder."<init>":()V
+        68: ldc           #28                 // String Invalid environment type:
+        70: invokevirtual #150                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        73: aload_1
+        74: invokevirtual #150                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        77: ldc           #1                  // String !
+        79: invokevirtual #150                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+        82: invokevirtual #151                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+        85: aload_0
+        86: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        89: athrow
+
+  private static void readEntrypoints(java.util.List<net.fabricmc.loader.impl.metadata.ParseWarning>, net.fabricmc.loader.impl.lib.gson.JsonReader, java.util.Map<java.lang.String, java.util.List<net.fabricmc.loader.impl.metadata.EntrypointMetadata>>) throws java.io.IOException, net.fabricmc.loader.impl.metadata.ParseMetadataException;
+    Code:
+         0: aload_1
+         1: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         4: getstatic     #136                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.BEGIN_OBJECT:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         7: if_acmpeq     21
+        10: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        13: dup
+        14: ldc           #18                 // String Entrypoints must be an object
+        16: aload_1
+        17: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        20: athrow
+        21: aload_1
+        22: invokevirtual #156                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginObject:()V
+        25: aload_1
+        26: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+        29: ifeq          367
+        32: aload_1
+        33: invokevirtual #163                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextName:()Ljava/lang/String;
+        36: astore_3
+        37: new           #89                 // class java/util/ArrayList
+        40: dup
+        41: invokespecial #152                // Method java/util/ArrayList."<init>":()V
+        44: astore        4
+        46: aload_1
+        47: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        50: getstatic     #135                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.BEGIN_ARRAY:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        53: if_acmpeq     67
+        56: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        59: dup
+        60: ldc           #15                 // String Entrypoint list must be an array!
+        62: aload_1
+        63: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        66: athrow
+        67: aload_1
+        68: invokevirtual #155                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginArray:()V
+        71: aload_1
+        72: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+        75: ifeq          350
+        78: ldc           #62                 // String default
+        80: astore        5
+        82: aconst_null
+        83: astore        6
+        85: getstatic     #140                // Field net/fabricmc/loader/impl/metadata/V1ModMetadataParser$1.$SwitchMap$net$fabricmc$loader$impl$lib$gson$JsonToken:[I
+        88: aload_1
+        89: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        92: invokevirtual #167                // Method net/fabricmc/loader/impl/lib/gson/JsonToken.ordinal:()I
+        95: iaload
+        96: lookupswitch  { // 2
+                       1: 124
+                       2: 133
+                 default: 302
+            }
+       124: aload_1
+       125: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+       128: astore        6
+       130: goto          313
+       133: aload_1
+       134: invokevirtual #156                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginObject:()V
+       137: aload_1
+       138: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+       141: ifeq          295
+       144: aload_1
+       145: invokevirtual #163                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextName:()Ljava/lang/String;
+       148: astore        7
+       150: aload         7
+       152: astore        8
+       154: iconst_m1
+       155: istore        9
+       157: aload         8
+       159: invokevirtual #146                // Method java/lang/String.hashCode:()I
+       162: lookupswitch  { // 2
+             -1150508209: 188
+               111972721: 204
+                 default: 217
+            }
+       188: aload         8
+       190: ldc           #53                 // String adapter
+       192: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       195: ifeq          217
+       198: iconst_0
+       199: istore        9
+       201: goto          217
+       204: aload         8
+       206: ldc           #81                 // String value
+       208: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       211: ifeq          217
+       214: iconst_1
+       215: istore        9
+       217: iload         9
+       219: lookupswitch  { // 2
+                       0: 244
+                       1: 253
+                 default: 262
+            }
+       244: aload_1
+       245: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+       248: astore        5
+       250: goto          292
+       253: aload_1
+       254: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+       257: astore        6
+       259: goto          292
+       262: aload_0
+       263: new           #113                // class net/fabricmc/loader/impl/metadata/ParseWarning
+       266: dup
+       267: aload_1
+       268: invokevirtual #160                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.getLineNumber:()I
+       271: aload_1
+       272: invokevirtual #159                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.getColumn:()I
+       275: aload         7
+       277: ldc           #24                 // String Invalid entry in entrypoint metadata
+       279: invokespecial #179                // Method net/fabricmc/loader/impl/metadata/ParseWarning."<init>":(IILjava/lang/String;Ljava/lang/String;)V
+       282: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       287: pop
+       288: aload_1
+       289: invokevirtual #166                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.skipValue:()V
+       292: goto          137
+       295: aload_1
+       296: invokevirtual #158                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endObject:()V
+       299: goto          313
+       302: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       305: dup
+       306: ldc           #16                 // String Entrypoint must be a string or object with \"value\" field
+       308: aload_1
+       309: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       312: athrow
+       313: aload         6
+       315: ifnonnull     328
+       318: new           #112                // class net/fabricmc/loader/impl/metadata/ParseMetadataException$MissingField
+       321: dup
+       322: ldc           #17                 // String Entrypoint value must be present
+       324: invokespecial #177                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException$MissingField."<init>":(Ljava/lang/String;)V
+       327: athrow
+       328: aload         4
+       330: new           #116                // class net/fabricmc/loader/impl/metadata/V1ModMetadata$EntrypointMetadataImpl
+       333: dup
+       334: aload         5
+       336: aload         6
+       338: invokespecial #182                // Method net/fabricmc/loader/impl/metadata/V1ModMetadata$EntrypointMetadataImpl."<init>":(Ljava/lang/String;Ljava/lang/String;)V
+       341: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       346: pop
+       347: goto          71
+       350: aload_1
+       351: invokevirtual #157                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endArray:()V
+       354: aload_2
+       355: aload_3
+       356: aload         4
+       358: invokeinterface #202,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+       363: pop
+       364: goto          25
+       367: aload_1
+       368: invokevirtual #158                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endObject:()V
+       371: return
+
+  private static void readNestedJarEntries(java.util.List<net.fabricmc.loader.impl.metadata.ParseWarning>, net.fabricmc.loader.impl.lib.gson.JsonReader, java.util.List<net.fabricmc.loader.impl.metadata.NestedJarEntry>) throws java.io.IOException, net.fabricmc.loader.impl.metadata.ParseMetadataException;
+    Code:
+         0: aload_1
+         1: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         4: getstatic     #135                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.BEGIN_ARRAY:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         7: if_acmpeq     21
+        10: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        13: dup
+        14: ldc           #31                 // String Jar entries must be in an array
+        16: aload_1
+        17: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        20: athrow
+        21: aload_1
+        22: invokevirtual #155                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginArray:()V
+        25: aload_1
+        26: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+        29: ifeq          181
+        32: aload_1
+        33: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        36: getstatic     #136                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.BEGIN_OBJECT:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        39: if_acmpeq     53
+        42: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        45: dup
+        46: ldc           #30                 // String Invalid type for JAR entry!
+        48: aload_1
+        49: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        52: athrow
+        53: aload_1
+        54: invokevirtual #156                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginObject:()V
+        57: aconst_null
+        58: astore_3
+        59: aload_1
+        60: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+        63: ifeq          144
+        66: aload_1
+        67: invokevirtual #163                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextName:()Ljava/lang/String;
+        70: astore        4
+        72: aload         4
+        74: ldc           #67                 // String file
+        76: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+        79: ifeq          111
+        82: aload_1
+        83: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        86: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        89: if_acmpeq     103
+        92: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        95: dup
+        96: ldc           #2                  // String \"file\" entry in jar object must be a string
+        98: aload_1
+        99: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       102: athrow
+       103: aload_1
+       104: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+       107: astore_3
+       108: goto          141
+       111: aload_0
+       112: new           #113                // class net/fabricmc/loader/impl/metadata/ParseWarning
+       115: dup
+       116: aload_1
+       117: invokevirtual #160                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.getLineNumber:()I
+       120: aload_1
+       121: invokevirtual #159                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.getColumn:()I
+       124: aload         4
+       126: ldc           #25                 // String Invalid entry in jar entry
+       128: invokespecial #179                // Method net/fabricmc/loader/impl/metadata/ParseWarning."<init>":(IILjava/lang/String;Ljava/lang/String;)V
+       131: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       136: pop
+       137: aload_1
+       138: invokevirtual #166                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.skipValue:()V
+       141: goto          59
+       144: aload_1
+       145: invokevirtual #158                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endObject:()V
+       148: aload_3
+       149: ifnonnull     163
+       152: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       155: dup
+       156: ldc           #37                 // String Missing mandatory key \'file\' in JAR entry!
+       158: aload_1
+       159: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       162: athrow
+       163: aload_2
+       164: new           #118                // class net/fabricmc/loader/impl/metadata/V1ModMetadata$JarEntry
+       167: dup
+       168: aload_3
+       169: invokespecial #183                // Method net/fabricmc/loader/impl/metadata/V1ModMetadata$JarEntry."<init>":(Ljava/lang/String;)V
+       172: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       177: pop
+       178: goto          25
+       181: aload_1
+       182: invokevirtual #157                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endArray:()V
+       185: return
+
+  private static void readMixinConfigs(java.util.List<net.fabricmc.loader.impl.metadata.ParseWarning>, net.fabricmc.loader.impl.lib.gson.JsonReader, java.util.List<net.fabricmc.loader.impl.metadata.V1ModMetadata$MixinEntry>) throws java.io.IOException, net.fabricmc.loader.impl.metadata.ParseMetadataException;
+    Code:
+         0: aload_1
+         1: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         4: getstatic     #135                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.BEGIN_ARRAY:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         7: if_acmpeq     21
+        10: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        13: dup
+        14: ldc           #38                 // String Mixin configs must be in an array
+        16: aload_1
+        17: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        20: athrow
+        21: aload_1
+        22: invokevirtual #155                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginArray:()V
+        25: aload_1
+        26: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+        29: ifeq          358
+        32: getstatic     #140                // Field net/fabricmc/loader/impl/metadata/V1ModMetadataParser$1.$SwitchMap$net$fabricmc$loader$impl$lib$gson$JsonToken:[I
+        35: aload_1
+        36: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        39: invokevirtual #167                // Method net/fabricmc/loader/impl/lib/gson/JsonToken.ordinal:()I
+        42: iaload
+        43: lookupswitch  { // 2
+                       1: 68
+                       2: 92
+                 default: 327
+            }
+        68: aload_2
+        69: new           #120                // class net/fabricmc/loader/impl/metadata/V1ModMetadata$MixinEntry
+        72: dup
+        73: aload_1
+        74: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+        77: getstatic     #134                // Field net/fabricmc/loader/api/metadata/ModEnvironment.UNIVERSAL:Lnet/fabricmc/loader/api/metadata/ModEnvironment;
+        80: invokespecial #185                // Method net/fabricmc/loader/impl/metadata/V1ModMetadata$MixinEntry."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/api/metadata/ModEnvironment;)V
+        83: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        88: pop
+        89: goto          25
+        92: aload_1
+        93: invokevirtual #156                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginObject:()V
+        96: aconst_null
+        97: astore_3
+        98: aconst_null
+        99: astore        4
+       101: aload_1
+       102: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+       105: ifeq          279
+       108: aload_1
+       109: invokevirtual #163                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextName:()Ljava/lang/String;
+       112: astore        5
+       114: aload         5
+       116: astore        6
+       118: iconst_m1
+       119: istore        7
+       121: aload         6
+       123: invokevirtual #146                // Method java/lang/String.hashCode:()I
+       126: lookupswitch  { // 2
+             -1354792126: 168
+               -85904877: 152
+                 default: 181
+            }
+       152: aload         6
+       154: ldc           #66                 // String environment
+       156: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       159: ifeq          181
+       162: iconst_0
+       163: istore        7
+       165: goto          181
+       168: aload         6
+       170: ldc           #57                 // String config
+       172: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       175: ifeq          181
+       178: iconst_1
+       179: istore        7
+       181: iload         7
+       183: lookupswitch  { // 2
+                       0: 208
+                       1: 217
+                 default: 246
+            }
+       208: aload_1
+       209: invokestatic  #191                // Method readEnvironment:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)Lnet/fabricmc/loader/api/metadata/ModEnvironment;
+       212: astore        4
+       214: goto          276
+       217: aload_1
+       218: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+       221: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+       224: if_acmpeq     238
+       227: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       230: dup
+       231: ldc           #49                 // String Value of \"config\" must be a string
+       233: aload_1
+       234: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       237: athrow
+       238: aload_1
+       239: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+       242: astore_3
+       243: goto          276
+       246: aload_0
+       247: new           #113                // class net/fabricmc/loader/impl/metadata/ParseWarning
+       250: dup
+       251: aload_1
+       252: invokevirtual #160                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.getLineNumber:()I
+       255: aload_1
+       256: invokevirtual #159                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.getColumn:()I
+       259: aload         5
+       261: ldc           #26                 // String Invalid entry in mixin config entry
+       263: invokespecial #179                // Method net/fabricmc/loader/impl/metadata/ParseWarning."<init>":(IILjava/lang/String;Ljava/lang/String;)V
+       266: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       271: pop
+       272: aload_1
+       273: invokevirtual #166                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.skipValue:()V
+       276: goto          101
+       279: aload_1
+       280: invokevirtual #158                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endObject:()V
+       283: aload         4
+       285: ifnonnull     293
+       288: getstatic     #134                // Field net/fabricmc/loader/api/metadata/ModEnvironment.UNIVERSAL:Lnet/fabricmc/loader/api/metadata/ModEnvironment;
+       291: astore        4
+       293: aload_3
+       294: ifnonnull     307
+       297: new           #112                // class net/fabricmc/loader/impl/metadata/ParseMetadataException$MissingField
+       300: dup
+       301: ldc           #36                 // String Missing mandatory key \'config\' in mixin entry!
+       303: invokespecial #177                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException$MissingField."<init>":(Ljava/lang/String;)V
+       306: athrow
+       307: aload_2
+       308: new           #120                // class net/fabricmc/loader/impl/metadata/V1ModMetadata$MixinEntry
+       311: dup
+       312: aload_3
+       313: aload         4
+       315: invokespecial #185                // Method net/fabricmc/loader/impl/metadata/V1ModMetadata$MixinEntry."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/api/metadata/ModEnvironment;)V
+       318: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       323: pop
+       324: goto          25
+       327: aload_0
+       328: new           #113                // class net/fabricmc/loader/impl/metadata/ParseWarning
+       331: dup
+       332: aload_1
+       333: invokevirtual #160                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.getLineNumber:()I
+       336: aload_1
+       337: invokevirtual #159                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.getColumn:()I
+       340: ldc           #29                 // String Invalid mixin entry type
+       342: invokespecial #178                // Method net/fabricmc/loader/impl/metadata/ParseWarning."<init>":(IILjava/lang/String;)V
+       345: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       350: pop
+       351: aload_1
+       352: invokevirtual #166                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.skipValue:()V
+       355: goto          25
+       358: aload_1
+       359: invokevirtual #157                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endArray:()V
+       362: return
+
+  private static void readDependenciesContainer(net.fabricmc.loader.impl.lib.gson.JsonReader, net.fabricmc.loader.api.metadata.ModDependency$Kind, java.util.List<net.fabricmc.loader.api.metadata.ModDependency>) throws java.io.IOException, net.fabricmc.loader.impl.metadata.ParseMetadataException;
+    Code:
+         0: aload_0
+         1: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         4: getstatic     #136                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.BEGIN_OBJECT:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         7: if_acmpeq     21
+        10: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        13: dup
+        14: ldc           #10                 // String Dependency container must be an object!
+        16: aload_0
+        17: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        20: athrow
+        21: aload_0
+        22: invokevirtual #156                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginObject:()V
+        25: aload_0
+        26: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+        29: ifeq          200
+        32: aload_0
+        33: invokevirtual #163                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextName:()Ljava/lang/String;
+        36: astore_3
+        37: new           #89                 // class java/util/ArrayList
+        40: dup
+        41: invokespecial #152                // Method java/util/ArrayList."<init>":()V
+        44: astore        4
+        46: getstatic     #140                // Field net/fabricmc/loader/impl/metadata/V1ModMetadataParser$1.$SwitchMap$net$fabricmc$loader$impl$lib$gson$JsonToken:[I
+        49: aload_0
+        50: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        53: invokevirtual #167                // Method net/fabricmc/loader/impl/lib/gson/JsonToken.ordinal:()I
+        56: iaload
+        57: lookupswitch  { // 2
+                       1: 84
+                       3: 99
+                 default: 153
+            }
+        84: aload         4
+        86: aload_0
+        87: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+        90: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        95: pop
+        96: goto          164
+        99: aload_0
+       100: invokevirtual #155                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginArray:()V
+       103: aload_0
+       104: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+       107: ifeq          146
+       110: aload_0
+       111: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+       114: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+       117: if_acmpeq     131
+       120: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       123: dup
+       124: ldc           #11                 // String Dependency version range array must only contain string values
+       126: aload_0
+       127: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       130: athrow
+       131: aload         4
+       133: aload_0
+       134: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+       137: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       142: pop
+       143: goto          103
+       146: aload_0
+       147: invokevirtual #157                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endArray:()V
+       150: goto          164
+       153: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       156: dup
+       157: ldc           #12                 // String Dependency version range must be a string or string array!
+       159: aload_0
+       160: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       163: athrow
+       164: aload_2
+       165: new           #109                // class net/fabricmc/loader/impl/metadata/ModDependencyImpl
+       168: dup
+       169: aload_1
+       170: aload_3
+       171: aload         4
+       173: invokespecial #171                // Method net/fabricmc/loader/impl/metadata/ModDependencyImpl."<init>":(Lnet/fabricmc/loader/api/metadata/ModDependency$Kind;Ljava/lang/String;Ljava/util/List;)V
+       176: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       181: pop
+       182: goto          197
+       185: astore        5
+       187: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       190: dup
+       191: aload         5
+       193: invokespecial #176                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/Throwable;)V
+       196: athrow
+       197: goto          25
+       200: aload_0
+       201: invokevirtual #158                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endObject:()V
+       204: return
+      Exception table:
+         from    to  target type
+           164   182   185   Class net/fabricmc/loader/api/VersionParsingException
+
+  private static void readPeople(java.util.List<net.fabricmc.loader.impl.metadata.ParseWarning>, net.fabricmc.loader.impl.lib.gson.JsonReader, java.util.List<net.fabricmc.loader.api.metadata.Person>) throws java.io.IOException, net.fabricmc.loader.impl.metadata.ParseMetadataException;
+    Code:
+         0: aload_1
+         1: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         4: getstatic     #135                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.BEGIN_ARRAY:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         7: if_acmpeq     21
+        10: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        13: dup
+        14: ldc           #35                 // String List of people must be an array
+        16: aload_1
+        17: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        20: athrow
+        21: aload_1
+        22: invokevirtual #155                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginArray:()V
+        25: aload_1
+        26: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+        29: ifeq          334
+        32: getstatic     #140                // Field net/fabricmc/loader/impl/metadata/V1ModMetadataParser$1.$SwitchMap$net$fabricmc$loader$impl$lib$gson$JsonToken:[I
+        35: aload_1
+        36: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        39: invokevirtual #167                // Method net/fabricmc/loader/impl/lib/gson/JsonToken.ordinal:()I
+        42: iaload
+        43: lookupswitch  { // 2
+                       1: 68
+                       2: 89
+                 default: 323
+            }
+        68: aload_2
+        69: new           #114                // class net/fabricmc/loader/impl/metadata/SimplePerson
+        72: dup
+        73: aload_1
+        74: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+        77: invokespecial #180                // Method net/fabricmc/loader/impl/metadata/SimplePerson."<init>":(Ljava/lang/String;)V
+        80: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        85: pop
+        86: goto          25
+        89: aload_1
+        90: invokevirtual #156                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginObject:()V
+        93: aconst_null
+        94: astore_3
+        95: aconst_null
+        96: astore        4
+        98: aload_1
+        99: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+       102: ifeq          275
+       105: aload_1
+       106: invokevirtual #163                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextName:()Ljava/lang/String;
+       109: astore        5
+       111: aload         5
+       113: astore        6
+       115: iconst_m1
+       116: istore        7
+       118: aload         6
+       120: invokevirtual #146                // Method java/lang/String.hashCode:()I
+       123: lookupswitch  { // 2
+                 3373707: 148
+               951526432: 164
+                 default: 177
+            }
+       148: aload         6
+       150: ldc           #74                 // String name
+       152: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       155: ifeq          177
+       158: iconst_0
+       159: istore        7
+       161: goto          177
+       164: aload         6
+       166: ldc           #59                 // String contact
+       168: invokevirtual #144                // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+       171: ifeq          177
+       174: iconst_1
+       175: istore        7
+       177: iload         7
+       179: lookupswitch  { // 2
+                       0: 204
+                       1: 233
+                 default: 242
+            }
+       204: aload_1
+       205: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+       208: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+       211: if_acmpeq     225
+       214: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       217: dup
+       218: ldc           #42                 // String Name of person in dependency container must be a string
+       220: aload_1
+       221: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       224: athrow
+       225: aload_1
+       226: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+       229: astore_3
+       230: goto          272
+       233: aload_1
+       234: invokestatic  #187                // Method readContactInfo:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)Lnet/fabricmc/loader/api/metadata/ContactInformation;
+       237: astore        4
+       239: goto          272
+       242: aload_0
+       243: new           #113                // class net/fabricmc/loader/impl/metadata/ParseWarning
+       246: dup
+       247: aload_1
+       248: invokevirtual #160                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.getLineNumber:()I
+       251: aload_1
+       252: invokevirtual #159                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.getColumn:()I
+       255: aload         5
+       257: ldc           #27                 // String Invalid entry in person
+       259: invokespecial #179                // Method net/fabricmc/loader/impl/metadata/ParseWarning."<init>":(IILjava/lang/String;Ljava/lang/String;)V
+       262: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       267: pop
+       268: aload_1
+       269: invokevirtual #166                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.skipValue:()V
+       272: goto          98
+       275: aload_1
+       276: invokevirtual #158                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endObject:()V
+       279: aload_3
+       280: ifnonnull     293
+       283: new           #112                // class net/fabricmc/loader/impl/metadata/ParseMetadataException$MissingField
+       286: dup
+       287: ldc           #43                 // String Person object must have a \'name\' field!
+       289: invokespecial #177                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException$MissingField."<init>":(Ljava/lang/String;)V
+       292: athrow
+       293: aload         4
+       295: ifnonnull     303
+       298: getstatic     #126                // Field net/fabricmc/loader/api/metadata/ContactInformation.EMPTY:Lnet/fabricmc/loader/api/metadata/ContactInformation;
+       301: astore        4
+       303: aload_2
+       304: new           #106                // class net/fabricmc/loader/impl/metadata/ContactInfoBackedPerson
+       307: dup
+       308: aload_3
+       309: aload         4
+       311: invokespecial #168                // Method net/fabricmc/loader/impl/metadata/ContactInfoBackedPerson."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/api/metadata/ContactInformation;)V
+       314: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+       319: pop
+       320: goto          25
+       323: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       326: dup
+       327: ldc           #44                 // String Person type must be an object or string!
+       329: aload_1
+       330: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       333: athrow
+       334: aload_1
+       335: invokevirtual #157                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endArray:()V
+       338: return
+
+  private static net.fabricmc.loader.api.metadata.ContactInformation readContactInfo(net.fabricmc.loader.impl.lib.gson.JsonReader) throws java.io.IOException, net.fabricmc.loader.impl.metadata.ParseMetadataException;
+    Code:
+         0: aload_0
+         1: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         4: getstatic     #136                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.BEGIN_OBJECT:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         7: if_acmpeq     21
+        10: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        13: dup
+        14: ldc           #6                  // String Contact info must in an object
+        16: aload_0
+        17: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        20: athrow
+        21: aload_0
+        22: invokevirtual #156                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginObject:()V
+        25: new           #91                 // class java/util/HashMap
+        28: dup
+        29: invokespecial #153                // Method java/util/HashMap."<init>":()V
+        32: astore_1
+        33: aload_0
+        34: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+        37: ifeq          81
+        40: aload_0
+        41: invokevirtual #163                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextName:()Ljava/lang/String;
+        44: astore_2
+        45: aload_0
+        46: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        49: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        52: if_acmpeq     66
+        55: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        58: dup
+        59: ldc           #7                  // String Contact information entries must be a string
+        61: aload_0
+        62: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        65: athrow
+        66: aload_1
+        67: aload_2
+        68: aload_0
+        69: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+        72: invokeinterface #202,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+        77: pop
+        78: goto          33
+        81: aload_0
+        82: invokevirtual #158                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endObject:()V
+        85: new           #107                // class net/fabricmc/loader/impl/metadata/ContactInformationImpl
+        88: dup
+        89: aload_1
+        90: invokespecial #169                // Method net/fabricmc/loader/impl/metadata/ContactInformationImpl."<init>":(Ljava/util/Map;)V
+        93: areturn
+
+  private static void readLicense(net.fabricmc.loader.impl.lib.gson.JsonReader, java.util.List<java.lang.String>) throws java.io.IOException, net.fabricmc.loader.impl.metadata.ParseMetadataException;
+    Code:
+         0: getstatic     #140                // Field net/fabricmc/loader/impl/metadata/V1ModMetadataParser$1.$SwitchMap$net$fabricmc$loader$impl$lib$gson$JsonToken:[I
+         3: aload_0
+         4: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         7: invokevirtual #167                // Method net/fabricmc/loader/impl/lib/gson/JsonToken.ordinal:()I
+        10: iaload
+        11: lookupswitch  { // 2
+                       1: 36
+                       3: 50
+                 default: 103
+            }
+        36: aload_1
+        37: aload_0
+        38: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+        41: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        46: pop
+        47: goto          114
+        50: aload_0
+        51: invokevirtual #155                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginArray:()V
+        54: aload_0
+        55: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+        58: ifeq          96
+        61: aload_0
+        62: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        65: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        68: if_acmpeq     82
+        71: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        74: dup
+        75: ldc           #34                 // String List of licenses must only contain strings
+        77: aload_0
+        78: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        81: athrow
+        82: aload_1
+        83: aload_0
+        84: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+        87: invokeinterface #201,  2          // InterfaceMethod java/util/List.add:(Ljava/lang/Object;)Z
+        92: pop
+        93: goto          54
+        96: aload_0
+        97: invokevirtual #157                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endArray:()V
+       100: goto          114
+       103: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       106: dup
+       107: ldc           #33                 // String License must be a string or array of strings!
+       109: aload_0
+       110: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       113: athrow
+       114: return
+
+  private static net.fabricmc.loader.impl.metadata.V1ModMetadata$IconEntry readIcon(net.fabricmc.loader.impl.lib.gson.JsonReader) throws java.io.IOException, net.fabricmc.loader.impl.metadata.ParseMetadataException;
+    Code:
+         0: getstatic     #140                // Field net/fabricmc/loader/impl/metadata/V1ModMetadataParser$1.$SwitchMap$net$fabricmc$loader$impl$lib$gson$JsonToken:[I
+         3: aload_0
+         4: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         7: invokevirtual #167                // Method net/fabricmc/loader/impl/lib/gson/JsonToken.ordinal:()I
+        10: iaload
+        11: lookupswitch  { // 2
+                       1: 36
+                       2: 48
+                 default: 207
+            }
+        36: new           #121                // class net/fabricmc/loader/impl/metadata/V1ModMetadata$Single
+        39: dup
+        40: aload_0
+        41: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+        44: invokespecial #186                // Method net/fabricmc/loader/impl/metadata/V1ModMetadata$Single."<init>":(Ljava/lang/String;)V
+        47: areturn
+        48: aload_0
+        49: invokevirtual #156                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginObject:()V
+        52: new           #97                 // class java/util/TreeMap
+        55: dup
+        56: invokestatic  #200                // InterfaceMethod java/util/Comparator.naturalOrder:()Ljava/util/Comparator;
+        59: invokespecial #154                // Method java/util/TreeMap."<init>":(Ljava/util/Comparator;)V
+        62: astore_1
+        63: aload_0
+        64: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+        67: ifeq          174
+        70: aload_0
+        71: invokevirtual #163                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextName:()Ljava/lang/String;
+        74: astore_2
+        75: aload_2
+        76: invokestatic  #141                // Method java/lang/Integer.parseInt:(Ljava/lang/String;)I
+        79: istore_3
+        80: goto          119
+        83: astore        4
+        85: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        88: dup
+        89: new           #88                 // class java/lang/StringBuilder
+        92: dup
+        93: invokespecial #149                // Method java/lang/StringBuilder."<init>":()V
+        96: ldc           #8                  // String Could not parse icon size \'
+        98: invokevirtual #150                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       101: aload_2
+       102: invokevirtual #150                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       105: ldc           #3                  // String \'!
+       107: invokevirtual #150                // Method java/lang/StringBuilder.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;
+       110: invokevirtual #151                // Method java/lang/StringBuilder.toString:()Ljava/lang/String;
+       113: aload         4
+       115: invokespecial #174                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Ljava/lang/Throwable;)V
+       118: athrow
+       119: iload_3
+       120: iconst_1
+       121: if_icmpge     135
+       124: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       127: dup
+       128: ldc           #47                 // String Size must be positive!
+       130: aload_0
+       131: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       134: athrow
+       135: aload_0
+       136: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+       139: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+       142: if_acmpeq     156
+       145: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       148: dup
+       149: ldc           #23                 // String Icon path must be a string
+       151: aload_0
+       152: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       155: athrow
+       156: aload_1
+       157: iload_3
+       158: invokestatic  #142                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       161: aload_0
+       162: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+       165: invokeinterface #205,  3          // InterfaceMethod java/util/SortedMap.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+       170: pop
+       171: goto          63
+       174: aload_0
+       175: invokevirtual #158                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endObject:()V
+       178: aload_1
+       179: invokeinterface #204,  1          // InterfaceMethod java/util/SortedMap.isEmpty:()Z
+       184: ifeq          198
+       187: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       190: dup
+       191: ldc           #22                 // String Icon object must not be empty!
+       193: aload_0
+       194: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       197: athrow
+       198: new           #119                // class net/fabricmc/loader/impl/metadata/V1ModMetadata$MapEntry
+       201: dup
+       202: aload_1
+       203: invokespecial #184                // Method net/fabricmc/loader/impl/metadata/V1ModMetadata$MapEntry."<init>":(Ljava/util/SortedMap;)V
+       206: areturn
+       207: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+       210: dup
+       211: ldc           #21                 // String Icon entry must be an object or string!
+       213: aload_0
+       214: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+       217: athrow
+      Exception table:
+         from    to  target type
+            75    80    83   Class java/lang/NumberFormatException
+
+  private static void readLanguageAdapters(net.fabricmc.loader.impl.lib.gson.JsonReader, java.util.Map<java.lang.String, java.lang.String>) throws java.io.IOException, net.fabricmc.loader.impl.metadata.ParseMetadataException;
+    Code:
+         0: aload_0
+         1: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         4: getstatic     #136                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.BEGIN_OBJECT:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         7: if_acmpeq     21
+        10: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        13: dup
+        14: ldc           #32                 // String Language adapters must be in an object
+        16: aload_0
+        17: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        20: athrow
+        21: aload_0
+        22: invokevirtual #156                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginObject:()V
+        25: aload_0
+        26: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+        29: ifeq          73
+        32: aload_0
+        33: invokevirtual #163                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextName:()Ljava/lang/String;
+        36: astore_2
+        37: aload_0
+        38: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        41: getstatic     #138                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.STRING:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+        44: if_acmpeq     58
+        47: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        50: dup
+        51: ldc           #50                 // String Value of language adapter entry must be a string
+        53: aload_0
+        54: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        57: athrow
+        58: aload_1
+        59: aload_2
+        60: aload_0
+        61: invokevirtual #164                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextString:()Ljava/lang/String;
+        64: invokeinterface #202,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+        69: pop
+        70: goto          25
+        73: aload_0
+        74: invokevirtual #158                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endObject:()V
+        77: return
+
+  private static void readCustomValues(net.fabricmc.loader.impl.lib.gson.JsonReader, java.util.Map<java.lang.String, net.fabricmc.loader.api.metadata.CustomValue>) throws java.io.IOException, net.fabricmc.loader.impl.metadata.ParseMetadataException;
+    Code:
+         0: aload_0
+         1: invokevirtual #165                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.peek:()Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         4: getstatic     #136                // Field net/fabricmc/loader/impl/lib/gson/JsonToken.BEGIN_OBJECT:Lnet/fabricmc/loader/impl/lib/gson/JsonToken;
+         7: if_acmpeq     21
+        10: new           #111                // class net/fabricmc/loader/impl/metadata/ParseMetadataException
+        13: dup
+        14: ldc           #9                  // String Custom values must be in an object!
+        16: aload_0
+        17: invokespecial #175                // Method net/fabricmc/loader/impl/metadata/ParseMetadataException."<init>":(Ljava/lang/String;Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)V
+        20: athrow
+        21: aload_0
+        22: invokevirtual #156                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.beginObject:()V
+        25: aload_0
+        26: invokevirtual #161                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.hasNext:()Z
+        29: ifeq          50
+        32: aload_1
+        33: aload_0
+        34: invokevirtual #163                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.nextName:()Ljava/lang/String;
+        37: aload_0
+        38: invokestatic  #170                // Method net/fabricmc/loader/impl/metadata/CustomValueImpl.readCustomValue:(Lnet/fabricmc/loader/impl/lib/gson/JsonReader;)Lnet/fabricmc/loader/api/metadata/CustomValue;
+        41: invokeinterface #202,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+        46: pop
+        47: goto          25
+        50: aload_0
+        51: invokevirtual #158                // Method net/fabricmc/loader/impl/lib/gson/JsonReader.endObject:()V
+        54: return
+
+  private net.fabricmc.loader.impl.metadata.V1ModMetadataParser();
+    Code:
+         0: aload_0
+         1: invokespecial #143                // Method java/lang/Object."<init>":()V
+         4: return
+}
