@@ -3,7 +3,7 @@
 	"package": "cn.spectra.gallium.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
-		"KeyboardHandlerMixin"
+		"TextureUtilMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

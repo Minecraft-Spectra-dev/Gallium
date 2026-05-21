@@ -1,16 +1,10 @@
 {
 	"gallium.options.page_title": "Gallium",
-	"gallium.options.external_page": "External Page",
-	"gallium.options.group_general": "General",
-	"gallium.options.boolean_option": "Boolean Switch",
-	"gallium.options.boolean_option.tooltip": "This is a boolean switch option example",
-	"gallium.options.integer_option": "Integer Slider",
-	"gallium.options.integer_option.tooltip": "This is an integer slider option example",
-	"gallium.options.enum_option": "Cycling Option",
-	"gallium.options.enum_option.tooltip": "This is an enum cycling option example",
-	"gallium.enum.option_a": "Option A",
-	"gallium.enum.option_b": "Option B",
-	"gallium.enum.option_c": "Option C",
-	"key.gallium.reload_resource_pack": "重载资源包",
+	"gallium.options.group_glow": "Glow Outline",
+	"gallium.options.glow_enabled": "Enable Glow",
+	"gallium.options.glow_enabled.tooltip": "Toggle the glow outline effect on held items. Per-item colors and shaders are configured via resource packs.",
+	"gallium.options.glow_intensity": "Intensity",
+	"gallium.options.glow_intensity.tooltip": "Global intensity multiplier for the glow outline",
+	"key.gallium.reload_resource_pack": "Reload Resource Packs",
 	"key.category.gallium.main": "Gallium"
 }

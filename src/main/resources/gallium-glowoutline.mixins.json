@@ -1,0 +1,13 @@
+{
+	"required": true,
+	"package": "cn.spectra.gallium.glowoutline.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"GameRendererMixin",
+		"ItemInHandRendererMixin",
+		"ItemFeatureRendererMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

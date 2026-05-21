@@ -1,16 +1,10 @@
 {
 	"gallium.options.page_title": "Gallium",
-	"gallium.options.external_page": "外部页面",
-	"gallium.options.group_general": "通用设置",
-	"gallium.options.boolean_option": "布尔开关",
-	"gallium.options.boolean_option.tooltip": "这是一个布尔开关选项示例",
-	"gallium.options.integer_option": "整数滑块",
-	"gallium.options.integer_option.tooltip": "这是一个整数滑块选项示例",
-	"gallium.options.enum_option": "循环选项",
-	"gallium.options.enum_option.tooltip": "这是一个枚举循环选项示例",
-	"gallium.enum.option_a": "选项 A",
-	"gallium.enum.option_b": "选项 B",
-	"gallium.enum.option_c": "选项 C",
+	"gallium.options.group_glow": "物品描边",
+	"gallium.options.glow_enabled": "启用描边",
+	"gallium.options.glow_enabled.tooltip": "开关手持物品的发光描边效果。每个物品的颜色和着色器通过资源包配置。",
+	"gallium.options.glow_intensity": "强度",
+	"gallium.options.glow_intensity.tooltip": "描边全局强度倍率",
 	"key.gallium.reload_resource_pack": "重载资源包",
 	"key.category.gallium.main": "Gallium"
 }

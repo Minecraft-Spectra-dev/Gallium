@@ -3,17 +3,13 @@
 	"id": "gallium",
 	"version": "${version}",
 	"name": "Gallium",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "Client-side enhancements: glow outline for held items, resource pack utilities.",
 	"authors": [
-		"Me!"
+		"Spectra"
 	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
 	"license": "CC0-1.0",
 	"icon": "assets/gallium/icon.png",
-	"environment": "*",
+	"environment": "client",
 	"entrypoints": {
 		"client": [
 			"cn.spectra.gallium.Gallium"
@@ -23,7 +19,8 @@
 		]
 	},
 	"mixins": [
-		"gallium.mixins.json"
+		"gallium.mixins.json",
+		"gallium-glowoutline.mixins.json"
 	],
 	"depends": {
 		"fabricloader": ">=0.18.4",
