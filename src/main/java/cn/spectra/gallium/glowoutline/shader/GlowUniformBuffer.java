@@ -13,7 +13,6 @@ public class GlowUniformBuffer implements AutoCloseable {
     private static final int UBO_SIZE = new Std140SizeCalculator()
             .putFloat()   // FrameTimeCounter
             .putVec2()    // ScreenSize
-            .putFloat()   // DepthThreshold
             .putFloat()   // Intensity
             .putFloat()   // PulseSpeed
             .putFloat()   // WaveSpeed
@@ -31,13 +30,11 @@ public class GlowUniformBuffer implements AutoCloseable {
         );
     }
 
-    public void update(float frameTimeCounter, int screenWidth, int screenHeight,
-                       float depthThreshold, ItemEffectConfig cfg) {
+    public void update(float frameTimeCounter, int screenWidth, int screenHeight, float depthThreshold, ItemEffectConfig cfg) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             ByteBuffer data = Std140Builder.onStack(stack, UBO_SIZE)
                     .putFloat(frameTimeCounter)
                     .putVec2((float) screenWidth, (float) screenHeight)
-                    .putFloat(depthThreshold)
                     .putFloat(cfg.intensity())
                     .putFloat(cfg.pulseSpeed())
                     .putFloat(cfg.waveSpeed())

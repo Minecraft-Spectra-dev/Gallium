@@ -5,7 +5,8 @@
 	"client": [
 		"GameRendererMixin",
 		"ItemInHandRendererMixin",
-		"ItemFeatureRendererMixin"
+		"accessor.FeatureRenderDispatcherAccessor",
+		"accessor.GameRendererAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1
