@@ -36,15 +36,29 @@ public class GameRendererMixin {
 
     @Inject(method = "renderLevel", at = @At("HEAD"))
     private void galliumGlowFrameStart(DeltaTracker deltaTracker, CallbackInfo ci) {
+        if (cn.spectra.gallium.glowoutline.IrisCompat.isShadowPass()) return;
         LocalPlayer player = minecraft.player;
         GlowCaptureManager.beginFrame(minecraft, player);
+    }
+
+    @Inject(method = "renderLevel", at = @At(value = "INVOKE",
+            target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture(Lcom/mojang/blaze3d/textures/GpuTexture;D)V"))
+    private void galliumCaptureSceneDepth(DeltaTracker deltaTracker, CallbackInfo ci) {
+        if (cn.spectra.gallium.glowoutline.IrisCompat.isShadowPass()) return;
+        if (!ItemEffectsManager.isActive()) return;
+        if (minecraft.options.getCameraType().isFirstPerson()) return;
+
+        RenderTarget mainTarget = minecraft.getMainRenderTarget();
+        if (mainTarget == null || mainTarget.getDepthTexture() == null) return;
+
+        GlowCaptureManager.captureSceneDepth(mainTarget);
     }
 
     @Inject(method = "renderLevel", at = @At("TAIL"))
     private void galliumGlowComposite(DeltaTracker deltaTracker, CallbackInfo ci) {
         if (!ItemEffectsManager.isActive()) return;
         if (!GlowOutlineConfig.isEnabled()) return;
-        if (!minecraft.options.getCameraType().isFirstPerson()) return;
+        if (cn.spectra.gallium.glowoutline.IrisCompat.isShadowPass()) return;
 
         RenderTarget mainTarget = minecraft.getMainRenderTarget();
         if (mainTarget == null || mainTarget.getColorTexture() == null) return;
@@ -67,7 +81,7 @@ public class GameRendererMixin {
     private void drawHandGlow(GlowCaptureState state, RenderTarget mainTarget, float globalIntensity) {
         if (!state.capturedThisFrame || state.config == null || state.maskTarget == null) return;
 
-        GlowCaptureManager.renderCapturedNodes(state);
+        GlowCaptureManager.renderCapturedNodes(state, minecraft);
 
         TextureTarget mask = state.maskTarget;
         if (mask.getColorTextureView() == null || mask.getDepthTextureView() == null) return;
@@ -93,6 +107,13 @@ public class GameRendererMixin {
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
             pass.bindTexture("MaskSampler",
                     mask.getColorTextureView(),
+                    RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+            pass.bindTexture("MaskDepthSampler",
+                    mask.getDepthTextureView(),
+                    RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+            TextureTarget sceneDepth = GlowCaptureManager.getSceneDepthTarget();
+            pass.bindTexture("SceneDepthSampler",
+                    sceneDepth != null ? sceneDepth.getDepthTextureView() : mask.getDepthTextureView(),
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
             pass.draw(0, 3);
         }

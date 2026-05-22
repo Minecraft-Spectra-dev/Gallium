@@ -1,6 +1,6 @@
 package cn.spectra.gallium.glowoutline.capture;
 
-import cn.spectra.gallium.Gallium;
+import cn.spectra.gallium.glowoutline.IrisCompat;
 import cn.spectra.gallium.glowoutline.ItemEffectConfig;
 import cn.spectra.gallium.glowoutline.ItemEffectsManager;
 import cn.spectra.gallium.glowoutline.mixin.accessor.FeatureRenderDispatcherAccessor;
@@ -9,6 +9,7 @@ import com.mojang.blaze3d.ProjectionType;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.GpuTexture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.RenderBuffers;
@@ -26,6 +27,8 @@ public final class GlowCaptureManager {
 
     private static @Nullable InteractionHand activeHand;
     private static int suppressDepth;
+    private static boolean sceneDepthCaptured;
+    private static @Nullable TextureTarget sceneDepthTarget;
 
     private GlowCaptureManager() {}
 
@@ -34,11 +37,40 @@ public final class GlowCaptureManager {
         OFF.resetFrame();
         activeHand = null;
         suppressDepth = 0;
+        sceneDepthCaptured = false;
 
         if (!ItemEffectsManager.isActive() || player == null) return;
 
         setupState(mc, MAIN, player.getMainHandItem());
         setupState(mc, OFF, player.getOffhandItem());
+    }
+
+    public static void captureSceneDepth(RenderTarget mainTarget) {
+        GpuTexture srcDepth = mainTarget.getDepthTexture();
+        if (srcDepth == null) return;
+
+        int w = mainTarget.width, h = mainTarget.height;
+        if (sceneDepthTarget == null || sceneDepthTarget.width != w || sceneDepthTarget.height != h) {
+            if (sceneDepthTarget != null) sceneDepthTarget.destroyBuffers();
+            sceneDepthTarget = new TextureTarget("GlowSceneDepth", w, h, true);
+        }
+
+        var encoder = RenderSystem.getDevice().createCommandEncoder();
+        encoder.copyTextureToTexture(srcDepth, sceneDepthTarget.getDepthTexture(), 0, 0, 0, 0, 0, w, h);
+
+        if (!IrisCompat.isShaderActive()) {
+            if (isActive(MAIN) && MAIN.maskTarget != null) {
+                encoder.copyTextureToTexture(srcDepth, MAIN.maskTarget.getDepthTexture(), 0, 0, 0, 0, 0, w, h);
+            }
+            if (isActive(OFF) && OFF.maskTarget != null) {
+                encoder.copyTextureToTexture(srcDepth, OFF.maskTarget.getDepthTexture(), 0, 0, 0, 0, 0, w, h);
+            }
+        }
+        sceneDepthCaptured = true;
+    }
+
+    public static @Nullable TextureTarget getSceneDepthTarget() {
+        return sceneDepthTarget;
     }
 
     private static void setupState(Minecraft mc, GlowCaptureState state, ItemStack stack) {
@@ -109,11 +141,20 @@ public final class GlowCaptureManager {
         return state.captureDispatcher.getSubmitNodeStorage();
     }
 
-    public static void renderCapturedNodes(GlowCaptureState state) {
+    public static void renderCapturedNodes(GlowCaptureState state, Minecraft mc) {
         if (state.captureDispatcher == null || state.captureBuffers == null || state.maskTarget == null) return;
 
         var encoder = RenderSystem.getDevice().createCommandEncoder();
-        encoder.clearColorAndDepthTextures(state.maskTarget.getColorTexture(), 0, state.maskTarget.getDepthTexture(), 1.0);
+        encoder.clearColorTexture(state.maskTarget.getColorTexture(), 0);
+
+        if (!sceneDepthCaptured) {
+            RenderTarget mainTarget = mc.getMainRenderTarget();
+            encoder.copyTextureToTexture(
+                    mainTarget.getDepthTexture(), state.maskTarget.getDepthTexture(),
+                    0, 0, 0, 0, 0, mainTarget.width, mainTarget.height);
+        } else if (IrisCompat.isShaderActive()) {
+            encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 1.0);
+        }
 
         var oldColor = RenderSystem.outputColorTextureOverride;
         var oldDepth = RenderSystem.outputDepthTextureOverride;
@@ -131,11 +172,13 @@ public final class GlowCaptureManager {
             RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
         }
 
+        boolean irisOldBypass = IrisCompat.setBypass(true);
         try {
             state.captureDispatcher.renderAllFeatures();
             state.captureBuffers.bufferSource().endBatch();
             state.captureBuffers.outlineBufferSource().endOutlineBatch();
         } finally {
+            IrisCompat.restoreBypass(irisOldBypass);
             if (state.capturedModelViewMatrix != null) {
                 RenderSystem.getModelViewStack().popMatrix();
             }

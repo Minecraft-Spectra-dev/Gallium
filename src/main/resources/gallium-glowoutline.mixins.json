@@ -5,6 +5,7 @@
 	"client": [
 		"GameRendererMixin",
 		"ItemInHandRendererMixin",
+		"ItemInHandLayerMixin",
 		"accessor.FeatureRenderDispatcherAccessor",
 		"accessor.GameRendererAccessor"
 	],

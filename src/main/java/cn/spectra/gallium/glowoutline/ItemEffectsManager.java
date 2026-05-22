@@ -39,6 +39,8 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
 
     @Override
     public void onResourceManagerReload(ResourceManager manager) {
+        GlowPipeline.clearAll();
+
         var resource = manager.getResource(RESOURCE_PATH);
         if (resource.isEmpty()) {
             defaultConfig = ItemEffectConfig.DEFAULT;
@@ -115,7 +117,7 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
             shaders.add(rule.effect().shader());
         }
         for (String shader : shaders) {
-            GlowPipeline.getOrRegister(shader);
+            GlowPipeline.getOrCreate(shader);
         }
 
         Gallium.LOGGER.info("Loaded item effects: {} rules, {} shaders", rules.size(), shaders.size());
