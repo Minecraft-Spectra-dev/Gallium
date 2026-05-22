@@ -40,6 +40,7 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
     @Override
     public void onResourceManagerReload(ResourceManager manager) {
         GlowPipeline.clearAll();
+        cn.spectra.gallium.glowoutline.capture.GlowCaptureManager.clearAll();
 
         var resource = manager.getResource(RESOURCE_PATH);
         if (resource.isEmpty()) {

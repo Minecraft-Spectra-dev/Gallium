@@ -5,7 +5,6 @@ import cn.spectra.gallium.glowoutline.ItemEffectConfig;
 import cn.spectra.gallium.glowoutline.ItemEffectsManager;
 import cn.spectra.gallium.glowoutline.mixin.accessor.FeatureRenderDispatcherAccessor;
 import cn.spectra.gallium.glowoutline.mixin.accessor.GameRendererAccessor;
-import com.mojang.blaze3d.ProjectionType;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -15,17 +14,19 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.RenderBuffers;
 import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix4f;
 import org.jspecify.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public final class GlowCaptureManager {
 
-    public static final GlowCaptureState MAIN = new GlowCaptureState(InteractionHand.MAIN_HAND);
-    public static final GlowCaptureState OFF = new GlowCaptureState(InteractionHand.OFF_HAND);
+    private static final List<GlowCaptureState> pool = new ArrayList<>();
+    private static final List<GlowCaptureState> activeStates = new ArrayList<>();
 
-    private static @Nullable InteractionHand activeHand;
+    private static @Nullable GlowCaptureState currentCapture;
     private static int suppressDepth;
     private static boolean sceneDepthCaptured;
     private static @Nullable TextureTarget sceneDepthTarget;
@@ -33,16 +34,17 @@ public final class GlowCaptureManager {
     private GlowCaptureManager() {}
 
     public static void beginFrame(Minecraft mc, LocalPlayer player) {
-        MAIN.resetFrame();
-        OFF.resetFrame();
-        activeHand = null;
+        for (GlowCaptureState state : activeStates) {
+            state.resetFrame();
+        }
+        activeStates.clear();
+        currentCapture = null;
         suppressDepth = 0;
         sceneDepthCaptured = false;
+    }
 
-        if (!ItemEffectsManager.isActive() || player == null) return;
-
-        setupState(mc, MAIN, player.getMainHandItem());
-        setupState(mc, OFF, player.getOffhandItem());
+    public static List<GlowCaptureState> getActiveStates() {
+        return activeStates;
     }
 
     public static void captureSceneDepth(RenderTarget mainTarget) {
@@ -59,11 +61,10 @@ public final class GlowCaptureManager {
         encoder.copyTextureToTexture(srcDepth, sceneDepthTarget.getDepthTexture(), 0, 0, 0, 0, 0, w, h);
 
         if (!IrisCompat.isShaderActive()) {
-            if (isActive(MAIN) && MAIN.maskTarget != null) {
-                encoder.copyTextureToTexture(srcDepth, MAIN.maskTarget.getDepthTexture(), 0, 0, 0, 0, 0, w, h);
-            }
-            if (isActive(OFF) && OFF.maskTarget != null) {
-                encoder.copyTextureToTexture(srcDepth, OFF.maskTarget.getDepthTexture(), 0, 0, 0, 0, 0, w, h);
+            for (GlowCaptureState state : activeStates) {
+                if (state.maskTarget != null) {
+                    encoder.copyTextureToTexture(srcDepth, state.maskTarget.getDepthTexture(), 0, 0, 0, 0, 0, w, h);
+                }
             }
         }
         sceneDepthCaptured = true;
@@ -73,17 +74,30 @@ public final class GlowCaptureManager {
         return sceneDepthTarget;
     }
 
-    private static void setupState(Minecraft mc, GlowCaptureState state, ItemStack stack) {
-        if (stack.isEmpty()) return;
-        ItemEffectConfig cfg = ItemEffectsManager.getConfig(stack);
-        if (cfg.intensity() <= 0) return;
+    public static boolean beginItemCapture(ItemStack stack) {
+        return beginItemCapture(stack, false);
+    }
 
+    public static boolean beginItemCapture(ItemStack stack, boolean firstPerson) {
+        if (stack.isEmpty()) return false;
+        if (!ItemEffectsManager.isActive()) return false;
+
+        ItemEffectConfig cfg = ItemEffectsManager.getConfig(stack);
+        if (cfg.intensity() <= 0) return false;
+
+        GlowCaptureState state = allocateState();
+        state.active = true;
+        state.firstPerson = firstPerson;
         state.item = stack.copy();
         state.config = cfg;
+        state.capturedModelViewMatrix = new Matrix4f(RenderSystem.getModelViewMatrix());
+        state.capturedProjectionMatrix = RenderSystem.getProjectionMatrixBuffer();
+        state.capturedProjectionType = RenderSystem.getProjectionType();
 
+        Minecraft mc = Minecraft.getInstance();
         RenderTarget main = mc.getMainRenderTarget();
         if (state.maskTarget == null) {
-            state.maskTarget = new TextureTarget("GlowMask_" + state.hand.name(), main.width, main.height, true);
+            state.maskTarget = new TextureTarget("GlowMask_" + pool.indexOf(state), main.width, main.height, true);
         } else if (state.maskTarget.width != main.width || state.maskTarget.height != main.height) {
             state.maskTarget.resize(main.width, main.height);
         }
@@ -93,8 +107,8 @@ public final class GlowCaptureManager {
         }
 
         if (state.captureDispatcher == null) {
-            FeatureRenderDispatcher main_dispatcher = mc.gameRenderer.getFeatureRenderDispatcher();
-            var accessor = (FeatureRenderDispatcherAccessor) main_dispatcher;
+            FeatureRenderDispatcher mainDispatcher = mc.gameRenderer.getFeatureRenderDispatcher();
+            var accessor = (FeatureRenderDispatcherAccessor) mainDispatcher;
             var gameAccessor = (GameRendererAccessor) mc.gameRenderer;
             state.captureDispatcher = new FeatureRenderDispatcher(
                     new SubmitNodeStorage(),
@@ -109,36 +123,25 @@ public final class GlowCaptureManager {
         } else {
             state.captureDispatcher.getSubmitNodeStorage().clear();
         }
+
+        activeStates.add(state);
+        currentCapture = state;
+        return true;
     }
 
-    public static boolean isActive(GlowCaptureState state) {
-        return state.config != null && state.maskTarget != null && state.captureDispatcher != null;
-    }
-
-    public static void beginHandSubmit(InteractionHand hand, ItemStack stack) {
-        activeHand = stack.isEmpty() ? null : hand;
-        if (activeHand != null) {
-            GlowCaptureState state = stateFor(activeHand);
-            state.capturedModelViewMatrix = new Matrix4f(RenderSystem.getModelViewMatrix());
-            state.capturedProjectionMatrix = RenderSystem.getProjectionMatrixBuffer();
-            state.capturedProjectionType = RenderSystem.getProjectionType();
-        }
-    }
-
-    public static void endHandSubmit() {
-        activeHand = null;
+    public static void endItemCapture() {
+        currentCapture = null;
     }
 
     public static void beginSuppress() { suppressDepth++; }
     public static void endSuppress() { if (suppressDepth > 0) suppressDepth--; }
 
-    public static @Nullable InteractionHand activeHand() { return activeHand; }
+    public static @Nullable GlowCaptureState currentCapture() { return currentCapture; }
 
-    public static @Nullable SubmitNodeStorage captureStorageForActiveHand() {
-        if (activeHand == null || suppressDepth > 0) return null;
-        GlowCaptureState state = stateFor(activeHand);
-        if (!isActive(state)) return null;
-        return state.captureDispatcher.getSubmitNodeStorage();
+    public static @Nullable SubmitNodeStorage captureStorageForCurrent() {
+        if (currentCapture == null || suppressDepth > 0) return null;
+        if (currentCapture.captureDispatcher == null) return null;
+        return currentCapture.captureDispatcher.getSubmitNodeStorage();
     }
 
     public static void renderCapturedNodes(GlowCaptureState state, Minecraft mc) {
@@ -147,7 +150,9 @@ public final class GlowCaptureManager {
         var encoder = RenderSystem.getDevice().createCommandEncoder();
         encoder.clearColorTexture(state.maskTarget.getColorTexture(), 0);
 
-        if (!sceneDepthCaptured) {
+        if (state.firstPerson) {
+            encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 1.0);
+        } else if (!sceneDepthCaptured) {
             RenderTarget mainTarget = mc.getMainRenderTarget();
             encoder.copyTextureToTexture(
                     mainTarget.getDepthTexture(), state.maskTarget.getDepthTexture(),
@@ -192,7 +197,21 @@ public final class GlowCaptureManager {
         state.capturedThisFrame = true;
     }
 
-    public static GlowCaptureState stateFor(InteractionHand hand) {
-        return hand == InteractionHand.MAIN_HAND ? MAIN : OFF;
+    private static GlowCaptureState allocateState() {
+        for (GlowCaptureState state : pool) {
+            if (!state.active) return state;
+        }
+        GlowCaptureState state = new GlowCaptureState();
+        pool.add(state);
+        return state;
+    }
+
+    public static void clearAll() {
+        for (GlowCaptureState state : pool) {
+            state.resetFrame();
+            state.captureDispatcher = null;
+        }
+        activeStates.clear();
+        currentCapture = null;
     }
 }

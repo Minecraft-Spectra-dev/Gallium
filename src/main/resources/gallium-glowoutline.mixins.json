@@ -6,6 +6,8 @@
 		"GameRendererMixin",
 		"ItemInHandRendererMixin",
 		"ItemInHandLayerMixin",
+		"ItemFrameRendererMixin",
+		"ItemFrameRenderStateMixin",
 		"accessor.FeatureRenderDispatcherAccessor",
 		"accessor.GameRendererAccessor"
 	],

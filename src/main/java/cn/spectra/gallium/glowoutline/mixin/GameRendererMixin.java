@@ -38,6 +38,7 @@ public class GameRendererMixin {
     private void galliumGlowFrameStart(DeltaTracker deltaTracker, CallbackInfo ci) {
         if (cn.spectra.gallium.glowoutline.IrisCompat.isShadowPass()) return;
         LocalPlayer player = minecraft.player;
+        if (player == null) return;
         GlowCaptureManager.beginFrame(minecraft, player);
     }
 
@@ -46,7 +47,6 @@ public class GameRendererMixin {
     private void galliumCaptureSceneDepth(DeltaTracker deltaTracker, CallbackInfo ci) {
         if (cn.spectra.gallium.glowoutline.IrisCompat.isShadowPass()) return;
         if (!ItemEffectsManager.isActive()) return;
-        if (minecraft.options.getCameraType().isFirstPerson()) return;
 
         RenderTarget mainTarget = minecraft.getMainRenderTarget();
         if (mainTarget == null || mainTarget.getDepthTexture() == null) return;
@@ -73,12 +73,13 @@ public class GameRendererMixin {
         glowAccumulatedTime += deltaTracker.getGameTimeDeltaTicks() / 20.0f;
         float globalIntensity = GlowOutlineConfig.getIntensity();
 
-        drawHandGlow(GlowCaptureManager.MAIN, mainTarget, globalIntensity);
-        drawHandGlow(GlowCaptureManager.OFF, mainTarget, globalIntensity);
+        for (GlowCaptureState state : GlowCaptureManager.getActiveStates()) {
+            drawGlow(state, mainTarget, globalIntensity);
+        }
     }
 
     @Unique
-    private void drawHandGlow(GlowCaptureState state, RenderTarget mainTarget, float globalIntensity) {
+    private void drawGlow(GlowCaptureState state, RenderTarget mainTarget, float globalIntensity) {
         if (!state.capturedThisFrame || state.config == null || state.maskTarget == null) return;
 
         GlowCaptureManager.renderCapturedNodes(state, minecraft);
@@ -99,7 +100,7 @@ public class GameRendererMixin {
 
         try (RenderPass pass = RenderSystem.getDevice()
                 .createCommandEncoder()
-                .createRenderPass(() -> "Glow_" + state.hand.name(), mainTarget.getColorTextureView(), OptionalInt.empty())) {
+                .createRenderPass(() -> "Glow", mainTarget.getColorTextureView(), OptionalInt.empty())) {
             pass.setPipeline(pipeline);
             pass.setUniform("GlowUniforms", glowUniformBuffer.getSlice());
             pass.bindTexture("DiffuseSampler",
@@ -113,7 +114,9 @@ public class GameRendererMixin {
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
             TextureTarget sceneDepth = GlowCaptureManager.getSceneDepthTarget();
             pass.bindTexture("SceneDepthSampler",
-                    sceneDepth != null ? sceneDepth.getDepthTextureView() : mask.getDepthTextureView(),
+                    state.firstPerson || sceneDepth == null
+                            ? mask.getDepthTextureView()
+                            : sceneDepth.getDepthTextureView(),
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
             pass.draw(0, 3);
         }

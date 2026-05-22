@@ -84,11 +84,11 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
     }
 
     private void duplicate(int order, Consumer<OrderedSubmitNodeCollector> consumer) {
-        SubmitNodeStorage capture = GlowCaptureManager.captureStorageForActiveHand();
+        SubmitNodeStorage capture = GlowCaptureManager.captureStorageForCurrent();
         if (capture != null) {
             consumer.accept(capture.order(order));
-            var hand = GlowCaptureManager.activeHand();
-            if (hand != null) GlowCaptureManager.stateFor(hand).capturedThisFrame = true;
+            var current = GlowCaptureManager.currentCapture();
+            if (current != null) current.capturedThisFrame = true;
         }
     }
 
@@ -142,11 +142,11 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
         }
 
         private void dup(Consumer<OrderedSubmitNodeCollector> consumer) {
-            SubmitNodeStorage capture = GlowCaptureManager.captureStorageForActiveHand();
+            SubmitNodeStorage capture = GlowCaptureManager.captureStorageForCurrent();
             if (capture != null) {
                 consumer.accept(capture.order(order));
-                var hand = GlowCaptureManager.activeHand();
-                if (hand != null) GlowCaptureManager.stateFor(hand).capturedThisFrame = true;
+                var current = GlowCaptureManager.currentCapture();
+                if (current != null) current.capturedThisFrame = true;
             }
         }
     }

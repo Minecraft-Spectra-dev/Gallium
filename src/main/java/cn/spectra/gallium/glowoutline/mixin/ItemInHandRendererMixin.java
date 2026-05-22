@@ -1,49 +1,46 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
-import cn.spectra.gallium.glowoutline.ItemEffectsManager;
+import cn.spectra.gallium.glowoutline.IrisCompat;
 import cn.spectra.gallium.glowoutline.capture.DuplicatingSubmitNodeStorage;
 import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.AbstractClientPlayer;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeStorage;
-import net.minecraft.world.InteractionHand;
+import net.minecraft.client.renderer.item.ItemStackRenderState;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemDisplayContext;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ItemInHandRenderer.class)
 public class ItemInHandRendererMixin {
 
-    @ModifyVariable(method = "renderHandsWithItems", at = @At("HEAD"), argsOnly = true, ordinal = 0)
-    private SubmitNodeCollector galliumWrapCollector(SubmitNodeCollector collector) {
-        if (!ItemEffectsManager.isActive()) return collector;
-        if (!GlowCaptureManager.isActive(GlowCaptureManager.MAIN) && !GlowCaptureManager.isActive(GlowCaptureManager.OFF)) return collector;
-        if (collector instanceof DuplicatingSubmitNodeStorage) return collector;
-        if (collector instanceof SubmitNodeStorage storage) {
-            return new DuplicatingSubmitNodeStorage(storage);
+    @WrapOperation(method = "renderItem", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/item/ItemStackRenderState;submit(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;III)V"))
+    private void galliumWrapItemSubmit(ItemStackRenderState renderState, PoseStack poseStack,
+                                       SubmitNodeCollector collector, int light, int overlay, int outlineColor,
+                                       Operation<Void> original,
+                                       LivingEntity mob, ItemStack itemStack, ItemDisplayContext type,
+                                       PoseStack ps, SubmitNodeCollector col, int l) {
+        if (IrisCompat.isShadowPass() || itemStack.isEmpty()) {
+            original.call(renderState, poseStack, collector, light, overlay, outlineColor);
+            return;
         }
-        return collector;
-    }
 
-    @Inject(method = "renderArmWithItem", at = @At("HEAD"))
-    private void galliumBeginHand(AbstractClientPlayer player, float frameInterp, float xRot, InteractionHand hand,
-                                   float attack, ItemStack stack, float inverseArmHeight,
-                                   PoseStack poseStack, SubmitNodeCollector collector, int light, CallbackInfo ci) {
-        GlowCaptureManager.beginHandSubmit(hand, stack);
-    }
-
-    @Inject(method = "renderArmWithItem", at = @At("TAIL"))
-    private void galliumEndHand(AbstractClientPlayer player, float frameInterp, float xRot, InteractionHand hand,
-                                 float attack, ItemStack stack, float inverseArmHeight,
-                                 PoseStack poseStack, SubmitNodeCollector collector, int light, CallbackInfo ci) {
-        GlowCaptureManager.endHandSubmit();
+        boolean capturing = GlowCaptureManager.beginItemCapture(itemStack, true);
+        if (capturing && collector instanceof SubmitNodeStorage storage) {
+            DuplicatingSubmitNodeStorage wrapped = new DuplicatingSubmitNodeStorage(storage);
+            original.call(renderState, poseStack, wrapped, light, overlay, outlineColor);
+        } else {
+            original.call(renderState, poseStack, collector, light, overlay, outlineColor);
+        }
+        GlowCaptureManager.endItemCapture();
     }
 
     @Inject(method = "renderPlayerArm", at = @At("HEAD"))
