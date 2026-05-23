@@ -13,8 +13,6 @@ public class GuiItemAtlasMixin {
             target = "Lcom/mojang/blaze3d/systems/GpuDevice;createTexture(Ljava/lang/String;ILcom/mojang/blaze3d/textures/TextureFormat;IIII)Lcom/mojang/blaze3d/textures/GpuTexture;"),
             index = 1)
     private int galliumAddCopySrcFlag(int usage) {
-        int newUsage = usage | GpuTexture.USAGE_COPY_SRC;
-        cn.spectra.gallium.Gallium.LOGGER.info("GuiItemAtlas createTexture usage: {} -> {}", usage, newUsage);
-        return newUsage;
+        return usage | GpuTexture.USAGE_COPY_SRC;
     }
 }

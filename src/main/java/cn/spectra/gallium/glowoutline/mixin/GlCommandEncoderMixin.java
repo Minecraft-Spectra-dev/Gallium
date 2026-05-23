@@ -9,6 +9,8 @@ import org.spongepowered.asm.mixin.injection.At;
 @Mixin(targets = "com.mojang.blaze3d.opengl.GlCommandEncoder")
 public class GlCommandEncoderMixin {
 
+    // Vanilla GlCommandEncoder.copyTextureToTexture passes (width, height) where blitFrameBuffers expects (x1, y1).
+    // Convert size to absolute coords until Mojang fixes it upstream.
     @WrapOperation(method = "copyTextureToTexture", at = @At(value = "INVOKE",
             target = "Lcom/mojang/blaze3d/opengl/DirectStateAccess;blitFrameBuffers(IIIIIIIIIIII)V"))
     private void galliumFixBlitCoords(DirectStateAccess directStateAccess,

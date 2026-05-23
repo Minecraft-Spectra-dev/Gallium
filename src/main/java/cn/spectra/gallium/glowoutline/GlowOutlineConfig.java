@@ -1,13 +1,13 @@
 package cn.spectra.gallium.glowoutline;
 
 public class GlowOutlineConfig {
-    private static boolean enabled = true;
-    private static boolean firstPerson = true;
-    private static boolean thirdPerson = true;
-    private static boolean otherEntities = true;
-    private static boolean droppedItems = true;
-    private static boolean armor = true;
-    private static boolean gui = true;
+    private static volatile boolean enabled = true;
+    private static volatile boolean firstPerson = true;
+    private static volatile boolean thirdPerson = true;
+    private static volatile boolean otherEntities = true;
+    private static volatile boolean droppedItems = true;
+    private static volatile boolean armor = true;
+    private static volatile boolean gui = true;
 
     public static boolean isEnabled() { return enabled; }
     public static void setEnabled(boolean v) { enabled = v; }

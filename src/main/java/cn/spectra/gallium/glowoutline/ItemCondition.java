@@ -36,14 +36,20 @@ public sealed interface ItemCondition permits
     record And(List<ItemCondition> children) implements ItemCondition {
         @Override
         public boolean test(ItemStack stack) {
-            return children.stream().allMatch(c -> c.test(stack));
+            for (int i = 0; i < children.size(); i++) {
+                if (!children.get(i).test(stack)) return false;
+            }
+            return true;
         }
     }
 
     record Or(List<ItemCondition> children) implements ItemCondition {
         @Override
         public boolean test(ItemStack stack) {
-            return children.stream().anyMatch(c -> c.test(stack));
+            for (int i = 0; i < children.size(); i++) {
+                if (children.get(i).test(stack)) return true;
+            }
+            return false;
         }
     }
 

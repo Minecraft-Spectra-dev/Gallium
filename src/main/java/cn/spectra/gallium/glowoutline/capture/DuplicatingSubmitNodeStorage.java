@@ -2,6 +2,7 @@ package cn.spectra.gallium.glowoutline.capture;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import it.unimi.dsi.fastutil.ints.Int2ObjectAVLTreeMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.model.geom.ModelPart;
@@ -31,6 +32,7 @@ import java.util.function.Consumer;
 public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
 
     private final SubmitNodeStorage delegate;
+    private final Int2ObjectOpenHashMap<DuplicatingSubmitNodeCollection> collectionsByOrder = new Int2ObjectOpenHashMap<>();
 
     public DuplicatingSubmitNodeStorage(SubmitNodeStorage delegate) {
         this.delegate = delegate;
@@ -38,7 +40,11 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
 
     @Override
     public SubmitNodeCollection order(int order) {
-        return new DuplicatingSubmitNodeCollection(delegate.order(order), order);
+        DuplicatingSubmitNodeCollection cached = collectionsByOrder.get(order);
+        if (cached != null) return cached;
+        DuplicatingSubmitNodeCollection created = new DuplicatingSubmitNodeCollection(delegate.order(order), order);
+        collectionsByOrder.put(order, created);
+        return created;
     }
 
     @Override public void submitShadow(PoseStack p, float r, List<EntityRenderState.ShadowPiece> pieces) { delegate.submitShadow(p, r, pieces); }

@@ -3,11 +3,12 @@
 	"id": "gallium",
 	"version": "${version}",
 	"name": "Gallium",
-	"description": "Client-side enhancements: glow outline for held items, resource pack utilities.",
+	"description": "Client-side enhancements: Provides additional shader interfaces for resource packs that operate on full screen.",
 	"authors": [
-		"Spectra"
+		"ChooseC",
+		"G2F1SH"
 	],
-	"license": "CC0-1.0",
+	"license": "All-Rights-Reserved",
 	"icon": "assets/gallium/icon.png",
 	"environment": "client",
 	"entrypoints": {

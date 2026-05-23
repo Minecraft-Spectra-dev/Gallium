@@ -49,9 +49,9 @@ public class Gallium implements ClientModInitializer {
 			client.reloadResourcePacks().thenAcceptAsync(aVoid -> {
 				LOGGER.info("Resource pack reloaded.");
 				if (screen != null && client.screen == null) {
-					client.schedule(() -> client.setScreen(screen));
+					client.setScreen(screen);
 				}
-			});
+			}, client);
 		});
 	}
 }

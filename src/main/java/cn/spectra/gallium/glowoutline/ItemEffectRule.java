@@ -14,9 +14,24 @@ public record ItemEffectRule(
         if (conditions.isEmpty()) return true;
 
         return switch (mode) {
-            case ALL_OF -> conditions.stream().allMatch(c -> c.test(stack));
-            case ANY_OF -> conditions.stream().anyMatch(c -> c.test(stack));
-            case NONE_OF -> conditions.stream().noneMatch(c -> c.test(stack));
+            case ALL_OF -> {
+                for (int i = 0; i < conditions.size(); i++) {
+                    if (!conditions.get(i).test(stack)) yield false;
+                }
+                yield true;
+            }
+            case ANY_OF -> {
+                for (int i = 0; i < conditions.size(); i++) {
+                    if (conditions.get(i).test(stack)) yield true;
+                }
+                yield false;
+            }
+            case NONE_OF -> {
+                for (int i = 0; i < conditions.size(); i++) {
+                    if (conditions.get(i).test(stack)) yield false;
+                }
+                yield true;
+            }
         };
     }
 }

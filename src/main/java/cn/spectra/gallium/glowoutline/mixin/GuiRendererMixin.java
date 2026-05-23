@@ -94,7 +94,8 @@ public class GuiRendererMixin {
         float v0 = 1.0f - fbY0 / screenH;
         float v1 = 1.0f - fbY1 / screenH;
 
-        int color = packGlowColor(cfg);
+        // Color/intensity is sourced from UBO; vertex color is just a passthrough modulator.
+        int color = 0xFFFFFFFF;
 
         GuiGlowElementRenderState element = GuiGlowElementRenderState.create(
                 GuiGlowElementPipeline.getOrCreate(cfg),
@@ -126,16 +127,6 @@ public class GuiRendererMixin {
     @Inject(method = "render", at = @At("TAIL"))
     private void galliumClear(GpuBufferSlice fogBuffer, CallbackInfo ci) {
         GuiGlowCaptureManager.clear();
-    }
-
-    private static int packGlowColor(ItemEffectConfig cfg) {
-        // Color/intensity now passed via UBO; vertex color carries final modulation only
-        // Default to white full alpha; the shader uses InnerColor from UBO for actual color.
-        return 0xFFFFFFFF;
-    }
-
-    private static int clamp255(int v) {
-        return Math.max(0, Math.min(255, v));
     }
 }
 

@@ -177,13 +177,13 @@ public final class GlowCaptureManager {
             RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
         }
 
-        boolean irisOldBypass = IrisCompat.setBypass(true);
+        var irisSnapshot = IrisCompat.setBypass(true);
         try {
             state.captureDispatcher.renderAllFeatures();
             state.captureBuffers.bufferSource().endBatch();
             state.captureBuffers.outlineBufferSource().endOutlineBatch();
         } finally {
-            IrisCompat.restoreBypass(irisOldBypass);
+            IrisCompat.restoreBypass(irisSnapshot);
             if (state.capturedModelViewMatrix != null) {
                 RenderSystem.getModelViewStack().popMatrix();
             }

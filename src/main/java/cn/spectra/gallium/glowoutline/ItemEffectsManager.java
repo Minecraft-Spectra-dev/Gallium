@@ -68,7 +68,7 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
             JsonArray rulesArr = root.getAsJsonArray("rules");
             for (int i = 0; i < rulesArr.size(); i++) {
                 JsonObject ruleObj = rulesArr.get(i).getAsJsonObject();
-                ItemEffectRule rule = parseRule(ruleObj);
+                ItemEffectRule rule = parseRule(ruleObj, i);
                 if (rule != null) parsed.add(rule);
             }
         }
@@ -93,7 +93,7 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
         Gallium.LOGGER.info("Loaded item effects: {} rules, {} shaders", rules.size(), shaders.size());
     }
 
-    private static ItemEffectRule parseRule(JsonObject obj) {
+    private static ItemEffectRule parseRule(JsonObject obj, int index) {
         JsonObject matchObj = obj.has("match") ? obj.getAsJsonObject("match") : obj;
 
         MatchMode mode = MatchMode.ALL_OF;
@@ -102,27 +102,43 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
             mode = switch (modeStr) {
                 case "any_of" -> MatchMode.ANY_OF;
                 case "none_of" -> MatchMode.NONE_OF;
-                default -> MatchMode.ALL_OF;
+                case "all_of" -> MatchMode.ALL_OF;
+                default -> {
+                    Gallium.LOGGER.warn("item_effects rule[{}]: unknown match mode '{}', defaulting to all_of", index, modeStr);
+                    yield MatchMode.ALL_OF;
+                }
             };
         }
 
         List<ItemCondition> conditions = new ArrayList<>();
-        parseConditions(matchObj, conditions);
-        if (conditions.isEmpty()) return null;
-        if (!obj.has("effect")) return null;
+        parseConditions(matchObj, conditions, index);
+        if (conditions.isEmpty()) {
+            Gallium.LOGGER.warn("item_effects rule[{}]: no valid conditions, skipping rule", index);
+            return null;
+        }
+        if (!obj.has("effect")) {
+            Gallium.LOGGER.warn("item_effects rule[{}]: missing 'effect', skipping rule", index);
+            return null;
+        }
 
-        ItemEffectConfig effect = parseEffect(obj.getAsJsonObject("effect"));
+        ItemEffectConfig effect = parseEffect(obj.getAsJsonObject("effect"), index);
+        if (effect == null) return null;
 
         return new ItemEffectRule(mode, List.copyOf(conditions), effect);
     }
 
-    private static void parseConditions(JsonObject matchObj, List<ItemCondition> conditions) {
+    private static void parseConditions(JsonObject matchObj, List<ItemCondition> conditions, int ruleIndex) {
         if (matchObj.has("items")) {
             JsonArray arr = matchObj.getAsJsonArray("items");
             Set<Item> items = new HashSet<>();
             for (JsonElement el : arr) {
-                var ref = BuiltInRegistries.ITEM.get(Identifier.parse(el.getAsString()));
-                ref.ifPresent(r -> items.add(r.value()));
+                String id = el.getAsString();
+                var ref = BuiltInRegistries.ITEM.get(Identifier.parse(id));
+                if (ref.isPresent()) {
+                    items.add(ref.get().value());
+                } else {
+                    Gallium.LOGGER.warn("item_effects rule[{}]: unknown item id '{}'", ruleIndex, id);
+                }
             }
             if (!items.isEmpty()) conditions.add(new ItemCondition.Items(Set.copyOf(items)));
         }
@@ -140,18 +156,18 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
         if (matchObj.has("predicates")) {
             JsonArray preds = matchObj.getAsJsonArray("predicates");
             for (int i = 0; i < preds.size(); i++) {
-                ItemCondition cond = parseConditionNode(preds.get(i).getAsJsonObject());
+                ItemCondition cond = parseConditionNode(preds.get(i).getAsJsonObject(), ruleIndex);
                 if (cond != null) conditions.add(cond);
             }
         }
     }
 
-    private static ItemCondition parseConditionNode(JsonObject node) {
+    private static ItemCondition parseConditionNode(JsonObject node, int ruleIndex) {
         if (node.has("and")) {
             JsonArray arr = node.getAsJsonArray("and");
             List<ItemCondition> children = new ArrayList<>();
             for (int i = 0; i < arr.size(); i++) {
-                ItemCondition c = parseConditionNode(arr.get(i).getAsJsonObject());
+                ItemCondition c = parseConditionNode(arr.get(i).getAsJsonObject(), ruleIndex);
                 if (c != null) children.add(c);
             }
             return children.isEmpty() ? null : new ItemCondition.And(List.copyOf(children));
@@ -160,23 +176,32 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
             JsonArray arr = node.getAsJsonArray("or");
             List<ItemCondition> children = new ArrayList<>();
             for (int i = 0; i < arr.size(); i++) {
-                ItemCondition c = parseConditionNode(arr.get(i).getAsJsonObject());
+                ItemCondition c = parseConditionNode(arr.get(i).getAsJsonObject(), ruleIndex);
                 if (c != null) children.add(c);
             }
             return children.isEmpty() ? null : new ItemCondition.Or(List.copyOf(children));
         }
         if (node.has("not")) {
-            ItemCondition child = parseConditionNode(node.getAsJsonObject("not"));
+            ItemCondition child = parseConditionNode(node.getAsJsonObject("not"), ruleIndex);
             return child == null ? null : new ItemCondition.Not(child);
         }
 
-        if (!node.has("path")) return null;
+        if (!node.has("path")) {
+            Gallium.LOGGER.warn("item_effects rule[{}]: predicate missing 'path', skipping", ruleIndex);
+            return null;
+        }
         String path = node.get("path").getAsString();
 
-        if (!path.startsWith("components.")) return null;
+        if (!path.startsWith("components.")) {
+            Gallium.LOGGER.warn("item_effects rule[{}]: predicate path '{}' must start with 'components.'", ruleIndex, path);
+            return null;
+        }
         String compId = path.substring("components.".length());
         DataComponentType<?> compType = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(Identifier.parse(compId));
-        if (compType == null) return null;
+        if (compType == null) {
+            Gallium.LOGGER.warn("item_effects rule[{}]: unknown data component '{}'", ruleIndex, compId);
+            return null;
+        }
 
         ItemCondition.Path.CheckMode mode;
         String value = "";
@@ -201,8 +226,11 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
         return new ItemCondition.Path(compType, mode, value, min, max);
     }
 
-    static ItemEffectConfig parseEffect(JsonObject obj) {
-        if (obj == null || !obj.has("shader")) return null;
+    static ItemEffectConfig parseEffect(JsonObject obj, int ruleIndex) {
+        if (obj == null || !obj.has("shader")) {
+            Gallium.LOGGER.warn("item_effects rule[{}]: 'effect' missing 'shader'", ruleIndex);
+            return null;
+        }
         String shader = obj.get("shader").getAsString();
 
         List<ShaderParam> params = new ArrayList<>();
@@ -210,7 +238,11 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
             JsonObject paramsObj = obj.getAsJsonObject("params");
             for (var entry : paramsObj.entrySet()) {
                 ShaderParam param = parseParam(entry.getKey(), entry.getValue());
-                if (param != null) params.add(param);
+                if (param == null) {
+                    Gallium.LOGGER.warn("item_effects rule[{}]: failed to parse param '{}'", ruleIndex, entry.getKey());
+                } else {
+                    params.add(param);
+                }
             }
         }
 

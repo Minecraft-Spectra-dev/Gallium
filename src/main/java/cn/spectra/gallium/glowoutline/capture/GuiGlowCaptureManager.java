@@ -1,33 +1,31 @@
 package cn.spectra.gallium.glowoutline.capture;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public final class GuiGlowCaptureManager {
 
     private static final List<GuiGlowCapture> pool = new ArrayList<>();
-    private static final List<GuiGlowCapture> active = new ArrayList<>();
+    private static int activeCount = 0;
 
     private GuiGlowCaptureManager() {}
 
     public static GuiGlowCapture acquire() {
-        for (GuiGlowCapture c : pool) {
-            if (!active.contains(c)) {
-                active.add(c);
-                return c;
-            }
+        if (activeCount < pool.size()) {
+            return pool.get(activeCount++);
         }
         GuiGlowCapture c = new GuiGlowCapture();
         pool.add(c);
-        active.add(c);
+        activeCount++;
         return c;
     }
 
     public static List<GuiGlowCapture> getActive() {
-        return active;
+        return activeCount == 0 ? Collections.emptyList() : pool.subList(0, activeCount);
     }
 
     public static void clear() {
-        active.clear();
+        activeCount = 0;
     }
 }

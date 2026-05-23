@@ -49,9 +49,24 @@ public class ResourceDumpCompressor {
 			Path zipPath = outputDir.resolve("dump-" + timestamp + ".zip");
 
 			compressDirectory(debugDir, zipPath);
+			deleteContents(debugDir);
 			Gallium.LOGGER.info("Resource dump compressed: {}", zipPath.getFileName());
 		} catch (IOException e) {
 			Gallium.LOGGER.error("Failed to compress resource dump", e);
+		}
+	}
+
+	private static void deleteContents(Path dir) throws IOException {
+		try (Stream<Path> walk = Files.walk(dir)) {
+			walk.sorted(java.util.Comparator.reverseOrder())
+				.filter(p -> !p.equals(dir))
+				.forEach(p -> {
+					try {
+						Files.deleteIfExists(p);
+					} catch (IOException e) {
+						Gallium.LOGGER.warn("Failed to delete dump source file: {}", p, e);
+					}
+				});
 		}
 	}
 
