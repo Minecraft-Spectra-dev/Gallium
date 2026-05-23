@@ -114,9 +114,11 @@ public class GameRendererMixin {
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
             TextureTarget sceneDepth = GlowCaptureManager.getSceneDepthTarget();
             pass.bindTexture("SceneDepthSampler",
-                    state.firstPerson || sceneDepth == null
+                    state.firstPerson
                             ? mask.getDepthTextureView()
-                            : sceneDepth.getDepthTextureView(),
+                            : (cn.spectra.gallium.glowoutline.IrisCompat.isShaderActive()
+                                    ? (sceneDepth != null ? sceneDepth.getDepthTextureView() : mask.getDepthTextureView())
+                                    : mainTarget.getDepthTextureView()),
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
             pass.draw(0, 3);
         }

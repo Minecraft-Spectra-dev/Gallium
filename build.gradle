@@ -25,7 +25,7 @@ dependencies {
     // Fabric API. This is technically optional, but you probably want it anyway.
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
-    implementation "maven.modrinth:sodium:mc26.1.2-0.8.12-beta.2-fabric"
+    implementation "maven.modrinth:sodium:mc26.1.2-0.8.12-fabric"
 }
 
 processResources {
