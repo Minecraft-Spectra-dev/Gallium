@@ -27,14 +27,24 @@ public class GalliumSodiumConfig implements ConfigEntryPoint {
     private OptionPageBuilder createGlowPage(ConfigBuilder builder) {
         return builder.createOptionPage()
                 .setName(Component.translatable("gallium.options.page_title"))
-                .addOptionGroup(createGlowGroup(builder));
+                .addOptionGroup(createGlobalGroup(builder))
+                .addOptionGroup(createRenderTargetGroup(builder));
     }
 
-    private OptionGroupBuilder createGlowGroup(ConfigBuilder builder) {
+    private OptionGroupBuilder createGlobalGroup(ConfigBuilder builder) {
         return builder.createOptionGroup()
-                .setName(Component.translatable("gallium.options.group_glow"))
-                .addOption(createEnabledOption(builder))
-                .addOption(createIntensityOption(builder));
+                .setName(Component.translatable("gallium.options.group_global"))
+                .addOption(createEnabledOption(builder));
+    }
+
+    private OptionGroupBuilder createRenderTargetGroup(ConfigBuilder builder) {
+        return builder.createOptionGroup()
+                .setName(Component.translatable("gallium.options.group_targets"))
+                .addOption(createToggle(builder, "first_person", GlowOutlineConfig::setFirstPerson, GlowOutlineConfig::isFirstPerson))
+                .addOption(createToggle(builder, "third_person", GlowOutlineConfig::setThirdPerson, GlowOutlineConfig::isThirdPerson))
+                .addOption(createToggle(builder, "other_entities", GlowOutlineConfig::setOtherEntities, GlowOutlineConfig::isOtherEntities))
+                .addOption(createToggle(builder, "dropped_items", GlowOutlineConfig::setDroppedItems, GlowOutlineConfig::isDroppedItems))
+                .addOption(createToggle(builder, "armor", GlowOutlineConfig::setArmor, GlowOutlineConfig::isArmor));
     }
 
     private OptionBuilder createEnabledOption(ConfigBuilder builder) {
@@ -46,17 +56,14 @@ public class GalliumSodiumConfig implements ConfigEntryPoint {
                 .setBinding(GlowOutlineConfig::setEnabled, GlowOutlineConfig::isEnabled);
     }
 
-    private OptionBuilder createIntensityOption(ConfigBuilder builder) {
-        return builder.createIntegerOption(Identifier.parse("gallium:glow_intensity"))
-                .setName(Component.translatable("gallium.options.glow_intensity"))
-                .setTooltip(Component.translatable("gallium.options.glow_intensity.tooltip"))
-                .setRange(0, 200, 10)
-                .setDefaultValue(100)
-                .setValueFormatter(v -> Component.literal(v + "%"))
+    private OptionBuilder createToggle(ConfigBuilder builder, String id,
+                                        java.util.function.Consumer<Boolean> setter,
+                                        java.util.function.Supplier<Boolean> getter) {
+        return builder.createBooleanOption(Identifier.parse("gallium:glow_" + id))
+                .setName(Component.translatable("gallium.options.glow_" + id))
+                .setTooltip(Component.translatable("gallium.options.glow_" + id + ".tooltip"))
+                .setDefaultValue(true)
                 .setStorageHandler(STORAGE_HANDLER)
-                .setBinding(
-                        v -> GlowOutlineConfig.setIntensity(v / 100.0f),
-                        () -> Math.round(GlowOutlineConfig.getIntensity() * 100)
-                );
+                .setBinding(setter::accept, getter::get);
     }
 }

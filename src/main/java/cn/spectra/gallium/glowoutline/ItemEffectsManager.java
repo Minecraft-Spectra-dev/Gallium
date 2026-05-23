@@ -14,7 +14,6 @@ import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import org.joml.Vector3f;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -26,7 +25,6 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
     private static final Identifier RELOAD_ID = Identifier.fromNamespaceAndPath("gallium", "item_effects");
     private static final Identifier RESOURCE_PATH = Identifier.fromNamespaceAndPath("gallium", "item_effects.json");
 
-    private static volatile ItemEffectConfig defaultConfig = ItemEffectConfig.DEFAULT;
     private static volatile List<ItemEffectRule> rules = List.of();
     private static volatile boolean active = false;
 
@@ -44,7 +42,6 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
 
         var resource = manager.getResource(RESOURCE_PATH);
         if (resource.isEmpty()) {
-            defaultConfig = ItemEffectConfig.DEFAULT;
             rules = List.of();
             active = false;
             Gallium.LOGGER.info("No item_effects.json found, glow outline inactive.");
@@ -55,65 +52,29 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
             JsonObject root = JsonParser.parseReader(
                     new InputStreamReader(stream, StandardCharsets.UTF_8)).getAsJsonObject();
             parseConfig(root);
-            active = true;
+            active = !rules.isEmpty();
         } catch (Exception e) {
             Gallium.LOGGER.error("Failed to parse item_effects.json", e);
-            defaultConfig = ItemEffectConfig.DEFAULT;
             rules = List.of();
             active = false;
         }
     }
 
     private void parseConfig(JsonObject root) {
-        ItemEffectConfig baseDefault = ItemEffectConfig.DEFAULT;
-        if (root.has("default")) {
-            baseDefault = parseEffect(root.getAsJsonObject("default"), baseDefault);
-        }
-        defaultConfig = baseDefault;
-
         List<ItemEffectRule> parsed = new ArrayList<>();
 
         if (root.has("rules")) {
             JsonArray rulesArr = root.getAsJsonArray("rules");
             for (int i = 0; i < rulesArr.size(); i++) {
                 JsonObject ruleObj = rulesArr.get(i).getAsJsonObject();
-                ItemEffectRule rule = parseRule(ruleObj, baseDefault, rulesArr.size() - i);
+                ItemEffectRule rule = parseRule(ruleObj);
                 if (rule != null) parsed.add(rule);
             }
         }
 
-        // Legacy format: "items" and "tags" top-level fields
-        if (root.has("items")) {
-            JsonObject itemsObj = root.getAsJsonObject("items");
-            int priority = 1000;
-            for (var entry : itemsObj.entrySet()) {
-                var ref = BuiltInRegistries.ITEM.get(Identifier.parse(entry.getKey()));
-                if (ref.isPresent()) {
-                    ItemEffectConfig effect = parseEffect(entry.getValue().getAsJsonObject(), baseDefault);
-                    List<ItemCondition> conds = List.of(new ItemCondition.Items(Set.of(ref.get().value())));
-                    parsed.add(new ItemEffectRule(priority--, MatchMode.ALL_OF, conds, effect));
-                }
-            }
-        }
-        if (root.has("tags")) {
-            JsonObject tagsObj = root.getAsJsonObject("tags");
-            int priority = 500;
-            for (var entry : tagsObj.entrySet()) {
-                String key = entry.getKey();
-                if (key.startsWith("#")) key = key.substring(1);
-                TagKey<Item> tag = TagKey.create(BuiltInRegistries.ITEM.key(), Identifier.parse(key));
-                ItemEffectConfig effect = parseEffect(entry.getValue().getAsJsonObject(), baseDefault);
-                List<ItemCondition> conds = List.of(new ItemCondition.Tag(tag));
-                parsed.add(new ItemEffectRule(priority--, MatchMode.ALL_OF, conds, effect));
-            }
-        }
-
-        parsed.sort(null);
         rules = List.copyOf(parsed);
 
-        // Register pipelines for all referenced shaders
         Set<String> shaders = new HashSet<>();
-        shaders.add(baseDefault.shader());
         for (ItemEffectRule rule : parsed) {
             shaders.add(rule.effect().shader());
         }
@@ -124,21 +85,27 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
         Gallium.LOGGER.info("Loaded item effects: {} rules, {} shaders", rules.size(), shaders.size());
     }
 
-    private static ItemEffectRule parseRule(JsonObject obj, ItemEffectConfig baseDefault, int implicitPriority) {
-        int priority = obj.has("priority") ? obj.get("priority").getAsInt() : implicitPriority;
-
+    private static ItemEffectRule parseRule(JsonObject obj) {
         JsonObject matchObj = obj.has("match") ? obj.getAsJsonObject("match") : obj;
+
+        MatchMode mode = MatchMode.ALL_OF;
+        if (matchObj.has("mode")) {
+            String modeStr = matchObj.get("mode").getAsString();
+            mode = switch (modeStr) {
+                case "any_of" -> MatchMode.ANY_OF;
+                case "none_of" -> MatchMode.NONE_OF;
+                default -> MatchMode.ALL_OF;
+            };
+        }
 
         List<ItemCondition> conditions = new ArrayList<>();
         parseConditions(matchObj, conditions);
-
-        ItemEffectConfig effect = baseDefault;
-        if (obj.has("effect")) {
-            effect = parseEffect(obj.getAsJsonObject("effect"), baseDefault);
-        }
-
         if (conditions.isEmpty()) return null;
-        return new ItemEffectRule(priority, MatchMode.ALL_OF, List.copyOf(conditions), effect);
+        if (!obj.has("effect")) return null;
+
+        ItemEffectConfig effect = parseEffect(obj.getAsJsonObject("effect"));
+
+        return new ItemEffectRule(mode, List.copyOf(conditions), effect);
     }
 
     private static void parseConditions(JsonObject matchObj, List<ItemCondition> conditions) {
@@ -172,7 +139,6 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
     }
 
     private static ItemCondition parseConditionNode(JsonObject node) {
-        // Logical operators
         if (node.has("and")) {
             JsonArray arr = node.getAsJsonArray("and");
             List<ItemCondition> children = new ArrayList<>();
@@ -196,20 +162,17 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
             return child == null ? null : new ItemCondition.Not(child);
         }
 
-        // Path-based condition
         if (!node.has("path")) return null;
         String path = node.get("path").getAsString();
 
-        // Resolve component from path (e.g. "components.minecraft:enchantments")
-        if (!path.startsWith("components.")) return null; // nbt.* paths ignored on this version
+        if (!path.startsWith("components.")) return null;
         String compId = path.substring("components.".length());
         DataComponentType<?> compType = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(Identifier.parse(compId));
         if (compType == null) return null;
 
-        // Determine check mode from fields
         ItemCondition.Path.CheckMode mode;
         String value = "";
-        float min = Float.NEGATIVE_INFINITY, max = Float.POSITIVE_INFINITY;
+        float min = java.lang.Float.NEGATIVE_INFINITY, max = java.lang.Float.POSITIVE_INFINITY;
 
         if (node.has("not_empty")) {
             mode = ItemCondition.Path.CheckMode.NOT_EMPTY;
@@ -230,70 +193,70 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
         return new ItemCondition.Path(compType, mode, value, min, max);
     }
 
-    static ItemEffectConfig parseEffect(JsonObject obj, ItemEffectConfig fallback) {
-        String shader = fallback.shader();
-        Vector3f inner = new Vector3f(fallback.innerColor());
-        Vector3f outer = new Vector3f(fallback.outerColor());
-        float intensity = fallback.intensity();
-        float pulseSpeed = fallback.pulseSpeed();
-        float waveSpeed = fallback.waveSpeed();
+    static ItemEffectConfig parseEffect(JsonObject obj) {
+        if (obj == null || !obj.has("shader")) return null;
+        String shader = obj.get("shader").getAsString();
 
-        if (obj.has("shader")) shader = obj.get("shader").getAsString();
-        if (obj.has("inner_color")) inner = parseColor(obj, "inner_color", inner);
-        if (obj.has("outer_color")) outer = parseColor(obj, "outer_color", outer);
-        if (obj.has("color")) {
-            Vector3f c = parseHexColor(obj.get("color").getAsString());
-            if (c != null) {
-                inner = c;
-                outer = new Vector3f(c).mul(0.7f);
+        List<ShaderParam> params = new ArrayList<>();
+        if (obj.has("params")) {
+            JsonObject paramsObj = obj.getAsJsonObject("params");
+            for (var entry : paramsObj.entrySet()) {
+                ShaderParam param = parseParam(entry.getKey(), entry.getValue());
+                if (param != null) params.add(param);
             }
         }
-        if (obj.has("intensity")) intensity = obj.get("intensity").getAsFloat();
-        if (obj.has("pulse_speed")) pulseSpeed = obj.get("pulse_speed").getAsFloat();
-        if (obj.has("wave_speed")) waveSpeed = obj.get("wave_speed").getAsFloat();
 
-        return new ItemEffectConfig(shader, inner, outer, intensity, pulseSpeed, waveSpeed);
+        return new ItemEffectConfig(shader, List.copyOf(params));
     }
 
-    private static Vector3f parseColor(JsonObject obj, String key, Vector3f fallback) {
-        JsonElement el = obj.get(key);
-        if (el.isJsonArray()) {
-            var arr = el.getAsJsonArray();
-            return new Vector3f(arr.get(0).getAsFloat(), arr.get(1).getAsFloat(), arr.get(2).getAsFloat());
-        } else if (el.isJsonPrimitive()) {
-            Vector3f c = parseHexColor(el.getAsString());
-            return c != null ? c : fallback;
+    private static ShaderParam parseParam(String name, JsonElement element) {
+        if (element.isJsonPrimitive()) {
+            if (element.getAsJsonPrimitive().isNumber()) {
+                return new ShaderParam.Float(name, element.getAsFloat());
+            }
+            if (element.getAsJsonPrimitive().isString()) {
+                String str = element.getAsString();
+                if (str.startsWith("#")) {
+                    float[] rgb = parseHexColor(str);
+                    if (rgb != null) return new ShaderParam.Vec3(name, rgb[0], rgb[1], rgb[2]);
+                }
+            }
+            return null;
         }
-        return fallback;
+        if (element.isJsonArray()) {
+            JsonArray arr = element.getAsJsonArray();
+            return switch (arr.size()) {
+                case 2 -> new ShaderParam.Vec2(name, arr.get(0).getAsFloat(), arr.get(1).getAsFloat());
+                case 3 -> new ShaderParam.Vec3(name, arr.get(0).getAsFloat(), arr.get(1).getAsFloat(), arr.get(2).getAsFloat());
+                case 4 -> new ShaderParam.Vec4(name, arr.get(0).getAsFloat(), arr.get(1).getAsFloat(), arr.get(2).getAsFloat(), arr.get(3).getAsFloat());
+                default -> null;
+            };
+        }
+        return null;
     }
 
-    private static Vector3f parseHexColor(String hex) {
-        if (hex == null) return null;
+    private static float[] parseHexColor(String hex) {
         if (hex.startsWith("#")) hex = hex.substring(1);
         try {
             int rgb = Integer.parseUnsignedInt(hex, 16);
             if (hex.length() == 8) rgb = rgb >>> 8;
-            return new Vector3f(
+            return new float[]{
                     ((rgb >> 16) & 0xFF) / 255.0f,
                     ((rgb >> 8) & 0xFF) / 255.0f,
                     (rgb & 0xFF) / 255.0f
-            );
+            };
         } catch (NumberFormatException e) {
             return null;
         }
     }
 
     public static ItemEffectConfig getConfig(ItemStack stack) {
-        if (stack.isEmpty()) return defaultConfig;
+        if (stack.isEmpty()) return null;
 
         for (ItemEffectRule rule : rules) {
             if (rule.matches(stack)) return rule.effect();
         }
 
-        return defaultConfig;
-    }
-
-    public static ItemEffectConfig getDefaultConfig() {
-        return defaultConfig;
+        return null;
     }
 }

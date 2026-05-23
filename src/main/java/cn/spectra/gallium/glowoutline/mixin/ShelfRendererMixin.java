@@ -4,37 +4,53 @@ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import cn.spectra.gallium.glowoutline.IrisCompat;
 import cn.spectra.gallium.glowoutline.capture.DuplicatingSubmitNodeStorage;
 import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
+import cn.spectra.gallium.glowoutline.capture.ShelfRenderStateAccessor;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeStorage;
+import net.minecraft.client.renderer.blockentity.ShelfRenderer;
+import net.minecraft.client.renderer.blockentity.state.ShelfRenderState;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
-import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.core.NonNullList;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ItemDisplayContext;
+import net.minecraft.world.level.block.entity.ShelfBlockEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(ItemInHandRenderer.class)
-public class ItemInHandRendererMixin {
+@Mixin(ShelfRenderer.class)
+public class ShelfRendererMixin {
 
-    @WrapOperation(method = "renderItem", at = @At(value = "INVOKE",
+    @Inject(method = "extractRenderState(Lnet/minecraft/world/level/block/entity/ShelfBlockEntity;Lnet/minecraft/client/renderer/blockentity/state/ShelfRenderState;FLnet/minecraft/world/phys/Vec3;Lnet/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay;)V",
+            at = @At("TAIL"))
+    private void galliumCaptureItems(ShelfBlockEntity blockEntity, ShelfRenderState state, float partialTicks,
+                                      net.minecraft.world.phys.Vec3 cameraPosition,
+                                      net.minecraft.client.renderer.feature.ModelFeatureRenderer.CrumblingOverlay breakProgress,
+                                      CallbackInfo ci) {
+        NonNullList<ItemStack> items = blockEntity.getItems();
+        ShelfRenderStateAccessor accessor = (ShelfRenderStateAccessor) state;
+        for (int i = 0; i < items.size(); i++) {
+            accessor.gallium$setItemStack(i, items.get(i));
+        }
+    }
+
+    @WrapOperation(method = "submitItem", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/item/ItemStackRenderState;submit(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;III)V"))
     private void galliumWrapItemSubmit(ItemStackRenderState renderState, PoseStack poseStack,
                                        SubmitNodeCollector collector, int light, int overlay, int outlineColor,
                                        Operation<Void> original,
-                                       LivingEntity mob, ItemStack itemStack, ItemDisplayContext type,
-                                       PoseStack ps, SubmitNodeCollector col, int l) {
-        if (IrisCompat.isShadowPass() || itemStack.isEmpty() || !GlowOutlineConfig.isFirstPerson()) {
+                                       ShelfRenderState state, ItemStackRenderState item, PoseStack ps,
+                                       SubmitNodeCollector col, int slot, float yRot) {
+        ItemStack itemStack = ((ShelfRenderStateAccessor) state).gallium$getItemStack(slot);
+        if (IrisCompat.isShadowPass() || itemStack.isEmpty() || !GlowOutlineConfig.isOtherEntities()) {
             original.call(renderState, poseStack, collector, light, overlay, outlineColor);
             return;
         }
 
-        boolean capturing = GlowCaptureManager.beginItemCapture(itemStack, true);
+        boolean capturing = GlowCaptureManager.beginItemCapture(itemStack);
         if (capturing && collector instanceof SubmitNodeStorage storage) {
             DuplicatingSubmitNodeStorage wrapped = new DuplicatingSubmitNodeStorage(storage);
             original.call(renderState, poseStack, wrapped, light, overlay, outlineColor);
@@ -42,29 +58,5 @@ public class ItemInHandRendererMixin {
             original.call(renderState, poseStack, collector, light, overlay, outlineColor);
         }
         GlowCaptureManager.endItemCapture();
-    }
-
-    @Inject(method = "renderPlayerArm", at = @At("HEAD"))
-    private void galliumSuppressArmStart(PoseStack p, SubmitNodeCollector c, int l, float eq, float sw,
-                                          net.minecraft.world.entity.HumanoidArm arm, CallbackInfo ci) {
-        GlowCaptureManager.beginSuppress();
-    }
-
-    @Inject(method = "renderPlayerArm", at = @At("TAIL"))
-    private void galliumSuppressArmEnd(PoseStack p, SubmitNodeCollector c, int l, float eq, float sw,
-                                        net.minecraft.world.entity.HumanoidArm arm, CallbackInfo ci) {
-        GlowCaptureManager.endSuppress();
-    }
-
-    @Inject(method = "renderMapHand", at = @At("HEAD"))
-    private void galliumSuppressMapStart(PoseStack p, SubmitNodeCollector c, int l,
-                                          net.minecraft.world.entity.HumanoidArm arm, CallbackInfo ci) {
-        GlowCaptureManager.beginSuppress();
-    }
-
-    @Inject(method = "renderMapHand", at = @At("TAIL"))
-    private void galliumSuppressMapEnd(PoseStack p, SubmitNodeCollector c, int l,
-                                        net.minecraft.world.entity.HumanoidArm arm, CallbackInfo ci) {
-        GlowCaptureManager.endSuppress();
     }
 }

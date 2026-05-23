@@ -1,14 +1,14 @@
 package cn.spectra.gallium.glowoutline;
 
 import net.minecraft.world.item.ItemStack;
+import org.jspecify.annotations.Nullable;
 import java.util.List;
 
 public record ItemEffectRule(
-        int priority,
         MatchMode mode,
         List<ItemCondition> conditions,
-        ItemEffectConfig effect
-) implements Comparable<ItemEffectRule> {
+        @Nullable ItemEffectConfig effect
+) {
 
     public boolean matches(ItemStack stack) {
         if (conditions.isEmpty()) return true;
@@ -18,10 +18,5 @@ public record ItemEffectRule(
             case ANY_OF -> conditions.stream().anyMatch(c -> c.test(stack));
             case NONE_OF -> conditions.stream().noneMatch(c -> c.test(stack));
         };
-    }
-
-    @Override
-    public int compareTo(ItemEffectRule other) {
-        return Integer.compare(other.priority, this.priority);
     }
 }

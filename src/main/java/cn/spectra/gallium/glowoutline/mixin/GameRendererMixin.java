@@ -71,15 +71,14 @@ public class GameRendererMixin {
         if (glowUniformBuffer == null) glowUniformBuffer = new GlowUniformBuffer();
 
         glowAccumulatedTime += deltaTracker.getGameTimeDeltaTicks() / 20.0f;
-        float globalIntensity = GlowOutlineConfig.getIntensity();
 
         for (GlowCaptureState state : GlowCaptureManager.getActiveStates()) {
-            drawGlow(state, mainTarget, globalIntensity);
+            drawGlow(state, mainTarget);
         }
     }
 
     @Unique
-    private void drawGlow(GlowCaptureState state, RenderTarget mainTarget, float globalIntensity) {
+    private void drawGlow(GlowCaptureState state, RenderTarget mainTarget) {
         if (!state.capturedThisFrame || state.config == null || state.maskTarget == null) return;
 
         GlowCaptureManager.renderCapturedNodes(state, minecraft);
@@ -95,8 +94,8 @@ public class GameRendererMixin {
                 mainTarget.getColorTexture(), glowTempColorTarget.getColorTexture(),
                 0, 0, 0, 0, 0, w, h);
 
-        var cfg = state.config.withIntensity(state.config.intensity() * globalIntensity);
-        glowUniformBuffer.update(glowAccumulatedTime, w, h, 0.001f, cfg);
+        float globalIntensity = 1.0f;
+        glowUniformBuffer.update(glowAccumulatedTime, w, h, globalIntensity, state.config);
 
         try (RenderPass pass = RenderSystem.getDevice()
                 .createCommandEncoder()

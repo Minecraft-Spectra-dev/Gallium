@@ -83,7 +83,7 @@ public final class GlowCaptureManager {
         if (!ItemEffectsManager.isActive()) return false;
 
         ItemEffectConfig cfg = ItemEffectsManager.getConfig(stack);
-        if (cfg.intensity() <= 0) return false;
+        if (cfg == null || cfg.shader().isEmpty()) return false;
 
         GlowCaptureState state = allocateState();
         state.active = true;

@@ -6,10 +6,13 @@
 		"GameRendererMixin",
 		"ItemInHandRendererMixin",
 		"ItemInHandLayerMixin",
+		"HumanoidArmorLayerMixin",
 		"ItemFrameRendererMixin",
 		"ItemFrameRenderStateMixin",
 		"ItemEntityRendererMixin",
 		"ItemEntityRenderStateMixin",
+		"ShelfRendererMixin",
+		"ShelfRenderStateMixin",
 		"accessor.FeatureRenderDispatcherAccessor",
 		"accessor.GameRendererAccessor"
 	],

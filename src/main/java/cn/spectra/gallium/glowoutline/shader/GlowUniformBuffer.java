@@ -1,6 +1,7 @@
 package cn.spectra.gallium.glowoutline.shader;
 
 import cn.spectra.gallium.glowoutline.ItemEffectConfig;
+import cn.spectra.gallium.glowoutline.ShaderParam;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
@@ -10,15 +11,8 @@ import java.nio.ByteBuffer;
 import org.lwjgl.system.MemoryStack;
 
 public class GlowUniformBuffer implements AutoCloseable {
-    private static final int UBO_SIZE = new Std140SizeCalculator()
-            .putFloat()   // FrameTimeCounter
-            .putVec2()    // ScreenSize
-            .putFloat()   // Intensity
-            .putFloat()   // PulseSpeed
-            .putFloat()   // WaveSpeed
-            .putVec3()    // InnerColor
-            .putVec3()    // OuterColor
-            .get();
+
+    private static final int MAX_UBO_SIZE = 512;
 
     private final GpuBuffer buffer;
 
@@ -26,23 +20,39 @@ public class GlowUniformBuffer implements AutoCloseable {
         this.buffer = RenderSystem.getDevice().createBuffer(
                 () -> "Glow Uniform Buffer",
                 136,
-                UBO_SIZE
+                MAX_UBO_SIZE
         );
     }
 
-    public void update(float frameTimeCounter, int screenWidth, int screenHeight, float depthThreshold, ItemEffectConfig cfg) {
+    public void update(float frameTimeCounter, int screenWidth, int screenHeight, float globalIntensity, ItemEffectConfig cfg) {
+        int totalSize = computeSize(cfg);
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            ByteBuffer data = Std140Builder.onStack(stack, UBO_SIZE)
-                    .putFloat(frameTimeCounter)
-                    .putVec2((float) screenWidth, (float) screenHeight)
-                    .putFloat(cfg.intensity())
-                    .putFloat(cfg.pulseSpeed())
-                    .putFloat(cfg.waveSpeed())
-                    .putVec3(cfg.innerColor().x, cfg.innerColor().y, cfg.innerColor().z)
-                    .putVec3(cfg.outerColor().x, cfg.outerColor().y, cfg.outerColor().z)
-                    .get();
+            Std140Builder builder = Std140Builder.onStack(stack, totalSize);
+            builder.putFloat(frameTimeCounter);
+            builder.putVec2((float) screenWidth, (float) screenHeight);
+            builder.putFloat(globalIntensity);
+            for (ShaderParam param : cfg.params()) {
+                param.pack(builder);
+            }
+            ByteBuffer data = builder.get();
             RenderSystem.getDevice().createCommandEncoder().writeToBuffer(this.buffer.slice(), data);
         }
+    }
+
+    private static int computeSize(ItemEffectConfig cfg) {
+        Std140SizeCalculator calc = new Std140SizeCalculator()
+                .putFloat()
+                .putVec2()
+                .putFloat();
+        for (ShaderParam param : cfg.params()) {
+            switch (param) {
+                case ShaderParam.Float f -> calc.putFloat();
+                case ShaderParam.Vec2 v -> calc.putVec2();
+                case ShaderParam.Vec3 v -> calc.putVec3();
+                case ShaderParam.Vec4 v -> calc.putVec4();
+            }
+        }
+        return calc.get();
     }
 
     public GpuBufferSlice getSlice() {

@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
+import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import cn.spectra.gallium.glowoutline.IrisCompat;
 import cn.spectra.gallium.glowoutline.capture.DuplicatingSubmitNodeStorage;
 import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
@@ -38,7 +39,7 @@ public class ItemEntityRendererMixin {
                                            ItemEntityRenderState state, PoseStack ps, SubmitNodeCollector col,
                                            net.minecraft.client.renderer.state.level.CameraRenderState cam) {
         ItemStack itemStack = ((ItemEntityRenderStateAccessor) state).gallium$getItemStack();
-        if (IrisCompat.isShadowPass() || itemStack.isEmpty()) {
+        if (IrisCompat.isShadowPass() || itemStack.isEmpty() || !GlowOutlineConfig.isDroppedItems()) {
             original.call(poseStack, collector, lightCoords, clusterState, random, boundingBox);
             return;
         }

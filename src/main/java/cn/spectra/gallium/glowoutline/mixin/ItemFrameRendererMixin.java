@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
+import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import cn.spectra.gallium.glowoutline.IrisCompat;
 import cn.spectra.gallium.glowoutline.capture.DuplicatingSubmitNodeStorage;
 import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
@@ -35,7 +36,7 @@ public class ItemFrameRendererMixin {
                                        Operation<Void> original,
                                        ItemFrameRenderState state, PoseStack ps, SubmitNodeCollector col, CameraRenderState cam) {
         ItemStack itemStack = ((ItemFrameRenderStateAccessor) state).gallium$getItemStack();
-        if (IrisCompat.isShadowPass() || itemStack.isEmpty()) {
+        if (IrisCompat.isShadowPass() || itemStack.isEmpty() || !GlowOutlineConfig.isOtherEntities()) {
             original.call(renderState, poseStack, collector, light, overlay, outlineColor);
             return;
         }
