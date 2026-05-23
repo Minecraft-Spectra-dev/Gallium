@@ -13,6 +13,11 @@
 		"ItemEntityRenderStateMixin",
 		"ShelfRendererMixin",
 		"ShelfRenderStateMixin",
+		"GuiGraphicsExtractorMixin",
+		"GuiItemAtlasMixin",
+		"GuiItemRenderStateMixin",
+		"GuiRendererMixin",
+		"GlCommandEncoderMixin",
 		"accessor.FeatureRenderDispatcherAccessor",
 		"accessor.GameRendererAccessor"
 	],

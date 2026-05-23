@@ -39,14 +39,5 @@ replay_*.log
 *.hprof
 *.jfr
 
-# misc
-assets/
-*.jar.bak
-Gallium.zip
-Enchantment-Outline1.10.2.zip
-glowmyblocks-1.3.0.jar
-*.png
-!src/main/resources/**/*.png
-
 # Agent
 .claude/

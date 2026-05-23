@@ -14,6 +14,8 @@
 	"gallium.options.glow_dropped_items.tooltip": "Glow outline on dropped items on the ground",
 	"gallium.options.glow_armor": "Armor",
 	"gallium.options.glow_armor.tooltip": "Glow outline on worn armor",
+	"gallium.options.glow_gui": "GUI",
+	"gallium.options.glow_gui.tooltip": "Glow outline on items in inventory, hotbar, and other GUIs",
 	"key.gallium.reload_resource_pack": "Reload Resource Packs",
 	"key.category.gallium.main": "Gallium"
 }

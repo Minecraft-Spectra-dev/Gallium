@@ -7,6 +7,7 @@ public class GlowOutlineConfig {
     private static boolean otherEntities = true;
     private static boolean droppedItems = true;
     private static boolean armor = true;
+    private static boolean gui = true;
 
     public static boolean isEnabled() { return enabled; }
     public static void setEnabled(boolean v) { enabled = v; }
@@ -25,4 +26,7 @@ public class GlowOutlineConfig {
 
     public static boolean isArmor() { return armor; }
     public static void setArmor(boolean v) { armor = v; }
+
+    public static boolean isGui() { return gui; }
+    public static void setGui(boolean v) { gui = v; }
 }

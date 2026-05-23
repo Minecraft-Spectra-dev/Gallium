@@ -38,6 +38,7 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
     @Override
     public void onResourceManagerReload(ResourceManager manager) {
         GlowPipeline.clearAll();
+        cn.spectra.gallium.glowoutline.shader.GuiGlowElementPipeline.clear();
         cn.spectra.gallium.glowoutline.capture.GlowCaptureManager.clearAll();
 
         var resource = manager.getResource(RESOURCE_PATH);
@@ -79,7 +80,14 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
             shaders.add(rule.effect().shader());
         }
         for (String shader : shaders) {
-            GlowPipeline.getOrCreate(shader);
+            if (!shader.isEmpty()) GlowPipeline.getOrCreate(shader);
+        }
+        // Pre-create GUI element pipelines per config
+        for (ItemEffectRule rule : parsed) {
+            ItemEffectConfig cfg = rule.effect();
+            if (cfg != null && !cfg.shader().isEmpty()) {
+                cn.spectra.gallium.glowoutline.shader.GuiGlowElementPipeline.getOrCreate(cfg);
+            }
         }
 
         Gallium.LOGGER.info("Loaded item effects: {} rules, {} shaders", rules.size(), shaders.size());

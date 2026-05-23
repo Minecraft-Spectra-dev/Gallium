@@ -14,6 +14,8 @@
 	"gallium.options.glow_dropped_items.tooltip": "地面掉落物品的描边",
 	"gallium.options.glow_armor": "盔甲",
 	"gallium.options.glow_armor.tooltip": "穿戴盔甲的描边",
+	"gallium.options.glow_gui": "GUI",
+	"gallium.options.glow_gui.tooltip": "物品栏、快捷栏等 GUI 中物品的描边",
 	"key.gallium.reload_resource_pack": "重载资源包",
 	"key.category.gallium.main": "Gallium"
 }

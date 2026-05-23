@@ -44,7 +44,8 @@ public class GalliumSodiumConfig implements ConfigEntryPoint {
                 .addOption(createToggle(builder, "third_person", GlowOutlineConfig::setThirdPerson, GlowOutlineConfig::isThirdPerson))
                 .addOption(createToggle(builder, "other_entities", GlowOutlineConfig::setOtherEntities, GlowOutlineConfig::isOtherEntities))
                 .addOption(createToggle(builder, "dropped_items", GlowOutlineConfig::setDroppedItems, GlowOutlineConfig::isDroppedItems))
-                .addOption(createToggle(builder, "armor", GlowOutlineConfig::setArmor, GlowOutlineConfig::isArmor));
+                .addOption(createToggle(builder, "armor", GlowOutlineConfig::setArmor, GlowOutlineConfig::isArmor))
+                .addOption(createToggle(builder, "gui", GlowOutlineConfig::setGui, GlowOutlineConfig::isGui));
     }
 
     private OptionBuilder createEnabledOption(ConfigBuilder builder) {
