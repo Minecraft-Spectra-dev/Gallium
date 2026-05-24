@@ -1,5 +1,6 @@
 package cn.spectra.gallium;
 
+import cn.spectra.gallium.config.GalliumConfigIO;
 import cn.spectra.gallium.glowoutline.ItemEffectsManager;
 import cn.spectra.gallium.glowoutline.shader.GlowPipeline;
 import net.fabricmc.api.ClientModInitializer;
@@ -23,6 +24,7 @@ public class Gallium implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		GalliumConfigIO.load();
 		GlowPipeline.init();
 		ResourceManagerHelper.get(PackType.CLIENT_RESOURCES).registerReloadListener(new ItemEffectsManager());
 
@@ -44,14 +46,14 @@ public class Gallium implements ClientModInitializer {
 	}
 
 	private void reloadResourcePack(Minecraft client) {
-		Screen screen = client.screen;
-		client.schedule(() -> {
-			client.reloadResourcePacks().thenAcceptAsync(aVoid -> {
-				LOGGER.info("Resource pack reloaded.");
-				if (screen != null && client.screen == null) {
-					client.setScreen(screen);
-				}
-			}, client);
-		});
+		Screen previous = client.screen;
+		client.reloadResourcePacks().thenAcceptAsync(aVoid -> {
+			LOGGER.info("Resource pack reloaded.");
+			// Reopen the prior screen only if reload itself dismissed it. If the user navigated
+			// elsewhere meanwhile, leave their current screen alone.
+			if (previous != null && client.screen == null) {
+				client.setScreen(previous);
+			}
+		}, client);
 	}
 }

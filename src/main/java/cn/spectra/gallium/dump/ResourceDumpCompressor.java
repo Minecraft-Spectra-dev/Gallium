@@ -20,20 +20,27 @@ public class ResourceDumpCompressor {
 	private static final AtomicBoolean scheduled = new AtomicBoolean(false);
 
 	public static void scheduleCompress() {
-		if (scheduled.compareAndSet(false, true)) {
-			Minecraft.getInstance().schedule(() -> {
-				scheduled.set(false);
-				compressLatestDump();
-			});
-		}
+		if (!scheduled.compareAndSet(false, true)) return;
+
+		// Snapshot the path on the render thread, then run the IO + zip work off-thread to keep the UI smooth.
+		Minecraft.getInstance().schedule(() -> {
+			Path gameDir = Minecraft.getInstance().gameDirectory.toPath().toAbsolutePath();
+			Path debugDir = TextureUtil.getDebugTexturePath(gameDir);
+			Path outputDir = gameDir.resolve("gallium").resolve("dumps");
+
+			Thread t = new Thread(() -> {
+				try {
+					compressLatestDump(debugDir, outputDir);
+				} finally {
+					scheduled.set(false);
+				}
+			}, "Gallium-DumpCompressor");
+			t.setDaemon(true);
+			t.start();
+		});
 	}
 
-	private static void compressLatestDump() {
-		Minecraft client = Minecraft.getInstance();
-		Path gameDir = client.gameDirectory.toPath().toAbsolutePath();
-		Path debugDir = TextureUtil.getDebugTexturePath(gameDir);
-		Path outputDir = gameDir.resolve("gallium").resolve("dumps");
-
+	private static void compressLatestDump(Path debugDir, Path outputDir) {
 		if (!Files.exists(debugDir)) return;
 
 		try {

@@ -11,32 +11,49 @@ import java.util.Map;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 
+/**
+ * Per-(shader,params) GUI glow pipeline cache. Two rules sharing a shader name but
+ * different params must NOT share a pipeline/UBO: GUI elements are submitted into
+ * a layered batch and drawn later with whatever uniforms were last written, so
+ * collapsing them by shader name causes color/intensity bleed across items.
+ * <p>
+ * Keying by {@link ItemEffectConfig} (a record whose equality covers shader+params)
+ * preserves the originally-intended one-pipeline-per-config invariant.
+ */
 public class GuiGlowElementPipeline {
 
-    private static final Map<ItemEffectConfig, RenderPipeline> pipelines = new HashMap<>();
-    private static final Map<RenderPipeline, GuiGlowUniformBuffer> uboByPipeline = new HashMap<>();
+    private static final Map<ItemEffectConfig, RenderPipeline> pipelinesByConfig = new HashMap<>();
+    private static final Map<RenderPipeline, GlowUniformBuffer> uboByPipeline = new HashMap<>();
     private static final Map<RenderPipeline, ItemEffectConfig> configByPipeline = new HashMap<>();
+    private static int locationCounter;
 
-    public static RenderPipeline getOrCreate(ItemEffectConfig cfg) {
-        return pipelines.computeIfAbsent(cfg, c -> {
-            int hash = System.identityHashCode(c);
-            String location = "pipeline/gallium_gui_glow_" + Integer.toHexString(hash);
-            String shaderPath = "core/" + c.shader() + "_gui";
-
-            RenderPipeline p = RenderPipeline.builder(RenderPipelines.GUI_TEXTURED_SNIPPET)
-                    .withLocation(location)
-                    .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", shaderPath))
-                    .withColorTargetState(new ColorTargetState(BlendFunction.ADDITIVE))
-                    .withUniform("GalliumGuiGlow", UniformType.UNIFORM_BUFFER)
-                    .build();
-            uboByPipeline.put(p, new GuiGlowUniformBuffer());
-            configByPipeline.put(p, c);
-            Gallium.LOGGER.info("Created GUI glow pipeline for shader '{}'", c.shader());
-            return p;
-        });
+    static {
+        GlowResources.register(GuiGlowElementPipeline::clear);
     }
 
-    public static GuiGlowUniformBuffer getUbo(RenderPipeline p) {
+    public static RenderPipeline getOrCreate(ItemEffectConfig cfg) {
+        RenderPipeline cached = pipelinesByConfig.get(cfg);
+        if (cached != null) return cached;
+
+        String shader = cfg.shader();
+        String location = "pipeline/gallium_gui_glow/" + shader + "_" + (locationCounter++);
+        String shaderPath = "core/" + shader + "_gui";
+
+        RenderPipeline p = RenderPipeline.builder(RenderPipelines.GUI_TEXTURED_SNIPPET)
+                .withLocation(location)
+                .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", shaderPath))
+                .withColorTargetState(new ColorTargetState(BlendFunction.ADDITIVE))
+                .withUniform("GalliumGuiGlow", UniformType.UNIFORM_BUFFER)
+                .build();
+        pipelinesByConfig.put(cfg, p);
+        uboByPipeline.put(p, new GlowUniformBuffer("GUI Glow Uniform Buffer"));
+        configByPipeline.put(p, cfg);
+        Gallium.LOGGER.info("Created GUI glow pipeline for shader '{}' (variant #{}, {} params)",
+                shader, locationCounter - 1, cfg.params().size());
+        return p;
+    }
+
+    public static GlowUniformBuffer getUbo(RenderPipeline p) {
         return uboByPipeline.get(p);
     }
 
@@ -53,8 +70,9 @@ public class GuiGlowElementPipeline {
 
     public static void clear() {
         for (var ubo : uboByPipeline.values()) ubo.close();
-        pipelines.clear();
+        pipelinesByConfig.clear();
         uboByPipeline.clear();
         configByPipeline.clear();
+        locationCounter = 0;
     }
 }

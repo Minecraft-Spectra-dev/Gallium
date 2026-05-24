@@ -16,7 +16,13 @@ public class GlowPipeline {
 
     private static final Map<String, RenderPipeline> REGISTRY = new HashMap<>();
 
+    static {
+        GlowResources.register(GlowPipeline::clearAll);
+    }
+
     public static void clearAll() {
+        // RenderPipeline currently has no close() in vanilla; clearing the cache lets
+        // the next reload rebuild fresh pipelines without leaking driver state long-term.
         REGISTRY.clear();
     }
 
@@ -45,5 +51,8 @@ public class GlowPipeline {
         return REGISTRY.get(shaderName);
     }
 
-    public static void init() {}
+    public static void init() {
+        // Static initializer registers the disposer; this method exists so callers can
+        // force class load deterministically during mod init.
+    }
 }

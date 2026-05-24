@@ -1,12 +1,15 @@
 package cn.spectra.gallium.glowoutline;
 
 import cn.spectra.gallium.Gallium;
+import cn.spectra.gallium.glowoutline.shader.GlowResources;
+import cn.spectra.gallium.glowoutline.shader.GuiGlowElementPipeline;
 import cn.spectra.gallium.glowoutline.shader.GlowPipeline;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
+import net.minecraft.IdentifierException;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -18,7 +21,10 @@ import net.minecraft.world.item.ItemStack;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 public class ItemEffectsManager implements SimpleSynchronousResourceReloadListener {
 
@@ -37,9 +43,7 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
 
     @Override
     public void onResourceManagerReload(ResourceManager manager) {
-        GlowPipeline.clearAll();
-        cn.spectra.gallium.glowoutline.shader.GuiGlowElementPipeline.clear();
-        cn.spectra.gallium.glowoutline.capture.GlowCaptureManager.clearAll();
+        GlowResources.disposeAll();
 
         var resource = manager.getResource(RESOURCE_PATH);
         if (resource.isEmpty()) {
@@ -61,14 +65,19 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
         }
     }
 
-    private void parseConfig(JsonObject root) {
+    private static void parseConfig(JsonObject root) {
         List<ItemEffectRule> parsed = new ArrayList<>();
 
         if (root.has("rules")) {
             JsonArray rulesArr = root.getAsJsonArray("rules");
             for (int i = 0; i < rulesArr.size(); i++) {
-                JsonObject ruleObj = rulesArr.get(i).getAsJsonObject();
-                ItemEffectRule rule = parseRule(ruleObj, i);
+                ItemEffectRule rule;
+                try {
+                    rule = parseRule(rulesArr.get(i).getAsJsonObject(), i);
+                } catch (Exception e) {
+                    Gallium.LOGGER.warn("item_effects rule[{}] threw during parse, skipping: {}", i, e.toString());
+                    continue;
+                }
                 if (rule != null) parsed.add(rule);
             }
         }
@@ -82,11 +91,10 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
         for (String shader : shaders) {
             if (!shader.isEmpty()) GlowPipeline.getOrCreate(shader);
         }
-        // Pre-create GUI element pipelines per config
         for (ItemEffectRule rule : parsed) {
             ItemEffectConfig cfg = rule.effect();
             if (cfg != null && !cfg.shader().isEmpty()) {
-                cn.spectra.gallium.glowoutline.shader.GuiGlowElementPipeline.getOrCreate(cfg);
+                GuiGlowElementPipeline.getOrCreate(cfg);
             }
         }
 
@@ -94,21 +102,15 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
     }
 
     private static ItemEffectRule parseRule(JsonObject obj, int index) {
-        JsonObject matchObj = obj.has("match") ? obj.getAsJsonObject("match") : obj;
-
-        MatchMode mode = MatchMode.ALL_OF;
-        if (matchObj.has("mode")) {
-            String modeStr = matchObj.get("mode").getAsString();
-            mode = switch (modeStr) {
-                case "any_of" -> MatchMode.ANY_OF;
-                case "none_of" -> MatchMode.NONE_OF;
-                case "all_of" -> MatchMode.ALL_OF;
-                default -> {
-                    Gallium.LOGGER.warn("item_effects rule[{}]: unknown match mode '{}', defaulting to all_of", index, modeStr);
-                    yield MatchMode.ALL_OF;
-                }
-            };
+        if (!obj.has("effect")) {
+            Gallium.LOGGER.warn("item_effects rule[{}]: missing 'effect', skipping rule", index);
+            return null;
         }
+        ItemEffectConfig effect = parseEffect(obj.getAsJsonObject("effect"), index);
+        if (effect == null) return null;
+
+        JsonObject matchObj = obj.has("match") ? obj.getAsJsonObject("match") : obj;
+        MatchMode mode = parseMode(matchObj, index);
 
         List<ItemCondition> conditions = new ArrayList<>();
         parseConditions(matchObj, conditions, index);
@@ -116,15 +118,22 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
             Gallium.LOGGER.warn("item_effects rule[{}]: no valid conditions, skipping rule", index);
             return null;
         }
-        if (!obj.has("effect")) {
-            Gallium.LOGGER.warn("item_effects rule[{}]: missing 'effect', skipping rule", index);
-            return null;
-        }
-
-        ItemEffectConfig effect = parseEffect(obj.getAsJsonObject("effect"), index);
-        if (effect == null) return null;
 
         return new ItemEffectRule(mode, List.copyOf(conditions), effect);
+    }
+
+    static MatchMode parseMode(JsonObject matchObj, int index) {
+        if (!matchObj.has("mode")) return MatchMode.ALL_OF;
+        String modeStr = matchObj.get("mode").getAsString();
+        return switch (modeStr) {
+            case "any_of" -> MatchMode.ANY_OF;
+            case "none_of" -> MatchMode.NONE_OF;
+            case "all_of" -> MatchMode.ALL_OF;
+            default -> {
+                Gallium.LOGGER.warn("item_effects rule[{}]: unknown match mode '{}', defaulting to all_of", index, modeStr);
+                yield MatchMode.ALL_OF;
+            }
+        };
     }
 
     private static void parseConditions(JsonObject matchObj, List<ItemCondition> conditions, int ruleIndex) {
@@ -133,7 +142,9 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
             Set<Item> items = new HashSet<>();
             for (JsonElement el : arr) {
                 String id = el.getAsString();
-                var ref = BuiltInRegistries.ITEM.get(Identifier.parse(id));
+                Identifier itemId = tryParseId(id, ruleIndex, "item");
+                if (itemId == null) continue;
+                var ref = BuiltInRegistries.ITEM.get(itemId);
                 if (ref.isPresent()) {
                     items.add(ref.get().value());
                 } else {
@@ -148,7 +159,9 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
             for (JsonElement el : arr) {
                 String key = el.getAsString();
                 if (key.startsWith("#")) key = key.substring(1);
-                TagKey<Item> tag = TagKey.create(BuiltInRegistries.ITEM.key(), Identifier.parse(key));
+                Identifier tagId = tryParseId(key, ruleIndex, "tag");
+                if (tagId == null) continue;
+                TagKey<Item> tag = TagKey.create(BuiltInRegistries.ITEM.key(), tagId);
                 conditions.add(new ItemCondition.Tag(tag));
             }
         }
@@ -191,13 +204,14 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
             return null;
         }
         String path = node.get("path").getAsString();
-
         if (!path.startsWith("components.")) {
             Gallium.LOGGER.warn("item_effects rule[{}]: predicate path '{}' must start with 'components.'", ruleIndex, path);
             return null;
         }
         String compId = path.substring("components.".length());
-        DataComponentType<?> compType = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(Identifier.parse(compId));
+        Identifier componentId = tryParseId(compId, ruleIndex, "component");
+        if (componentId == null) return null;
+        DataComponentType<?> compType = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(componentId);
         if (compType == null) {
             Gallium.LOGGER.warn("item_effects rule[{}]: unknown data component '{}'", ruleIndex, compId);
             return null;
@@ -226,7 +240,7 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
         return new ItemCondition.Path(compType, mode, value, min, max);
     }
 
-    static ItemEffectConfig parseEffect(JsonObject obj, int ruleIndex) {
+    private static ItemEffectConfig parseEffect(JsonObject obj, int ruleIndex) {
         if (obj == null || !obj.has("shader")) {
             Gallium.LOGGER.warn("item_effects rule[{}]: 'effect' missing 'shader'", ruleIndex);
             return null;
@@ -249,19 +263,9 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
         return new ItemEffectConfig(shader, List.copyOf(params));
     }
 
-    private static ShaderParam parseParam(String name, JsonElement element) {
-        if (element.isJsonPrimitive()) {
-            if (element.getAsJsonPrimitive().isNumber()) {
-                return new ShaderParam.Float(name, element.getAsFloat());
-            }
-            if (element.getAsJsonPrimitive().isString()) {
-                String str = element.getAsString();
-                if (str.startsWith("#")) {
-                    float[] rgb = parseHexColor(str);
-                    if (rgb != null) return new ShaderParam.Vec3(name, rgb[0], rgb[1], rgb[2]);
-                }
-            }
-            return null;
+    static ShaderParam parseParam(String name, JsonElement element) {
+        if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isNumber()) {
+            return new ShaderParam.Float(name, element.getAsFloat());
         }
         if (element.isJsonArray()) {
             JsonArray arr = element.getAsJsonArray();
@@ -275,17 +279,11 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
         return null;
     }
 
-    private static float[] parseHexColor(String hex) {
-        if (hex.startsWith("#")) hex = hex.substring(1);
+    private static Identifier tryParseId(String raw, int ruleIndex, String kind) {
         try {
-            int rgb = Integer.parseUnsignedInt(hex, 16);
-            if (hex.length() == 8) rgb = rgb >>> 8;
-            return new float[]{
-                    ((rgb >> 16) & 0xFF) / 255.0f,
-                    ((rgb >> 8) & 0xFF) / 255.0f,
-                    (rgb & 0xFF) / 255.0f
-            };
-        } catch (NumberFormatException e) {
+            return Identifier.parse(raw);
+        } catch (IdentifierException e) {
+            Gallium.LOGGER.warn("item_effects rule[{}]: invalid {} id '{}': {}", ruleIndex, kind, raw, e.getMessage());
             return null;
         }
     }

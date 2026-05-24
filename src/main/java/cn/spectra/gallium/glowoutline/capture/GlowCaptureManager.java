@@ -31,6 +31,10 @@ public final class GlowCaptureManager {
     private static boolean sceneDepthCaptured;
     private static @Nullable TextureTarget sceneDepthTarget;
 
+    static {
+        cn.spectra.gallium.glowoutline.shader.GlowResources.register(GlowCaptureManager::clearAll);
+    }
+
     private GlowCaptureManager() {}
 
     public static void beginFrame(Minecraft mc, LocalPlayer player) {
@@ -88,7 +92,6 @@ public final class GlowCaptureManager {
         GlowCaptureState state = allocateState();
         state.active = true;
         state.firstPerson = firstPerson;
-        state.item = stack.copy();
         state.config = cfg;
         state.capturedModelViewMatrix = new Matrix4f(RenderSystem.getModelViewMatrix());
         state.capturedProjectionMatrix = RenderSystem.getProjectionMatrixBuffer();
@@ -97,7 +100,7 @@ public final class GlowCaptureManager {
         Minecraft mc = Minecraft.getInstance();
         RenderTarget main = mc.getMainRenderTarget();
         if (state.maskTarget == null) {
-            state.maskTarget = new TextureTarget("GlowMask_" + pool.indexOf(state), main.width, main.height, true);
+            state.maskTarget = new TextureTarget("GlowMask_" + state.slot, main.width, main.height, true);
         } else if (state.maskTarget.width != main.width || state.maskTarget.height != main.height) {
             state.maskTarget.resize(main.width, main.height);
         }
@@ -202,6 +205,7 @@ public final class GlowCaptureManager {
             if (!state.active) return state;
         }
         GlowCaptureState state = new GlowCaptureState();
+        state.slot = pool.size();
         pool.add(state);
         return state;
     }
@@ -209,8 +213,18 @@ public final class GlowCaptureManager {
     public static void clearAll() {
         for (GlowCaptureState state : pool) {
             state.resetFrame();
+            if (state.maskTarget != null) {
+                state.maskTarget.destroyBuffers();
+                state.maskTarget = null;
+            }
             state.captureDispatcher = null;
+            state.captureBuffers = null;
         }
+        if (sceneDepthTarget != null) {
+            sceneDepthTarget.destroyBuffers();
+            sceneDepthTarget = null;
+        }
+        sceneDepthCaptured = false;
         activeStates.clear();
         currentCapture = null;
     }

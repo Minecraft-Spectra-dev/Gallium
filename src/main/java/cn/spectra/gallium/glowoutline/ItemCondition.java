@@ -1,8 +1,6 @@
 package cn.spectra.gallium.glowoutline;
 
 import net.minecraft.core.component.DataComponentType;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
@@ -61,7 +59,11 @@ public sealed interface ItemCondition permits
     }
 
     record Path(DataComponentType<?> component, CheckMode mode, String value, float min, float max) implements ItemCondition {
-        public enum CheckMode { EXISTS, NOT_EMPTY, CONTAINS, RANGE, EQUALS }
+        public enum CheckMode {
+            /** Returns whatever {@code ItemStack.has} reports, including prototype defaults — not necessarily an "explicit override". */
+            EXISTS,
+            NOT_EMPTY, CONTAINS, RANGE, EQUALS
+        }
 
         @Override
         public boolean test(ItemStack stack) {

@@ -1,18 +1,32 @@
 package cn.spectra.gallium.glowoutline;
 
 import cn.spectra.gallium.Gallium;
-import net.fabricmc.loader.api.FabricLoader;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.function.BooleanSupplier;
+import net.fabricmc.loader.api.FabricLoader;
 
+/**
+ * Iris compatibility shim using cached MethodHandles for hot-path queries.
+ * <p>
+ * Iris reflection lookup happens once at static init; per-frame calls are reduced to direct
+ * {@link MethodHandle} invocations and primitive field access. Gracefully no-ops when Iris
+ * is absent or its internals change shape.
+ */
 public final class IrisCompat {
 
     private static final boolean IRIS_LOADED;
-    private static Method getInstanceMethod;
-    private static Method isShaderPackInUseMethod;
-    private static Method isRenderingShadowPassMethod;
-    private static Field bypassField;
-    private static Field renderWithExtendedField;
+
+    private static final BooleanSupplier IS_SHADER_ACTIVE;
+    private static final BooleanSupplier IS_SHADOW_PASS;
+
+    private static final MethodHandle BYPASS_GETTER;
+    private static final MethodHandle BYPASS_SETTER;
+    private static final MethodHandle EXTENDED_GETTER;
+    private static final MethodHandle EXTENDED_SETTER;
+    private static final boolean BYPASS_AVAILABLE;
 
     public record BypassSnapshot(boolean bypass, boolean renderWithExtended, boolean valid) {
         public static final BypassSnapshot NONE = new BypassSnapshot(false, false, false);
@@ -20,63 +34,84 @@ public final class IrisCompat {
 
     static {
         IRIS_LOADED = FabricLoader.getInstance().isModLoaded("iris");
+
+        BooleanSupplier shaderActive = () -> false;
+        BooleanSupplier shadowPass = () -> false;
+        MethodHandle bypassGet = null, bypassSet = null, extendedGet = null, extendedSet = null;
+
         if (IRIS_LOADED) {
             try {
                 Class<?> irisApi = Class.forName("net.irisshaders.iris.api.v0.IrisApi");
-                getInstanceMethod = irisApi.getMethod("getInstance");
-                isShaderPackInUseMethod = irisApi.getMethod("isShaderPackInUse");
-                isRenderingShadowPassMethod = irisApi.getMethod("isRenderingShadowPass");
-            } catch (Exception e) {
-                Gallium.LOGGER.warn("Iris detected but IrisApi reflection failed: {}", e.toString());
+                Method getInstance = irisApi.getMethod("getInstance");
+                Object instance = getInstance.invoke(null);
+
+                MethodHandles.Lookup lookup = MethodHandles.lookup();
+                MethodHandle isShaderPackInUse = lookup.unreflect(irisApi.getMethod("isShaderPackInUse")).bindTo(instance);
+                MethodHandle isRenderingShadowPass = lookup.unreflect(irisApi.getMethod("isRenderingShadowPass")).bindTo(instance);
+
+                shaderActive = () -> {
+                    try { return (boolean) isShaderPackInUse.invokeExact(); }
+                    catch (Throwable t) { return false; }
+                };
+                shadowPass = () -> {
+                    try { return (boolean) isRenderingShadowPass.invokeExact(); }
+                    catch (Throwable t) { return false; }
+                };
+            } catch (Throwable t) {
+                Gallium.LOGGER.debug("Iris detected but IrisApi reflection failed: {}", t.toString());
             }
+
             try {
                 Class<?> immediateState = Class.forName("net.irisshaders.iris.vertices.ImmediateState");
-                bypassField = immediateState.getField("bypass");
-                renderWithExtendedField = immediateState.getField("renderWithExtendedVertexFormat");
-            } catch (Exception e) {
-                Gallium.LOGGER.warn("Iris detected but ImmediateState reflection failed: {}", e.toString());
+                Field bypass = immediateState.getField("bypass");
+                Field extended = immediateState.getField("renderWithExtendedVertexFormat");
+                MethodHandles.Lookup lookup = MethodHandles.lookup();
+                bypassGet = lookup.unreflectGetter(bypass);
+                bypassSet = lookup.unreflectSetter(bypass);
+                extendedGet = lookup.unreflectGetter(extended);
+                extendedSet = lookup.unreflectSetter(extended);
+            } catch (Throwable t) {
+                Gallium.LOGGER.debug("Iris detected but ImmediateState reflection failed: {}", t.toString());
             }
         }
+
+        IS_SHADER_ACTIVE = shaderActive;
+        IS_SHADOW_PASS = shadowPass;
+        BYPASS_GETTER = bypassGet;
+        BYPASS_SETTER = bypassSet;
+        EXTENDED_GETTER = extendedGet;
+        EXTENDED_SETTER = extendedSet;
+        BYPASS_AVAILABLE = bypassGet != null || extendedGet != null;
     }
 
+    private IrisCompat() {}
+
     public static boolean isShaderActive() {
-        if (!IRIS_LOADED || isShaderPackInUseMethod == null) return false;
-        try {
-            Object instance = getInstanceMethod.invoke(null);
-            return (boolean) isShaderPackInUseMethod.invoke(instance);
-        } catch (Exception e) {
-            return false;
-        }
+        return IS_SHADER_ACTIVE.getAsBoolean();
     }
 
     public static boolean isShadowPass() {
-        if (!IRIS_LOADED || isRenderingShadowPassMethod == null) return false;
-        try {
-            Object instance = getInstanceMethod.invoke(null);
-            return (boolean) isRenderingShadowPassMethod.invoke(instance);
-        } catch (Exception e) {
-            return false;
-        }
+        return IS_SHADOW_PASS.getAsBoolean();
     }
 
     public static BypassSnapshot setBypass(boolean value) {
-        if (!IRIS_LOADED || (bypassField == null && renderWithExtendedField == null)) return BypassSnapshot.NONE;
+        if (!BYPASS_AVAILABLE) return BypassSnapshot.NONE;
         try {
-            boolean oldBypass = bypassField != null ? bypassField.getBoolean(null) : false;
-            boolean oldExtended = renderWithExtendedField != null ? renderWithExtendedField.getBoolean(null) : false;
-            if (bypassField != null) bypassField.setBoolean(null, value);
-            if (renderWithExtendedField != null && value) renderWithExtendedField.setBoolean(null, false);
+            boolean oldBypass = BYPASS_GETTER != null && (boolean) BYPASS_GETTER.invokeExact();
+            boolean oldExtended = EXTENDED_GETTER != null && (boolean) EXTENDED_GETTER.invokeExact();
+            if (BYPASS_SETTER != null) BYPASS_SETTER.invokeExact(value);
+            if (EXTENDED_SETTER != null && value) EXTENDED_SETTER.invokeExact(false);
             return new BypassSnapshot(oldBypass, oldExtended, true);
-        } catch (Exception e) {
+        } catch (Throwable t) {
             return BypassSnapshot.NONE;
         }
     }
 
     public static void restoreBypass(BypassSnapshot snapshot) {
-        if (!IRIS_LOADED || snapshot == null || !snapshot.valid()) return;
+        if (!BYPASS_AVAILABLE || snapshot == null || !snapshot.valid()) return;
         try {
-            if (bypassField != null) bypassField.setBoolean(null, snapshot.bypass());
-            if (renderWithExtendedField != null) renderWithExtendedField.setBoolean(null, snapshot.renderWithExtended());
-        } catch (Exception ignored) {}
+            if (BYPASS_SETTER != null) BYPASS_SETTER.invokeExact(snapshot.bypass());
+            if (EXTENDED_SETTER != null) EXTENDED_SETTER.invokeExact(snapshot.renderWithExtended());
+        } catch (Throwable ignored) {}
     }
 }

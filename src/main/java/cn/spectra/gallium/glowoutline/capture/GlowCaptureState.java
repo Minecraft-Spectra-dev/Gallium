@@ -6,7 +6,6 @@ import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import net.minecraft.client.renderer.RenderBuffers;
 import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
-import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix4f;
 import org.jspecify.annotations.Nullable;
 
@@ -18,8 +17,8 @@ public final class GlowCaptureState {
     public boolean capturedThisFrame;
     public boolean active;
     public boolean firstPerson;
+    public int slot;
 
-    public @Nullable ItemStack item = ItemStack.EMPTY;
     public @Nullable ItemEffectConfig config;
 
     public @Nullable Matrix4f capturedModelViewMatrix;
@@ -30,7 +29,6 @@ public final class GlowCaptureState {
         capturedThisFrame = false;
         active = false;
         firstPerson = false;
-        item = ItemStack.EMPTY;
         config = null;
         capturedModelViewMatrix = null;
         capturedProjectionMatrix = null;

@@ -1,5 +1,6 @@
 package cn.spectra.gallium.compat.sodium;
 
+import cn.spectra.gallium.config.GalliumConfigIO;
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import net.caffeinemc.mods.sodium.api.config.ConfigEntryPoint;
 import net.caffeinemc.mods.sodium.api.config.StorageEventHandler;
@@ -14,7 +15,9 @@ public class GalliumSodiumConfig implements ConfigEntryPoint {
 
     private static final StorageEventHandler STORAGE_HANDLER = new StorageEventHandler() {
         @Override
-        public void afterSave() {}
+        public void afterSave() {
+            GalliumConfigIO.save();
+        }
     };
 
     @Override

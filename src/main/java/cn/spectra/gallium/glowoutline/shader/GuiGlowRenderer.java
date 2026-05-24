@@ -11,8 +11,21 @@ import org.joml.Vector2f;
 public final class GuiGlowRenderer {
 
     private static TextureTarget maskTarget;
+    private static long lastCopyErrorLogNanos;
+    private static final long COPY_ERROR_LOG_INTERVAL_NANOS = 5_000_000_000L; // 5s
+
+    static {
+        GlowResources.register(GuiGlowRenderer::dispose);
+    }
 
     private GuiGlowRenderer() {}
+
+    private static void dispose() {
+        if (maskTarget != null) {
+            maskTarget.destroyBuffers();
+            maskTarget = null;
+        }
+    }
 
     public static TextureTarget ensureMaskTarget(int screenW, int screenH) {
         if (maskTarget == null || maskTarget.width != screenW || maskTarget.height != screenH) {
@@ -63,9 +76,13 @@ public final class GuiGlowRenderer {
                 // CommandEncoder.copyTextureToTexture signature: (src, dst, mip, destX, destY, srcX, srcY, w, h)
                 encoder.copyTextureToTexture(atlasTex, maskTex, 0, dstX, dstY, srcX, srcY, copyW, copyH);
             } catch (IllegalArgumentException e) {
-                cn.spectra.gallium.Gallium.LOGGER.warn(
-                    "GuiGlow copy failed: u0={} v0={} -> atlas=({}x{}) src=({},{}) dst=({},{}) mask=({}x{}) err={}",
-                    c.u0, c.v0, atlasW, atlasH, srcX, srcY, dstX, dstY, actualMaskW, actualMaskH, e.getMessage());
+                long now = System.nanoTime();
+                if (now - lastCopyErrorLogNanos > COPY_ERROR_LOG_INTERVAL_NANOS) {
+                    lastCopyErrorLogNanos = now;
+                    cn.spectra.gallium.Gallium.LOGGER.warn(
+                        "GuiGlow copy failed: u0={} v0={} -> atlas=({}x{}) src=({},{}) dst=({},{}) mask=({}x{}) err={}",
+                        c.u0, c.v0, atlasW, atlasH, srcX, srcY, dstX, dstY, actualMaskW, actualMaskH, e.getMessage());
+                }
             }
         }
 

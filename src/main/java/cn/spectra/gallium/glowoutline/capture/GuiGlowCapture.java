@@ -28,4 +28,11 @@ public class GuiGlowCapture {
         this.v1 = v1;
         this.scissorArea = scissorArea;
     }
+
+    public void reset() {
+        this.config = null;
+        this.atlasTextureView = null;
+        this.pose = null;
+        this.scissorArea = null;
+    }
 }
