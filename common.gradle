@@ -1,0 +1,153 @@
+// project.mcVersion is the integer encoding declared in root build.gradle's
+// preprocess block. Format: <major:1><minor:2><patch:2>, always 5 digits.
+// Mojang dropped the leading "1." at MC 26, but we keep the implicit "1."
+// in our encoding so all integers stay 5 digits and comparisons stay
+// monotonic — e.g. MC "26.1" is encoded as 1_26_01 (= 12601), NOT 26_01_00.
+final int mcVersion = project.mcVersion
+final boolean unobfuscated = mcVersion >= 1_26_00
+
+apply plugin: 'maven-publish'
+apply plugin: unobfuscated ? 'net.fabricmc.fabric-loom' : 'net.fabricmc.fabric-loom-remap'
+apply plugin: 'com.replaymod.preprocess'
+
+configurations {
+    // Apply on resolved runtimeClasspath (not runtimeOnly), otherwise the exclude
+    // propagates via testRuntimeOnly into testRuntimeClasspath and breaks unit tests
+    // that load classes implementing ClientModInitializer.
+    if (unobfuscated) {
+        runtimeClasspath.exclude group: 'net.fabricmc', module: 'fabric-loader'
+    } else {
+        modRuntimeOnly.exclude group: 'net.fabricmc', module: 'fabric-loader'
+    }
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    maven {
+        name = "Modrinth"
+        url = "https://api.modrinth.com/maven"
+    }
+}
+
+JavaVersion JAVA_COMPATIBILITY
+if (mcVersion >= 1_26_00) {
+    JAVA_COMPATIBILITY = JavaVersion.VERSION_25
+} else if (mcVersion >= 1_20_05) {
+    JAVA_COMPATIBILITY = JavaVersion.VERSION_21
+} else if (mcVersion >= 1_18_00) {
+    JAVA_COMPATIBILITY = JavaVersion.VERSION_17
+} else {
+    JAVA_COMPATIBILITY = JavaVersion.VERSION_1_8
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    if (!unobfuscated) {
+        mappings loom.officialMojangMappings()
+    }
+
+    // from https://github.com/TISUnion/Carpet-TIS-Addition/blob/master/common.gradle#L41-L54
+    def processDependency = { dep ->
+        // https://github.com/FabricMC/fabric-loader/issues/783
+        if (dep instanceof ModuleDependency) {
+            if (!(dep.group == 'net.fabricmc' && dep.name == 'fabric-loader')) {
+                dep.exclude group: 'net.fabricmc', module: 'fabric-loader'
+            }
+        }
+        return dep
+    }
+    def autoImplementation = { Object... args -> processDependency(unobfuscated ? implementation(*args) : modImplementation(*args)) }
+
+    autoImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    autoImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    autoImplementation "maven.modrinth:sodium:${project.sodium_dependency}"
+
+    testImplementation platform("org.junit:junit-bom:5.11.4")
+    testImplementation "org.junit.jupiter:junit-jupiter"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+test {
+    useJUnitPlatform()
+}
+
+List<String> MIXIN_CONFIG_PATHS = [
+        "gallium.mixins.json",
+        "gallium-glowoutline.mixins.json"
+]
+
+loom {
+    runConfigs.configureEach {
+        ideConfigGenerated = true
+        runDir '../../run'
+    }
+
+    if (!unobfuscated) {
+        mixin {
+            useLegacyMixinAp = true
+        }
+    }
+}
+
+processResources {
+    inputs.property "version", project.mod_version
+
+    filesMatching("fabric.mod.json") {
+        expand(
+                "description": project.mod_description,
+                "homepage": project.mod_homepage,
+                "id": project.mod_id,
+                "name": project.mod_name,
+                "license": project.mod_license,
+                "version": project.mod_version,
+                "minecraft_dependency": project.minecraft_dependency,
+                "java_version": JAVA_COMPATIBILITY.majorVersion,
+                "sources": project.mod_sources
+        )
+    }
+
+    filesMatching(MIXIN_CONFIG_PATHS) {
+        filter { s ->
+            s.replace('{{COMPATIBILITY_LEVEL}}', "JAVA_${JAVA_COMPATIBILITY.ordinal() + 1}")
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = "UTF-8"
+    options.release = JAVA_COMPATIBILITY.ordinal() + 1
+}
+
+java {
+    sourceCompatibility = JAVA_COMPATIBILITY
+    targetCompatibility = JAVA_COMPATIBILITY
+    withSourcesJar()
+}
+
+jar {
+    from(rootProject.file('LICENSE')) {
+        rename { "${it}_${project.archives_base_name}" }
+    }
+
+    if (!unobfuscated) {
+        exclude "${project.archives_base_name}-refmap.json"
+    }
+}
+
+publishing {
+    publications {
+        create('mavenJava', MavenPublication) {
+            artifactId = base.archivesName.get()
+            from components.java
+        }
+    }
+
+    repositories {
+    }
+}

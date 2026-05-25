@@ -1,14 +1,18 @@
 {
 	"schemaVersion": 1,
-	"id": "gallium",
+	"id": "${id}",
 	"version": "${version}",
-	"name": "Gallium",
-	"description": "Client-side enhancements: Provides additional shader interfaces for resource packs that operate on full screen.",
+	"name": "${name}",
+	"description": "${description}",
 	"authors": [
 		"ChooseC",
 		"G2F1SH"
 	],
-	"license": "All-Rights-Reserved",
+	"contact": {
+		"homepage": "${homepage}",
+		"sources": "${sources}"
+	},
+	"license": "${license}",
 	"icon": "assets/gallium/icon.png",
 	"environment": "client",
 	"entrypoints": {
@@ -25,8 +29,8 @@
 	],
 	"depends": {
 		"fabricloader": ">=0.18.4",
-		"minecraft": "~26.1.2",
-		"java": ">=25",
+		"minecraft": "${minecraft_dependency}",
+		"java": ">=${java_version}",
 		"fabric-api": "*",
 		"sodium": "*"
 	}

@@ -7,7 +7,9 @@ import com.mojang.blaze3d.pipeline.ColorTargetState;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.UniformType;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 
@@ -20,7 +22,7 @@ import net.minecraft.resources.Identifier;
  * Keying by {@link ItemEffectConfig} (a record whose equality covers shader+params)
  * preserves the originally-intended one-pipeline-per-config invariant.
  */
-public class GuiGlowElementPipeline {
+public final class GuiGlowElementPipeline {
 
     private static final Map<ItemEffectConfig, RenderPipeline> pipelinesByConfig = new HashMap<>();
     private static final Map<RenderPipeline, GlowUniformBuffer> uboByPipeline = new HashMap<>();
@@ -28,8 +30,10 @@ public class GuiGlowElementPipeline {
     private static int locationCounter;
 
     static {
-        GlowResources.register(GuiGlowElementPipeline::clear);
+        GlowResources.registerPipeline(GuiGlowElementPipeline::clear);
     }
+
+    private GuiGlowElementPipeline() {}
 
     public static RenderPipeline getOrCreate(ItemEffectConfig cfg) {
         RenderPipeline cached = pipelinesByConfig.get(cfg);
@@ -61,10 +65,24 @@ public class GuiGlowElementPipeline {
         return configByPipeline.get(p);
     }
 
-    public static void updateAllForFrame(int screenW, int screenH, float frameTime, float globalIntensity) {
+    public static void updateAllForFrame(int screenW, int screenH, float frameTime) {
         for (var entry : uboByPipeline.entrySet()) {
             ItemEffectConfig cfg = configByPipeline.get(entry.getKey());
-            entry.getValue().update(frameTime, screenW, screenH, globalIntensity, cfg);
+            entry.getValue().update(frameTime, screenW, screenH, cfg);
+        }
+    }
+
+    /** Drop pipelines (and their UBOs) keyed by configs not in {@code liveConfigs}. */
+    public static void retainOnly(Set<ItemEffectConfig> liveConfigs) {
+        Iterator<Map.Entry<ItemEffectConfig, RenderPipeline>> it = pipelinesByConfig.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<ItemEffectConfig, RenderPipeline> e = it.next();
+            if (liveConfigs.contains(e.getKey())) continue;
+            RenderPipeline p = e.getValue();
+            GlowUniformBuffer ubo = uboByPipeline.remove(p);
+            if (ubo != null) ubo.close();
+            configByPipeline.remove(p);
+            it.remove();
         }
     }
 

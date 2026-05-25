@@ -3,6 +3,7 @@ package cn.spectra.gallium;
 import cn.spectra.gallium.config.GalliumConfigIO;
 import cn.spectra.gallium.glowoutline.ItemEffectsManager;
 import cn.spectra.gallium.glowoutline.shader.GlowPipeline;
+import cn.spectra.gallium.glowoutline.shader.GlowResources;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
@@ -26,6 +27,7 @@ public class Gallium implements ClientModInitializer {
 	public void onInitializeClient() {
 		GalliumConfigIO.load();
 		GlowPipeline.init();
+		GlowResources.eagerInit();
 		ResourceManagerHelper.get(PackType.CLIENT_RESOURCES).registerReloadListener(new ItemEffectsManager());
 
 		KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MOD_ID, "main"));

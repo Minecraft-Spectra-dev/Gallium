@@ -2,6 +2,8 @@ package cn.spectra.gallium.compat.sodium;
 
 import cn.spectra.gallium.config.GalliumConfigIO;
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
+import cn.spectra.gallium.glowoutline.GlowOutlineConfig.Group;
+import cn.spectra.gallium.glowoutline.GlowOutlineConfig.Toggle;
 import net.caffeinemc.mods.sodium.api.config.ConfigEntryPoint;
 import net.caffeinemc.mods.sodium.api.config.StorageEventHandler;
 import net.caffeinemc.mods.sodium.api.config.structure.ConfigBuilder;
@@ -28,46 +30,27 @@ public class GalliumSodiumConfig implements ConfigEntryPoint {
     }
 
     private OptionPageBuilder createGlowPage(ConfigBuilder builder) {
-        return builder.createOptionPage()
-                .setName(Component.translatable("gallium.options.page_title"))
-                .addOptionGroup(createGlobalGroup(builder))
-                .addOptionGroup(createRenderTargetGroup(builder));
+        OptionPageBuilder page = builder.createOptionPage()
+                .setName(Component.translatable("gallium.options.page_title"));
+        page.addOptionGroup(createGroup(builder, Group.GLOBAL, "gallium.options.group_global"));
+        page.addOptionGroup(createGroup(builder, Group.RENDER_TARGET, "gallium.options.group_targets"));
+        return page;
     }
 
-    private OptionGroupBuilder createGlobalGroup(ConfigBuilder builder) {
-        return builder.createOptionGroup()
-                .setName(Component.translatable("gallium.options.group_global"))
-                .addOption(createEnabledOption(builder));
+    private OptionGroupBuilder createGroup(ConfigBuilder builder, Group group, String nameKey) {
+        OptionGroupBuilder g = builder.createOptionGroup().setName(Component.translatable(nameKey));
+        for (Toggle t : Toggle.values()) {
+            if (t.group() == group) g.addOption(createToggle(builder, t));
+        }
+        return g;
     }
 
-    private OptionGroupBuilder createRenderTargetGroup(ConfigBuilder builder) {
-        return builder.createOptionGroup()
-                .setName(Component.translatable("gallium.options.group_targets"))
-                .addOption(createToggle(builder, "first_person", GlowOutlineConfig::setFirstPerson, GlowOutlineConfig::isFirstPerson))
-                .addOption(createToggle(builder, "third_person", GlowOutlineConfig::setThirdPerson, GlowOutlineConfig::isThirdPerson))
-                .addOption(createToggle(builder, "other_entities", GlowOutlineConfig::setOtherEntities, GlowOutlineConfig::isOtherEntities))
-                .addOption(createToggle(builder, "dropped_items", GlowOutlineConfig::setDroppedItems, GlowOutlineConfig::isDroppedItems))
-                .addOption(createToggle(builder, "armor", GlowOutlineConfig::setArmor, GlowOutlineConfig::isArmor))
-                .addOption(createToggle(builder, "gui", GlowOutlineConfig::setGui, GlowOutlineConfig::isGui));
-    }
-
-    private OptionBuilder createEnabledOption(ConfigBuilder builder) {
-        return builder.createBooleanOption(Identifier.parse("gallium:glow_enabled"))
-                .setName(Component.translatable("gallium.options.glow_enabled"))
-                .setTooltip(Component.translatable("gallium.options.glow_enabled.tooltip"))
+    private OptionBuilder createToggle(ConfigBuilder builder, Toggle toggle) {
+        return builder.createBooleanOption(Identifier.parse("gallium:" + toggle.sodiumId()))
+                .setName(Component.translatable("gallium.options." + toggle.sodiumId()))
+                .setTooltip(Component.translatable("gallium.options." + toggle.sodiumId() + ".tooltip"))
                 .setDefaultValue(true)
                 .setStorageHandler(STORAGE_HANDLER)
-                .setBinding(GlowOutlineConfig::setEnabled, GlowOutlineConfig::isEnabled);
-    }
-
-    private OptionBuilder createToggle(ConfigBuilder builder, String id,
-                                        java.util.function.Consumer<Boolean> setter,
-                                        java.util.function.Supplier<Boolean> getter) {
-        return builder.createBooleanOption(Identifier.parse("gallium:glow_" + id))
-                .setName(Component.translatable("gallium.options.glow_" + id))
-                .setTooltip(Component.translatable("gallium.options.glow_" + id + ".tooltip"))
-                .setDefaultValue(true)
-                .setStorageHandler(STORAGE_HANDLER)
-                .setBinding(setter::accept, getter::get);
+                .setBinding(toggle::set, toggle::get);
     }
 }

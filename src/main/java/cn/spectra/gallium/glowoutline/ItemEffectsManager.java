@@ -43,12 +43,16 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
 
     @Override
     public void onResourceManagerReload(ResourceManager manager) {
-        GlowResources.disposeAll();
+        // Drop runtime GPU resources (mask targets, capture buffers). Pipelines are pruned
+        // incrementally below so unchanged shaders don't have to rebuild.
+        GlowResources.disposeRuntime();
 
         var resource = manager.getResource(RESOURCE_PATH);
         if (resource.isEmpty()) {
             rules = List.of();
             active = false;
+            GlowPipeline.retainOnly(java.util.Set.of());
+            GuiGlowElementPipeline.retainOnly(java.util.Set.of());
             Gallium.LOGGER.info("No item_effects.json found, glow outline inactive.");
             return;
         }
@@ -62,6 +66,8 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
             Gallium.LOGGER.error("Failed to parse item_effects.json", e);
             rules = List.of();
             active = false;
+            GlowPipeline.retainOnly(java.util.Set.of());
+            GuiGlowElementPipeline.retainOnly(java.util.Set.of());
         }
     }
 
@@ -85,18 +91,22 @@ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListen
         rules = List.copyOf(parsed);
 
         Set<String> shaders = new HashSet<>();
+        Set<ItemEffectConfig> liveConfigs = new HashSet<>();
         for (ItemEffectRule rule : parsed) {
-            shaders.add(rule.effect().shader());
+            ItemEffectConfig cfg = rule.effect();
+            if (cfg == null) continue;
+            shaders.add(cfg.shader());
+            if (!cfg.shader().isEmpty()) liveConfigs.add(cfg);
         }
         for (String shader : shaders) {
             if (!shader.isEmpty()) GlowPipeline.getOrCreate(shader);
         }
-        for (ItemEffectRule rule : parsed) {
-            ItemEffectConfig cfg = rule.effect();
-            if (cfg != null && !cfg.shader().isEmpty()) {
-                GuiGlowElementPipeline.getOrCreate(cfg);
-            }
+        for (ItemEffectConfig cfg : liveConfigs) {
+            GuiGlowElementPipeline.getOrCreate(cfg);
         }
+        // Drop pipelines no longer referenced by any current rule.
+        GlowPipeline.retainOnly(shaders);
+        GuiGlowElementPipeline.retainOnly(liveConfigs);
 
         Gallium.LOGGER.info("Loaded item effects: {} rules, {} shaders", rules.size(), shaders.size());
     }

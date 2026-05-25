@@ -1,15 +1,12 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
-import cn.spectra.gallium.glowoutline.IrisCompat;
-import cn.spectra.gallium.glowoutline.capture.DuplicatingSubmitNodeStorage;
-import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
+import cn.spectra.gallium.glowoutline.capture.CaptureSites;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.entity.layers.EquipmentLayerRenderer;
 import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
 import net.minecraft.client.resources.model.EquipmentClientInfo;
@@ -34,18 +31,12 @@ public class HumanoidArmorLayerMixin {
                                           int lightCoords,
                                           int outlineColor,
                                           Operation<Void> original) {
-        if (IrisCompat.isShadowPass() || itemStack.isEmpty() || !GlowOutlineConfig.isArmor()) {
-            original.call(renderer, layerType, equipmentAssetId, model, state, itemStack, poseStack, collector, lightCoords, outlineColor);
-            return;
-        }
-
-        boolean capturing = GlowCaptureManager.beginItemCapture(itemStack);
-        if (capturing && collector instanceof SubmitNodeStorage storage) {
-            DuplicatingSubmitNodeStorage wrapped = new DuplicatingSubmitNodeStorage(storage);
+        SubmitNodeCollector wrapped = CaptureSites.beginIfCapturable(
+                itemStack, collector, GlowOutlineConfig.Toggle.ARMOR);
+        try {
             original.call(renderer, layerType, equipmentAssetId, model, state, itemStack, poseStack, wrapped, lightCoords, outlineColor);
-        } else {
-            original.call(renderer, layerType, equipmentAssetId, model, state, itemStack, poseStack, collector, lightCoords, outlineColor);
+        } finally {
+            CaptureSites.end();
         }
-        GlowCaptureManager.endItemCapture();
     }
 }

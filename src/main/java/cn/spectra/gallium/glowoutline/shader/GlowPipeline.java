@@ -8,22 +8,36 @@ import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.resources.Identifier;
 
-public class GlowPipeline {
+public final class GlowPipeline {
 
     private static final Map<String, RenderPipeline> REGISTRY = new HashMap<>();
 
     static {
-        GlowResources.register(GlowPipeline::clearAll);
+        GlowResources.registerPipeline(GlowPipeline::clearAll);
     }
 
+    private GlowPipeline() {}
+
+    /** Drops every cached pipeline. Used on full teardown.
+     *  RenderPipeline currently has no close() in vanilla; clearing the cache lets the next
+     *  reload rebuild fresh pipelines without leaking driver state long-term. */
     public static void clearAll() {
-        // RenderPipeline currently has no close() in vanilla; clearing the cache lets
-        // the next reload rebuild fresh pipelines without leaking driver state long-term.
         REGISTRY.clear();
+    }
+
+    /** Drop pipelines whose shader name is no longer referenced by current rules. */
+    public static void retainOnly(Set<String> liveShaders) {
+        Iterator<Map.Entry<String, RenderPipeline>> it = REGISTRY.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, RenderPipeline> e = it.next();
+            if (!liveShaders.contains(e.getKey())) it.remove();
+        }
     }
 
     public static RenderPipeline getOrCreate(String shaderName) {
@@ -52,7 +66,6 @@ public class GlowPipeline {
     }
 
     public static void init() {
-        // Static initializer registers the disposer; this method exists so callers can
-        // force class load deterministically during mod init.
+        // Force static init.
     }
 }

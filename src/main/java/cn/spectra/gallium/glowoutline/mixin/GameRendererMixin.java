@@ -9,7 +9,6 @@ import cn.spectra.gallium.glowoutline.shader.GlowTime;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -26,14 +25,14 @@ public class GameRendererMixin {
     @Inject(method = "renderLevel", at = @At("HEAD"))
     private void galliumGlowFrameStart(DeltaTracker deltaTracker, CallbackInfo ci) {
         if (IrisCompat.isShadowPass()) return;
-        LocalPlayer player = minecraft.player;
-        if (player == null) return;
-        GlowCaptureManager.beginFrame(minecraft, player);
+        if (minecraft.player == null) return;
+        GlowCaptureManager.beginFrame();
         GlowTime.advanceWorld(deltaTracker.getGameTimeDeltaTicks());
     }
 
     @Inject(method = "renderLevel", at = @At(value = "INVOKE",
-            target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture(Lcom/mojang/blaze3d/textures/GpuTexture;D)V"))
+            target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture(Lcom/mojang/blaze3d/textures/GpuTexture;D)V",
+            ordinal = 0))
     private void galliumCaptureSceneDepth(DeltaTracker deltaTracker, CallbackInfo ci) {
         if (IrisCompat.isShadowPass()) return;
         if (!ItemEffectsManager.isActive()) return;

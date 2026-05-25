@@ -40,6 +40,11 @@ import java.util.function.Consumer;
  */
 public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
 
+    /** Reused as the no-op super-storage for inner collections. The collection delegates everything
+     *  to its real {@code delegate}; the super(SubmitNodeStorage) call is just to satisfy the
+     *  superclass constructor and never receives any submits. */
+    private static final SubmitNodeStorage SENTINEL = new SubmitNodeStorage();
+
     private final SubmitNodeStorage delegate;
     private final Int2ObjectOpenHashMap<DuplicatingSubmitNodeCollection> collectionsByOrder = new Int2ObjectOpenHashMap<>();
 
@@ -112,7 +117,7 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
         private final int order;
 
         DuplicatingSubmitNodeCollection(SubmitNodeCollection delegate, int order) {
-            super(new SubmitNodeStorage());
+            super(SENTINEL);
             this.delegate = delegate;
             this.order = order;
         }

@@ -1,14 +1,11 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
-import cn.spectra.gallium.glowoutline.IrisCompat;
-import cn.spectra.gallium.glowoutline.capture.DuplicatingSubmitNodeStorage;
-import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
+import cn.spectra.gallium.glowoutline.capture.CaptureSites;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
 import net.minecraft.client.renderer.entity.state.ArmedEntityRenderState;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
@@ -29,28 +26,15 @@ public class ItemInHandLayerMixin {
                                        ArmedEntityRenderState state, ItemStackRenderState item,
                                        ItemStack itemStack, HumanoidArm arm, PoseStack ps,
                                        SubmitNodeCollector col, int l) {
-        if (IrisCompat.isShadowPass() || itemStack.isEmpty()) {
-            original.call(renderState, poseStack, collector, light, overlay, outlineColor);
-            return;
-        }
-
         boolean isPlayer = state.entityType == EntityType.PLAYER;
-        if (isPlayer && !GlowOutlineConfig.isThirdPerson()) {
-            original.call(renderState, poseStack, collector, light, overlay, outlineColor);
-            return;
-        }
-        if (!isPlayer && !GlowOutlineConfig.isOtherEntities()) {
-            original.call(renderState, poseStack, collector, light, overlay, outlineColor);
-            return;
-        }
-
-        boolean capturing = GlowCaptureManager.beginItemCapture(itemStack);
-        if (capturing && collector instanceof SubmitNodeStorage storage) {
-            DuplicatingSubmitNodeStorage wrapped = new DuplicatingSubmitNodeStorage(storage);
+        GlowOutlineConfig.Toggle flag = isPlayer
+                ? GlowOutlineConfig.Toggle.THIRD_PERSON
+                : GlowOutlineConfig.Toggle.OTHER_ENTITIES;
+        SubmitNodeCollector wrapped = CaptureSites.beginIfCapturable(itemStack, collector, flag);
+        try {
             original.call(renderState, poseStack, wrapped, light, overlay, outlineColor);
-        } else {
-            original.call(renderState, poseStack, collector, light, overlay, outlineColor);
+        } finally {
+            CaptureSites.end();
         }
-        GlowCaptureManager.endItemCapture();
     }
 }

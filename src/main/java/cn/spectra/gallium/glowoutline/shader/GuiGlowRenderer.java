@@ -10,6 +10,8 @@ import org.joml.Vector2f;
 
 public final class GuiGlowRenderer {
 
+    private static final int ITEM_SLOT_SIZE = 16;
+
     private static TextureTarget maskTarget;
     private static long lastCopyErrorLogNanos;
     private static final long COPY_ERROR_LOG_INTERVAL_NANOS = 5_000_000_000L; // 5s
@@ -43,7 +45,7 @@ public final class GuiGlowRenderer {
         encoder.clearColorTexture(maskTarget.getColorTexture(), 0);
 
         double guiScale = Minecraft.getInstance().getWindow().getGuiScale();
-        int slotPixelSize = (int) Math.round(16 * guiScale);
+        int slotPixelSize = (int) Math.round(ITEM_SLOT_SIZE * guiScale);
         GpuTexture maskTex = maskTarget.getColorTexture();
         int actualMaskW = maskTex.getWidth(0);
         int actualMaskH = maskTex.getHeight(0);
@@ -61,7 +63,7 @@ public final class GuiGlowRenderer {
             int copyH = slotPixelSize;
 
             Vector2f topLeft = c.pose.transformPosition(new Vector2f(c.x, c.y));
-            Vector2f bottomRight = c.pose.transformPosition(new Vector2f(c.x + 16, c.y + 16));
+            Vector2f bottomRight = c.pose.transformPosition(new Vector2f(c.x + ITEM_SLOT_SIZE, c.y + ITEM_SLOT_SIZE));
             int fbX0 = Math.round(topLeft.x * (float) guiScale);
             int fbY1 = Math.round(bottomRight.y * (float) guiScale);
 

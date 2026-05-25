@@ -10,7 +10,6 @@ import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.RenderBuffers;
 import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
@@ -22,6 +21,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class GlowCaptureManager {
+
+    /** Hard cap on world capture states. Each holds a screen-sized TextureTarget plus RenderBuffers,
+     *  so without this cap a brief peak (many on-screen item entities + armor pieces in one frame)
+     *  pins VRAM forever. Surplus states beyond the mark are released at frame end. */
+    private static final int POOL_HIGH_WATER_MARK = 16;
 
     private static final List<GlowCaptureState> pool = new ArrayList<>();
     private static final List<GlowCaptureState> activeStates = new ArrayList<>();
@@ -37,7 +41,7 @@ public final class GlowCaptureManager {
 
     private GlowCaptureManager() {}
 
-    public static void beginFrame(Minecraft mc, LocalPlayer player) {
+    public static void beginFrame() {
         for (GlowCaptureState state : activeStates) {
             state.resetFrame();
         }
@@ -45,6 +49,12 @@ public final class GlowCaptureManager {
         currentCapture = null;
         suppressDepth = 0;
         sceneDepthCaptured = false;
+
+        if (pool.size() > POOL_HIGH_WATER_MARK) {
+            for (int i = pool.size() - 1; i >= POOL_HIGH_WATER_MARK; i--) {
+                releaseState(pool.remove(i));
+            }
+        }
     }
 
     public static List<GlowCaptureState> getActiveStates() {
@@ -52,6 +62,7 @@ public final class GlowCaptureManager {
     }
 
     public static void captureSceneDepth(RenderTarget mainTarget) {
+        if (sceneDepthCaptured) return;
         GpuTexture srcDepth = mainTarget.getDepthTexture();
         if (srcDepth == null) return;
 
@@ -210,15 +221,19 @@ public final class GlowCaptureManager {
         return state;
     }
 
+    private static void releaseState(GlowCaptureState state) {
+        state.resetFrame();
+        if (state.maskTarget != null) {
+            state.maskTarget.destroyBuffers();
+            state.maskTarget = null;
+        }
+        state.captureDispatcher = null;
+        state.captureBuffers = null;
+    }
+
     public static void clearAll() {
         for (GlowCaptureState state : pool) {
-            state.resetFrame();
-            if (state.maskTarget != null) {
-                state.maskTarget.destroyBuffers();
-                state.maskTarget = null;
-            }
-            state.captureDispatcher = null;
-            state.captureBuffers = null;
+            releaseState(state);
         }
         if (sceneDepthTarget != null) {
             sceneDepthTarget.destroyBuffers();

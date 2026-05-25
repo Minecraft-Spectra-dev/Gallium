@@ -67,7 +67,7 @@ public final class GlowComposite {
 
         int w = mainTarget.width;
         int h = mainTarget.height;
-        uniformBuffer.update(GlowTime.worldSecondsFloat(), w, h, 1.0f, state.config);
+        uniformBuffer.update(GlowTime.worldSecondsFloat(), w, h, state.config);
 
         try (RenderPass pass = RenderSystem.getDevice()
                 .createCommandEncoder()
@@ -83,16 +83,19 @@ public final class GlowComposite {
             pass.bindTexture("MaskDepthSampler",
                     mask.getDepthTextureView(),
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
-            TextureTarget sceneDepth = GlowCaptureManager.getSceneDepthTarget();
             pass.bindTexture("SceneDepthSampler",
-                    state.firstPerson
-                            ? mask.getDepthTextureView()
-                            : (IrisCompat.isShaderActive()
-                                    ? (sceneDepth != null ? sceneDepth.getDepthTextureView() : mask.getDepthTextureView())
-                                    : mainTarget.getDepthTextureView()),
+                    selectSceneDepthView(state, mask, mainTarget),
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
             pass.draw(0, 3);
         }
+    }
+
+    private static com.mojang.blaze3d.textures.GpuTextureView selectSceneDepthView(
+            GlowCaptureState state, TextureTarget mask, RenderTarget mainTarget) {
+        if (state.firstPerson) return mask.getDepthTextureView();
+        if (!IrisCompat.isShaderActive()) return mainTarget.getDepthTextureView();
+        TextureTarget sceneDepth = GlowCaptureManager.getSceneDepthTarget();
+        return sceneDepth != null ? sceneDepth.getDepthTextureView() : mask.getDepthTextureView();
     }
 
     private static void dispose() {

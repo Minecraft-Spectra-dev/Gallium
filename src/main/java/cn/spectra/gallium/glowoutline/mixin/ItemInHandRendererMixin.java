@@ -1,16 +1,14 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
-import cn.spectra.gallium.glowoutline.IrisCompat;
-import cn.spectra.gallium.glowoutline.capture.DuplicatingSubmitNodeStorage;
-import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
+import cn.spectra.gallium.glowoutline.capture.CaptureSites;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
+import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemDisplayContext;
@@ -29,19 +27,13 @@ public class ItemInHandRendererMixin {
                                        Operation<Void> original,
                                        LivingEntity mob, ItemStack itemStack, ItemDisplayContext type,
                                        PoseStack ps, SubmitNodeCollector col, int l) {
-        if (IrisCompat.isShadowPass() || itemStack.isEmpty() || !GlowOutlineConfig.isFirstPerson()) {
-            original.call(renderState, poseStack, collector, light, overlay, outlineColor);
-            return;
-        }
-
-        boolean capturing = GlowCaptureManager.beginItemCapture(itemStack, true);
-        if (capturing && collector instanceof SubmitNodeStorage storage) {
-            DuplicatingSubmitNodeStorage wrapped = new DuplicatingSubmitNodeStorage(storage);
+        SubmitNodeCollector wrapped = CaptureSites.beginIfCapturable(
+                itemStack, collector, GlowOutlineConfig.Toggle.FIRST_PERSON, true);
+        try {
             original.call(renderState, poseStack, wrapped, light, overlay, outlineColor);
-        } else {
-            original.call(renderState, poseStack, collector, light, overlay, outlineColor);
+        } finally {
+            CaptureSites.end();
         }
-        GlowCaptureManager.endItemCapture();
     }
 
     @Inject(method = "renderPlayerArm", at = @At("HEAD"))

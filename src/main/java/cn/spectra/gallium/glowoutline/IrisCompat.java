@@ -14,6 +14,10 @@ import net.fabricmc.loader.api.FabricLoader;
  * Iris reflection lookup happens once at static init; per-frame calls are reduced to direct
  * {@link MethodHandle} invocations and primitive field access. Gracefully no-ops when Iris
  * is absent or its internals change shape.
+ * <p>
+ * Per-field availability is tracked separately, so partial reflection failures (e.g. {@code bypass}
+ * found but {@code renderWithExtendedVertexFormat} renamed) still produce consistent
+ * snapshot/restore: only fields actually accessible are touched.
  */
 public final class IrisCompat {
 
@@ -26,10 +30,14 @@ public final class IrisCompat {
     private static final MethodHandle BYPASS_SETTER;
     private static final MethodHandle EXTENDED_GETTER;
     private static final MethodHandle EXTENDED_SETTER;
+    private static final boolean BYPASS_FIELD_OK;
+    private static final boolean EXTENDED_FIELD_OK;
     private static final boolean BYPASS_AVAILABLE;
 
-    public record BypassSnapshot(boolean bypass, boolean renderWithExtended, boolean valid) {
-        public static final BypassSnapshot NONE = new BypassSnapshot(false, false, false);
+    public record BypassSnapshot(boolean bypass, boolean renderWithExtended,
+                                  boolean bypassValid, boolean extendedValid) {
+        public static final BypassSnapshot NONE = new BypassSnapshot(false, false, false, false);
+        public boolean valid() { return bypassValid || extendedValid; }
     }
 
     static {
@@ -61,17 +69,29 @@ public final class IrisCompat {
                 Gallium.LOGGER.debug("Iris detected but IrisApi reflection failed: {}", t.toString());
             }
 
+            Class<?> immediateState = null;
             try {
-                Class<?> immediateState = Class.forName("net.irisshaders.iris.vertices.ImmediateState");
-                Field bypass = immediateState.getField("bypass");
-                Field extended = immediateState.getField("renderWithExtendedVertexFormat");
-                MethodHandles.Lookup lookup = MethodHandles.lookup();
-                bypassGet = lookup.unreflectGetter(bypass);
-                bypassSet = lookup.unreflectSetter(bypass);
-                extendedGet = lookup.unreflectGetter(extended);
-                extendedSet = lookup.unreflectSetter(extended);
+                immediateState = Class.forName("net.irisshaders.iris.vertices.ImmediateState");
             } catch (Throwable t) {
-                Gallium.LOGGER.debug("Iris detected but ImmediateState reflection failed: {}", t.toString());
+                Gallium.LOGGER.debug("Iris detected but ImmediateState class missing: {}", t.toString());
+            }
+
+            if (immediateState != null) {
+                MethodHandles.Lookup lookup = MethodHandles.lookup();
+                try {
+                    Field bypass = immediateState.getField("bypass");
+                    bypassGet = lookup.unreflectGetter(bypass);
+                    bypassSet = lookup.unreflectSetter(bypass);
+                } catch (Throwable t) {
+                    Gallium.LOGGER.debug("Iris ImmediateState.bypass reflection failed: {}", t.toString());
+                }
+                try {
+                    Field extended = immediateState.getField("renderWithExtendedVertexFormat");
+                    extendedGet = lookup.unreflectGetter(extended);
+                    extendedSet = lookup.unreflectSetter(extended);
+                } catch (Throwable t) {
+                    Gallium.LOGGER.debug("Iris ImmediateState.renderWithExtendedVertexFormat reflection failed: {}", t.toString());
+                }
             }
         }
 
@@ -81,7 +101,9 @@ public final class IrisCompat {
         BYPASS_SETTER = bypassSet;
         EXTENDED_GETTER = extendedGet;
         EXTENDED_SETTER = extendedSet;
-        BYPASS_AVAILABLE = bypassGet != null || extendedGet != null;
+        BYPASS_FIELD_OK = bypassGet != null && bypassSet != null;
+        EXTENDED_FIELD_OK = extendedGet != null && extendedSet != null;
+        BYPASS_AVAILABLE = BYPASS_FIELD_OK || EXTENDED_FIELD_OK;
     }
 
     private IrisCompat() {}
@@ -96,22 +118,30 @@ public final class IrisCompat {
 
     public static BypassSnapshot setBypass(boolean value) {
         if (!BYPASS_AVAILABLE) return BypassSnapshot.NONE;
+        boolean bypassValid = false, extendedValid = false;
+        boolean oldBypass = false, oldExtended = false;
         try {
-            boolean oldBypass = BYPASS_GETTER != null && (boolean) BYPASS_GETTER.invokeExact();
-            boolean oldExtended = EXTENDED_GETTER != null && (boolean) EXTENDED_GETTER.invokeExact();
-            if (BYPASS_SETTER != null) BYPASS_SETTER.invokeExact(value);
-            if (EXTENDED_SETTER != null && value) EXTENDED_SETTER.invokeExact(false);
-            return new BypassSnapshot(oldBypass, oldExtended, true);
+            if (BYPASS_FIELD_OK) {
+                oldBypass = (boolean) BYPASS_GETTER.invokeExact();
+                BYPASS_SETTER.invokeExact(value);
+                bypassValid = true;
+            }
+            if (EXTENDED_FIELD_OK) {
+                oldExtended = (boolean) EXTENDED_GETTER.invokeExact();
+                if (value) EXTENDED_SETTER.invokeExact(false);
+                extendedValid = true;
+            }
+            return new BypassSnapshot(oldBypass, oldExtended, bypassValid, extendedValid);
         } catch (Throwable t) {
-            return BypassSnapshot.NONE;
+            return new BypassSnapshot(oldBypass, oldExtended, bypassValid, extendedValid);
         }
     }
 
     public static void restoreBypass(BypassSnapshot snapshot) {
-        if (!BYPASS_AVAILABLE || snapshot == null || !snapshot.valid()) return;
+        if (snapshot == null || !snapshot.valid()) return;
         try {
-            if (BYPASS_SETTER != null) BYPASS_SETTER.invokeExact(snapshot.bypass());
-            if (EXTENDED_SETTER != null) EXTENDED_SETTER.invokeExact(snapshot.renderWithExtended());
+            if (snapshot.bypassValid() && BYPASS_FIELD_OK) BYPASS_SETTER.invokeExact(snapshot.bypass());
+            if (snapshot.extendedValid() && EXTENDED_FIELD_OK) EXTENDED_SETTER.invokeExact(snapshot.renderWithExtended());
         } catch (Throwable ignored) {}
     }
 }

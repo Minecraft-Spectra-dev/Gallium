@@ -23,6 +23,7 @@ public final class GuiGlowDispatcher {
 
     /** Pixels of margin around the 16x16 item slot when sampling the mask texture. */
     private static final int MASK_QUAD_MARGIN = 4;
+    private static final int ITEM_SLOT_SIZE = 16;
     private static final int VERTEX_PASSTHROUGH_COLOR = 0xFFFFFFFF;
 
     private GuiGlowDispatcher() {}
@@ -53,8 +54,8 @@ public final class GuiGlowDispatcher {
 
         int qx0 = itemState.x() - MASK_QUAD_MARGIN;
         int qy0 = itemState.y() - MASK_QUAD_MARGIN;
-        int qx1 = itemState.x() + 16 + MASK_QUAD_MARGIN;
-        int qy1 = itemState.y() + 16 + MASK_QUAD_MARGIN;
+        int qx1 = itemState.x() + ITEM_SLOT_SIZE + MASK_QUAD_MARGIN;
+        int qy1 = itemState.y() + ITEM_SLOT_SIZE + MASK_QUAD_MARGIN;
 
         Vector2f topLeft = itemState.pose().transformPosition(new Vector2f(qx0, qy0));
         Vector2f bottomRight = itemState.pose().transformPosition(new Vector2f(qx1, qy1));
@@ -90,6 +91,6 @@ public final class GuiGlowDispatcher {
         int screenH = mainTarget.height;
 
         GuiGlowRenderer.renderMaskOnly(screenW, screenH);
-        GuiGlowElementPipeline.updateAllForFrame(screenW, screenH, GlowTime.guiSecondsFloat(), 1.0f);
+        GuiGlowElementPipeline.updateAllForFrame(screenW, screenH, GlowTime.guiSecondsFloat());
     }
 }

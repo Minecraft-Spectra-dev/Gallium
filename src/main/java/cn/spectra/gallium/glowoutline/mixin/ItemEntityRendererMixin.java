@@ -1,15 +1,12 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
-import cn.spectra.gallium.glowoutline.IrisCompat;
-import cn.spectra.gallium.glowoutline.capture.DuplicatingSubmitNodeStorage;
-import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
+import cn.spectra.gallium.glowoutline.capture.CaptureSites;
 import cn.spectra.gallium.glowoutline.capture.ItemEntityRenderStateAccessor;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.entity.ItemEntityRenderer;
 import net.minecraft.client.renderer.entity.state.ItemClusterRenderState;
 import net.minecraft.client.renderer.entity.state.ItemEntityRenderState;
@@ -39,18 +36,12 @@ public class ItemEntityRendererMixin {
                                            ItemEntityRenderState state, PoseStack ps, SubmitNodeCollector col,
                                            net.minecraft.client.renderer.state.level.CameraRenderState cam) {
         ItemStack itemStack = ((ItemEntityRenderStateAccessor) state).gallium$getItemStack();
-        if (IrisCompat.isShadowPass() || itemStack.isEmpty() || !GlowOutlineConfig.isDroppedItems()) {
-            original.call(poseStack, collector, lightCoords, clusterState, random, boundingBox);
-            return;
-        }
-
-        boolean capturing = GlowCaptureManager.beginItemCapture(itemStack);
-        if (capturing && collector instanceof SubmitNodeStorage storage) {
-            DuplicatingSubmitNodeStorage wrapped = new DuplicatingSubmitNodeStorage(storage);
+        SubmitNodeCollector wrapped = CaptureSites.beginIfCapturable(
+                itemStack, collector, GlowOutlineConfig.Toggle.DROPPED_ITEMS);
+        try {
             original.call(poseStack, wrapped, lightCoords, clusterState, random, boundingBox);
-        } else {
-            original.call(poseStack, collector, lightCoords, clusterState, random, boundingBox);
+        } finally {
+            CaptureSites.end();
         }
-        GlowCaptureManager.endItemCapture();
     }
 }
