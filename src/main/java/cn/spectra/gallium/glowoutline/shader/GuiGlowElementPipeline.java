@@ -3,7 +3,9 @@ package cn.spectra.gallium.glowoutline.shader;
 import cn.spectra.gallium.Gallium;
 import cn.spectra.gallium.glowoutline.ItemEffectConfig;
 import com.mojang.blaze3d.pipeline.BlendFunction;
+//#if MC>=1_26_00
 import com.mojang.blaze3d.pipeline.ColorTargetState;
+//#endif
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.UniformType;
 import java.util.HashMap;
@@ -46,7 +48,11 @@ public final class GuiGlowElementPipeline {
         RenderPipeline p = RenderPipeline.builder(RenderPipelines.GUI_TEXTURED_SNIPPET)
                 .withLocation(location)
                 .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", shaderPath))
+                //#if MC>=1_26_00
                 .withColorTargetState(new ColorTargetState(BlendFunction.ADDITIVE))
+                //#else
+                //$$ .withBlend(BlendFunction.ADDITIVE)
+                //#endif
                 .withUniform("GalliumGuiGlow", UniformType.UNIFORM_BUFFER)
                 .build();
         pipelinesByConfig.put(cfg, p);

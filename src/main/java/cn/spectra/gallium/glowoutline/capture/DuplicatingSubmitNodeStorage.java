@@ -10,15 +10,28 @@ import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeCollection;
 import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.block.MovingBlockRenderState;
+//#if MC>=1_26_00
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModelPart;
+//#else
+//$$ import net.minecraft.client.renderer.block.model.BlockStateModel;
+//#endif
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.feature.ModelFeatureRenderer;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.rendertype.RenderType;
+//#if MC>=1_26_00
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+//#else
+//$$ import net.minecraft.client.renderer.state.CameraRenderState;
+//#endif
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+//#if MC>=1_26_00
 import net.minecraft.client.resources.model.geometry.BakedQuad;
+//#else
+//$$ import net.minecraft.client.renderer.block.model.BakedQuad;
+//$$ import net.minecraft.world.level.block.state.BlockState;
+//#endif
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemDisplayContext;
@@ -67,7 +80,11 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
     @Override public void submitFlame(PoseStack p, EntityRenderState rs, Quaternionf q) { delegate.submitFlame(p, rs, q); }
     @Override public void submitLeash(PoseStack p, EntityRenderState.LeashState ls) { delegate.submitLeash(p, ls); }
     @Override public void submitMovingBlock(PoseStack p, MovingBlockRenderState mb) { delegate.submitMovingBlock(p, mb); }
+    //#if MC>=1_26_00
     @Override public void submitBreakingBlockModel(PoseStack p, BlockStateModel m, long seed, int prog) { delegate.submitBreakingBlockModel(p, m, seed, prog); }
+    //#else
+    //$$ @Override public void submitBlock(PoseStack p, BlockState bs, int i, int j, int k) { delegate.submitBlock(p, bs, i, j, k); }
+    //#endif
     @Override public void submitParticleGroup(ParticleGroupRenderer r) { delegate.submitParticleGroup(r); }
     @Override public void clear() { delegate.clear(); }
     @Override public void endFrame() { delegate.endFrame(); }
@@ -85,6 +102,7 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
         duplicate(0, c -> c.submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc));
     }
 
+    //#if MC>=1_26_00
     @Override
     public void submitBlockModel(PoseStack p, RenderType rt, List<BlockStateModelPart> parts, int[] tints, int l, int ov, int oc) {
         delegate.submitBlockModel(p, rt, parts, tints, l, ov, oc);
@@ -96,6 +114,19 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
         delegate.submitItem(p, dc, l, ov, oc, tints, quads, ft);
         duplicate(0, c -> c.submitItem(p, dc, l, ov, oc, tints, quads, ft));
     }
+    //#else
+    //$$ @Override
+    //$$ public void submitBlockModel(PoseStack p, RenderType rt, BlockStateModel m, float fr, float fg, float fb, int l, int ov, int oc) {
+    //$$     delegate.submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc);
+    //$$     duplicate(0, c -> c.submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc));
+    //$$ }
+    //$$
+    //$$ @Override
+    //$$ public void submitItem(PoseStack p, ItemDisplayContext dc, int l, int ov, int oc, int[] tints, List<BakedQuad> quads, RenderType rt, ItemStackRenderState.FoilType ft) {
+    //$$     delegate.submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
+    //$$     duplicate(0, c -> c.submitItem(p, dc, l, ov, oc, tints, quads, rt, ft));
+    //$$ }
+    //#endif
 
     @Override
     public void submitCustomGeometry(PoseStack p, RenderType rt, CustomGeometryRenderer cgr) {
@@ -128,7 +159,11 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
         @Override public void submitFlame(PoseStack p, EntityRenderState rs, Quaternionf q) { delegate.submitFlame(p, rs, q); }
         @Override public void submitLeash(PoseStack p, EntityRenderState.LeashState ls) { delegate.submitLeash(p, ls); }
         @Override public void submitMovingBlock(PoseStack p, MovingBlockRenderState mb) { delegate.submitMovingBlock(p, mb); }
+        //#if MC>=1_26_00
         @Override public void submitBreakingBlockModel(PoseStack p, BlockStateModel m, long seed, int prog) { delegate.submitBreakingBlockModel(p, m, seed, prog); }
+        //#else
+        //$$ @Override public void submitBlock(PoseStack p, BlockState bs, int i, int j, int k) { delegate.submitBlock(p, bs, i, j, k); }
+        //#endif
         @Override public void submitParticleGroup(ParticleGroupRenderer r) { delegate.submitParticleGroup(r); }
 
         @Override
@@ -143,6 +178,7 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
             dup(c -> c.submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc));
         }
 
+        //#if MC>=1_26_00
         @Override
         public void submitBlockModel(PoseStack p, RenderType rt, List<BlockStateModelPart> parts, int[] tints, int l, int ov, int oc) {
             delegate.submitBlockModel(p, rt, parts, tints, l, ov, oc);
@@ -154,6 +190,19 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
             delegate.submitItem(p, dc, l, ov, oc, tints, quads, ft);
             dup(c -> c.submitItem(p, dc, l, ov, oc, tints, quads, ft));
         }
+        //#else
+        //$$ @Override
+        //$$ public void submitBlockModel(PoseStack p, RenderType rt, BlockStateModel m, float fr, float fg, float fb, int l, int ov, int oc) {
+        //$$     delegate.submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc);
+        //$$     dup(c -> c.submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc));
+        //$$ }
+        //$$
+        //$$ @Override
+        //$$ public void submitItem(PoseStack p, ItemDisplayContext dc, int l, int ov, int oc, int[] tints, List<BakedQuad> quads, RenderType rt, ItemStackRenderState.FoilType ft) {
+        //$$     delegate.submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
+        //$$     dup(c -> c.submitItem(p, dc, l, ov, oc, tints, quads, rt, ft));
+        //$$ }
+        //#endif
 
         @Override
         public void submitCustomGeometry(PoseStack p, RenderType rt, CustomGeometryRenderer cgr) {

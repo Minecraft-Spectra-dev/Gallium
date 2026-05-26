@@ -14,12 +14,14 @@
 		"ShelfRendererMixin",
 		"ShelfRenderStateMixin",
 		"GuiGraphicsExtractorMixin",
+		"GuiGraphicsItemMixin",
 		"GuiItemAtlasMixin",
 		"GuiItemRenderStateMixin",
 		"GuiRendererMixin",
 		"GlCommandEncoderMixin",
 		"accessor.FeatureRenderDispatcherAccessor",
-		"accessor.GameRendererAccessor"
+		"accessor.GameRendererAccessor",
+		"accessor.GuiRendererAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1

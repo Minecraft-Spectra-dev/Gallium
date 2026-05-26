@@ -10,6 +10,11 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.ItemEntityRenderer;
 import net.minecraft.client.renderer.entity.state.ItemClusterRenderState;
 import net.minecraft.client.renderer.entity.state.ItemEntityRenderState;
+//#if MC>=1_26_00
+import net.minecraft.client.renderer.state.level.CameraRenderState;
+//#else
+//$$ import net.minecraft.client.renderer.state.CameraRenderState;
+//#endif
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
@@ -34,7 +39,7 @@ public class ItemEntityRendererMixin {
                                            RandomSource random, AABB boundingBox,
                                            Operation<Void> original,
                                            ItemEntityRenderState state, PoseStack ps, SubmitNodeCollector col,
-                                           net.minecraft.client.renderer.state.level.CameraRenderState cam) {
+                                           CameraRenderState cam) {
         ItemStack itemStack = ((ItemEntityRenderStateAccessor) state).gallium$getItemStack();
         SubmitNodeCollector wrapped = CaptureSites.beginIfCapturable(
                 itemStack, collector, GlowOutlineConfig.Toggle.DROPPED_ITEMS);

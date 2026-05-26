@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
+//#if MC>=1_26_00
 import com.mojang.blaze3d.textures.GpuTexture;
 import net.minecraft.client.gui.render.GuiItemAtlas;
 import org.spongepowered.asm.mixin.Mixin;
@@ -16,3 +17,26 @@ public class GuiItemAtlasMixin {
         return usage | GpuTexture.USAGE_COPY_SRC;
     }
 }
+//#else
+//$$ // 1.21.11 has no GuiItemAtlas type — the items atlas is created inline inside
+//$$ // GuiRenderer.createAtlasTextures(int). Same fix, different host class: tag the
+//$$ // first createTexture call (the color atlas) with USAGE_COPY_SRC so we can copy
+//$$ // rendered item bitmaps out of it into our glow mask target.
+//$$ import com.mojang.blaze3d.textures.GpuTexture;
+//$$ import net.minecraft.client.gui.render.GuiRenderer;
+//$$ import org.spongepowered.asm.mixin.Mixin;
+//$$ import org.spongepowered.asm.mixin.injection.At;
+//$$ import org.spongepowered.asm.mixin.injection.ModifyArg;
+//$$
+//$$ @Mixin(GuiRenderer.class)
+//$$ public class GuiItemAtlasMixin {
+//$$
+//$$     @ModifyArg(method = "createAtlasTextures(I)V", at = @At(value = "INVOKE",
+//$$             target = "Lcom/mojang/blaze3d/systems/GpuDevice;createTexture(Ljava/lang/String;ILcom/mojang/blaze3d/textures/TextureFormat;IIII)Lcom/mojang/blaze3d/textures/GpuTexture;",
+//$$             ordinal = 0),
+//$$             index = 1)
+//$$     private int galliumAddCopySrcFlag(int usage) {
+//$$         return usage | GpuTexture.USAGE_COPY_SRC;
+//$$     }
+//$$ }
+//#endif

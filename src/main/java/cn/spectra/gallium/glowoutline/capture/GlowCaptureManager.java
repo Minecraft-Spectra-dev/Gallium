@@ -123,6 +123,7 @@ public final class GlowCaptureManager {
         if (state.captureDispatcher == null) {
             FeatureRenderDispatcher mainDispatcher = mc.gameRenderer.getFeatureRenderDispatcher();
             var accessor = (FeatureRenderDispatcherAccessor) mainDispatcher;
+            //#if MC>=1_26_00
             var gameAccessor = (GameRendererAccessor) mc.gameRenderer;
             state.captureDispatcher = new FeatureRenderDispatcher(
                     new SubmitNodeStorage(),
@@ -134,6 +135,17 @@ public final class GlowCaptureManager {
                     mc.font,
                     gameAccessor.gallium$getGameRenderState()
             );
+            //#else
+            //$$ state.captureDispatcher = new FeatureRenderDispatcher(
+            //$$         new SubmitNodeStorage(),
+            //$$         mc.getBlockRenderer(),
+            //$$         state.captureBuffers.bufferSource(),
+            //$$         accessor.gallium$getAtlasManager(),
+            //$$         state.captureBuffers.outlineBufferSource(),
+            //$$         state.captureBuffers.crumblingBufferSource(),
+            //$$         mc.font
+            //$$ );
+            //#endif
         } else {
             state.captureDispatcher.getSubmitNodeStorage().clear();
         }

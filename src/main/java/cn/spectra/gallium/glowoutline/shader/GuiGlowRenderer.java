@@ -39,6 +39,12 @@ public final class GuiGlowRenderer {
 
     public static TextureTarget renderMaskOnly(int screenW, int screenH) {
         if (GuiGlowCaptureManager.getActive().isEmpty()) return null;
+        //#if MC<1_26_00
+        //$$ // 1.21.11 path samples the items atlas directly from the GUI glow shader
+        //$$ // (see GuiGlowDispatcher.onItemBlit), so we don't need an intermediate
+        //$$ // mask target / atlas-to-mask copy here.
+        //$$ return null;
+        //#else
         ensureMaskTarget(screenW, screenH);
 
         var encoder = RenderSystem.getDevice().createCommandEncoder();
@@ -68,7 +74,7 @@ public final class GuiGlowRenderer {
             int fbY1 = Math.round(bottomRight.y * (float) guiScale);
 
             int dstX = fbX0;
-            int dstY = actualMaskH - fbY1; // top-down to bottom-up
+            int dstY = actualMaskH - fbY1; // 26.1 mask target is y-up; convert from y-down screen coords
 
             // Skip if either source or destination region is out of bounds.
             if (srcX < 0 || srcY < 0 || srcX + copyW > atlasW || srcY + copyH > atlasH) continue;
@@ -89,6 +95,7 @@ public final class GuiGlowRenderer {
         }
 
         return maskTarget;
+        //#endif
     }
 
     public static TextureTarget getMaskTarget() {

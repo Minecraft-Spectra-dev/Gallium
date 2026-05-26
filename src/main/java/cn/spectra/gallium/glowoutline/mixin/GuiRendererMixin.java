@@ -1,6 +1,9 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
 import cn.spectra.gallium.glowoutline.capture.GuiGlowCaptureManager;
+//#if MC<1_26_00
+//$$ import cn.spectra.gallium.glowoutline.mixin.accessor.GuiRendererAccessor;
+//#endif
 import cn.spectra.gallium.glowoutline.shader.GlowUniformBuffer;
 import cn.spectra.gallium.glowoutline.shader.GuiGlowDispatcher;
 import cn.spectra.gallium.glowoutline.shader.GuiGlowElementPipeline;
@@ -9,11 +12,21 @@ import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.systems.RenderPass;
+//#if MC<1_26_00
+//$$ import com.mojang.blaze3d.textures.GpuTextureView;
+//#endif
 import com.mojang.blaze3d.vertex.VertexFormat;
+//#if MC>=1_26_00
 import net.minecraft.client.gui.render.GuiItemAtlas;
+//#endif
 import net.minecraft.client.gui.render.GuiRenderer;
+//#if MC>=1_26_00
 import net.minecraft.client.renderer.state.gui.GuiItemRenderState;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
+//#else
+//$$ import net.minecraft.client.gui.render.state.GuiItemRenderState;
+//$$ import net.minecraft.client.gui.render.state.GuiRenderState;
+//#endif
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -42,10 +55,20 @@ public class GuiRendererMixin {
         }
     }
 
+    //#if MC>=1_26_00
     @Inject(method = "submitBlitFromItemAtlas", at = @At("TAIL"))
     private void galliumCaptureForGlow(GuiItemRenderState itemState, GuiItemAtlas.SlotView slotView, CallbackInfo ci) {
         GuiGlowDispatcher.onItemBlit(this.renderState, itemState, slotView);
     }
+    //#else
+    //$$ @Inject(method = "submitBlitFromItemAtlas", at = @At("TAIL"))
+    //$$ private void galliumCaptureForGlow(GuiItemRenderState itemState, float f, float g, int i, int j, CallbackInfo ci) {
+    //$$     GuiRendererAccessor self = (GuiRendererAccessor) this;
+    //$$     GpuTextureView atlasView = self.gallium$getItemsAtlasView();
+    //$$     if (atlasView == null) return;
+    //$$     GuiGlowDispatcher.onItemBlit(this.renderState, itemState, atlasView, f, g, i, j);
+    //$$ }
+    //#endif
 
     @Inject(method = "prepareItemElements", at = @At("TAIL"))
     private void galliumRenderMaskBuffer(CallbackInfo ci) {

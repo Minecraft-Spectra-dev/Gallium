@@ -6,7 +6,11 @@ import cn.spectra.gallium.glowoutline.shader.GlowPipeline;
 import cn.spectra.gallium.glowoutline.shader.GlowResources;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+//#if MC>=1_26_00
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+//#else
+//$$ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+//#endif
 import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -32,7 +36,11 @@ public class Gallium implements ClientModInitializer {
 
 		KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MOD_ID, "main"));
 
+		//#if MC>=1_26_00
 		RELOAD_RESOURCE_PACK_KEY = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+		//#else
+		//$$ RELOAD_RESOURCE_PACK_KEY = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+		//#endif
 			"key.gallium.reload_resource_pack",
 			GLFW.GLFW_KEY_UNKNOWN,
 			category

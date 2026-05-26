@@ -2,7 +2,9 @@ package cn.spectra.gallium.glowoutline.shader;
 
 import cn.spectra.gallium.Gallium;
 import com.mojang.blaze3d.pipeline.BlendFunction;
+//#if MC>=1_26_00
 import com.mojang.blaze3d.pipeline.ColorTargetState;
+//#endif
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -10,7 +12,9 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+//#if MC>=1_26_00
 import java.util.Optional;
+//#endif
 import java.util.Set;
 import net.minecraft.resources.Identifier;
 
@@ -51,9 +55,15 @@ public final class GlowPipeline {
                     .withSampler("MaskDepthSampler")
                     .withSampler("SceneDepthSampler")
                     .withUniform("GlowUniforms", UniformType.UNIFORM_BUFFER)
+                    //#if MC>=1_26_00
                     .withColorTargetState(new ColorTargetState(BlendFunction.ADDITIVE))
+                    //#else
+                    //$$ .withBlend(BlendFunction.ADDITIVE)
+                    //#endif
                     .withCull(false)
+                    //#if MC>=1_26_00
                     .withDepthStencilState(Optional.empty())
+                    //#endif
                     .withVertexFormat(DefaultVertexFormat.EMPTY, VertexFormat.Mode.TRIANGLES)
                     .build();
             Gallium.LOGGER.info("Created glow pipeline: {}", name);

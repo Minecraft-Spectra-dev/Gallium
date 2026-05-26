@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
+//#if MC>=1_26_00
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import cn.spectra.gallium.glowoutline.ItemEffectConfig;
 import cn.spectra.gallium.glowoutline.ItemEffectsManager;
@@ -35,3 +36,8 @@ public class GuiGraphicsExtractorMixin {
         return state;
     }
 }
+//#else
+//$$ // 1.21.11 has no GuiGraphicsExtractor; GUI item entry path is structured
+//$$ // differently. See GuiItemAtlasMixin for the same gating rationale.
+//$$ public class GuiGraphicsExtractorMixin {}
+//#endif

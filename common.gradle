@@ -11,12 +11,12 @@ apply plugin: unobfuscated ? 'net.fabricmc.fabric-loom' : 'net.fabricmc.fabric-l
 apply plugin: 'com.replaymod.preprocess'
 
 configurations {
-    // Apply on resolved runtimeClasspath (not runtimeOnly), otherwise the exclude
-    // propagates via testRuntimeOnly into testRuntimeClasspath and breaks unit tests
-    // that load classes implementing ClientModInitializer.
-    if (unobfuscated) {
-        runtimeClasspath.exclude group: 'net.fabricmc', module: 'fabric-loader'
-    } else {
+    // On <1_26_00 (loom-remap mode) CFM-style remap pulls fabric-loader as a transitive
+    // mod dep, which then double-loads at runtime. Excluding it from modRuntimeOnly
+    // keeps the dev runtime clean. On 26.1+ Loom never transitively pulls a second
+    // copy, so no exclude is needed — and excluding from runtimeClasspath would strip
+    // KnotClient from :runClient's launch classpath.
+    if (!unobfuscated) {
         modRuntimeOnly.exclude group: 'net.fabricmc', module: 'fabric-loader'
     }
 }
@@ -82,6 +82,21 @@ List<String> MIXIN_CONFIG_PATHS = [
         "gallium-glowoutline.mixins.json"
 ]
 
+// Mixin classes whose target class only exists on >=1_26_00 (kept as empty stubs
+// in source on older versions). They must be removed from mixins.json on those
+// versions because the Mixin loader chokes on entries without a @Mixin annotation.
+List<String> STUB_MIXIN_CLASSES_PRE_1_26 = [
+        "GuiGraphicsExtractorMixin",
+        "TextureUtilMixin"
+]
+
+// Mirror image: mixin classes that only carry a real @Mixin on <1_26_00. On
+// 26.1+ they collapse to empty stubs and would similarly break the loader.
+List<String> STUB_MIXIN_CLASSES_FROM_1_26 = [
+        "GuiGraphicsItemMixin",
+        "accessor.GuiRendererAccessor"
+]
+
 loom {
     runConfigs.configureEach {
         ideConfigGenerated = true
@@ -117,6 +132,37 @@ processResources {
             s.replace('{{COMPATIBILITY_LEVEL}}', "JAVA_${JAVA_COMPATIBILITY.ordinal() + 1}")
         }
     }
+    if (!unobfuscated) {
+        // Strip stub mixin entries from mixins.json on pre-1.26 versions: their
+        // target class doesn't exist there, so the source has //#if-gated empty
+        // stubs that the Mixin loader would reject. Must operate on the final
+        // resource (after preprocess + filter) to guarantee well-formed JSON,
+        // hence doLast on processResources.
+        doLast {
+            stripStubMixins(destinationDir, MIXIN_CONFIG_PATHS, STUB_MIXIN_CLASSES_PRE_1_26)
+        }
+    } else {
+        // Symmetric: on 26.1+, the 1.21.x-only mixin classes collapse to stubs.
+        doLast {
+            stripStubMixins(destinationDir, MIXIN_CONFIG_PATHS, STUB_MIXIN_CLASSES_FROM_1_26)
+        }
+    }
+}
+
+def stripStubMixins(File destinationDir, List<String> mixinConfigPaths, List<String> stubs) {
+    for (String name : mixinConfigPaths) {
+        File f = new File(destinationDir, name)
+        if (!f.exists()) continue
+        String content = f.text
+        String stripped = content
+        for (String stub : stubs) {
+            stripped = stripped.replaceAll(
+                    '(?m)^\\s*"' + java.util.regex.Pattern.quote(stub) + '"\\s*,?\\s*\\r?\\n', ''
+            )
+        }
+        stripped = stripped.replaceAll(',(\\s*])', '$1')
+        if (stripped != content) f.text = stripped
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -133,10 +179,6 @@ java {
 jar {
     from(rootProject.file('LICENSE')) {
         rename { "${it}_${project.archives_base_name}" }
-    }
-
-    if (!unobfuscated) {
-        exclude "${project.archives_base_name}-refmap.json"
     }
 }
 
