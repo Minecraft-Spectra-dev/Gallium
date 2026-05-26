@@ -24,7 +24,6 @@
 		]
 	},
 	"mixins": [
-		"gallium.mixins.json",
 		"gallium-glowoutline.mixins.json"
 	],
 	"depends": {

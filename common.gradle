@@ -78,7 +78,6 @@ test {
 }
 
 List<String> MIXIN_CONFIG_PATHS = [
-        "gallium.mixins.json",
         "gallium-glowoutline.mixins.json"
 ]
 
