@@ -11,6 +11,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Pure-logic tests for ItemCondition composites and ItemEffectRule matching.
  * Uses {@code And(empty)}/{@code Or(empty)} as always-true/always-false primitives
  * since real Items/Tag/Path conditions would require a Minecraft registry.
+ * <p>
+ * The composite primitives never read the stack, so {@code null} is an inert
+ * placeholder here. Constructing a real {@code ItemStack} would drag in vanilla's
+ * Bootstrap (registry init) which is out of scope for pure-logic tests, and
+ * mocking the (final) class fails on the 1.21.x branch where ItemStack's
+ * {@code <clinit>} chains into Item.{@code <clinit>} and the registry. If
+ * {@code test()} ever evolves to dereference the stack unconditionally, every
+ * test below will NPE — refactor or bootstrap at that point.
  */
 class ItemConditionTest {
 

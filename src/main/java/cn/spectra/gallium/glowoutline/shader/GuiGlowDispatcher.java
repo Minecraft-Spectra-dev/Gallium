@@ -36,6 +36,11 @@ public final class GuiGlowDispatcher {
     private static final int ITEM_SLOT_SIZE = 16;
     private static final int VERTEX_PASSTHROUGH_COLOR = 0xFFFFFFFF;
 
+    // Scratch buffers reused across onItemBlit calls. GUI rendering is render-thread-only,
+    // so static reuse beats allocating two Vector2f per item every frame.
+    private static final Vector2f SCRATCH_TOP_LEFT = new Vector2f();
+    private static final Vector2f SCRATCH_BOTTOM_RIGHT = new Vector2f();
+
     private GuiGlowDispatcher() {}
 
     //#if MC>=1_26_00
@@ -68,8 +73,8 @@ public final class GuiGlowDispatcher {
         int qx1 = itemState.x() + ITEM_SLOT_SIZE + MASK_QUAD_MARGIN;
         int qy1 = itemState.y() + ITEM_SLOT_SIZE + MASK_QUAD_MARGIN;
 
-        Vector2f topLeft = itemState.pose().transformPosition(new Vector2f(qx0, qy0));
-        Vector2f bottomRight = itemState.pose().transformPosition(new Vector2f(qx1, qy1));
+        Vector2f topLeft = itemState.pose().transformPosition(qx0, qy0, SCRATCH_TOP_LEFT);
+        Vector2f bottomRight = itemState.pose().transformPosition(qx1, qy1, SCRATCH_BOTTOM_RIGHT);
 
         float fbX0 = (float) (topLeft.x * guiScale);
         float fbY0 = (float) (topLeft.y * guiScale);

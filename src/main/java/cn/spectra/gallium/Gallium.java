@@ -32,7 +32,7 @@ public class Gallium implements ClientModInitializer {
 		GalliumConfigIO.load();
 		GlowPipeline.init();
 		GlowResources.eagerInit();
-		// fabric-resource-loader v1: 26.1 renamed registerReloader -> registerReloadListener.
+		// Fabric API renamed registerReloader -> registerReloadListener for MC 26.1+ support.
 		//#if MC>=1_26_00
 		ResourceLoader.get(PackType.CLIENT_RESOURCES).registerReloadListener(ItemEffectsManager.RELOAD_ID, new ItemEffectsManager());
 		//#else

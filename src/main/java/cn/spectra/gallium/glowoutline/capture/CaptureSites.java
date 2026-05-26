@@ -11,7 +11,8 @@ import net.minecraft.world.item.ItemStack;
  * <ol>
  *   <li>Skipping if shadow pass / empty stack / feature toggle off.</li>
  *   <li>Calling {@link GlowCaptureManager#beginItemCapture}.</li>
- *   <li>Wrapping the {@code SubmitNodeCollector} into a duplicating storage when capturable.</li>
+ *   <li>Wrapping the {@code SubmitNodeCollector} into a duplicating storage when capturable
+ *       and the original collector is a {@link SubmitNodeStorage}.</li>
  * </ol>
  * Mixins call {@link #beginIfCapturable} for the pre-flight, then unconditionally invoke
  * {@link GlowCaptureManager#endItemCapture()} after the original call.

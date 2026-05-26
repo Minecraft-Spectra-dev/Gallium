@@ -68,13 +68,16 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
 
     private static void parseConfig(JsonObject root) {
         List<ItemEffectRule> parsed = new ArrayList<>();
+        // Tracks per-reload whether we've already logged the flat-schema deprecation, so a
+        // pack with many legacy rules emits at most one warn per resource reload.
+        boolean[] flatSchemaWarned = { false };
 
         if (root.has("rules")) {
             JsonArray rulesArr = root.getAsJsonArray("rules");
             for (int i = 0; i < rulesArr.size(); i++) {
                 ItemEffectRule rule;
                 try {
-                    rule = parseRule(rulesArr.get(i).getAsJsonObject(), i);
+                    rule = parseRule(rulesArr.get(i).getAsJsonObject(), i, flatSchemaWarned);
                 } catch (Exception e) {
                     Gallium.LOGGER.warn("item_effects rule[{}] threw during parse, skipping: {}", i, e.toString());
                     continue;
@@ -106,7 +109,7 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
         Gallium.LOGGER.info("Loaded item effects: {} rules, {} shaders", rules.size(), shaders.size());
     }
 
-    private static ItemEffectRule parseRule(JsonObject obj, int index) {
+    private static ItemEffectRule parseRule(JsonObject obj, int index, boolean[] flatSchemaWarned) {
         if (!obj.has("effect")) {
             Gallium.LOGGER.warn("item_effects rule[{}]: missing 'effect', skipping rule", index);
             return null;
@@ -114,7 +117,18 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
         ItemEffectConfig effect = parseEffect(obj.getAsJsonObject("effect"), index);
         if (effect == null) return null;
 
-        JsonObject matchObj = obj.has("match") ? obj.getAsJsonObject("match") : obj;
+        boolean hasMatch = obj.has("match");
+        JsonObject matchObj = hasMatch ? obj.getAsJsonObject("match") : obj;
+        if (!hasMatch && !flatSchemaWarned[0]) {
+            // Legacy flat form — match conditions read off the rule object itself instead of a
+            // nested "match". Still works, but documenting it as deprecated nudges pack authors
+            // toward the canonical schema before we have to pick between the two on a conflict.
+            flatSchemaWarned[0] = true;
+            Gallium.LOGGER.warn(
+                "item_effects rule[{}]: missing 'match' object, falling back to flat-schema (deprecated). "
+                    + "Wrap conditions in a \"match\": {...} block. Further occurrences in this reload silenced.",
+                index);
+        }
         MatchMode mode = parseMode(matchObj, index);
 
         List<ItemCondition> conditions = new ArrayList<>();

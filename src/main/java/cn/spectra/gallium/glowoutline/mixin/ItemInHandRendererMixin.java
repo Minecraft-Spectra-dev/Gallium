@@ -2,6 +2,7 @@ package cn.spectra.gallium.glowoutline.mixin;
 
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -14,8 +15,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ItemDisplayContext;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ItemInHandRenderer.class)
 public class ItemInHandRendererMixin {
@@ -36,27 +35,31 @@ public class ItemInHandRendererMixin {
         }
     }
 
-    @Inject(method = "renderPlayerArm", at = @At("HEAD"))
-    private void galliumSuppressArmStart(PoseStack p, SubmitNodeCollector c, int l, float eq, float sw,
-                                          net.minecraft.world.entity.HumanoidArm arm, CallbackInfo ci) {
+    // WrapMethod gives a single hook for HEAD+TAIL begin/end, so an exception inside the
+    // original still runs endSuppress() and keeps suppressDepth balanced. Previously a
+    // throw from renderPlayerArm would leak the increment; beginFrame's per-frame reset
+    // hid the symptom but the invariant was unsafe.
+    @WrapMethod(method = "renderPlayerArm")
+    private void galliumWrapRenderPlayerArm(PoseStack poseStack, SubmitNodeCollector collector, int light,
+                                            float equipped, float swing, net.minecraft.world.entity.HumanoidArm arm,
+                                            Operation<Void> original) {
         GlowCaptureManager.beginSuppress();
+        try {
+            original.call(poseStack, collector, light, equipped, swing, arm);
+        } finally {
+            GlowCaptureManager.endSuppress();
+        }
     }
 
-    @Inject(method = "renderPlayerArm", at = @At("TAIL"))
-    private void galliumSuppressArmEnd(PoseStack p, SubmitNodeCollector c, int l, float eq, float sw,
-                                        net.minecraft.world.entity.HumanoidArm arm, CallbackInfo ci) {
-        GlowCaptureManager.endSuppress();
-    }
-
-    @Inject(method = "renderMapHand", at = @At("HEAD"))
-    private void galliumSuppressMapStart(PoseStack p, SubmitNodeCollector c, int l,
-                                          net.minecraft.world.entity.HumanoidArm arm, CallbackInfo ci) {
+    @WrapMethod(method = "renderMapHand")
+    private void galliumWrapRenderMapHand(PoseStack poseStack, SubmitNodeCollector collector, int light,
+                                          net.minecraft.world.entity.HumanoidArm arm,
+                                          Operation<Void> original) {
         GlowCaptureManager.beginSuppress();
-    }
-
-    @Inject(method = "renderMapHand", at = @At("TAIL"))
-    private void galliumSuppressMapEnd(PoseStack p, SubmitNodeCollector c, int l,
-                                        net.minecraft.world.entity.HumanoidArm arm, CallbackInfo ci) {
-        GlowCaptureManager.endSuppress();
+        try {
+            original.call(poseStack, collector, light, arm);
+        } finally {
+            GlowCaptureManager.endSuppress();
+        }
     }
 }

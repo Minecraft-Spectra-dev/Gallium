@@ -46,10 +46,11 @@ import java.util.function.Consumer;
  * Mirror submit calls into the active glow capture so the offscreen pass renders the same nodes.
  * <p>
  * The outer storage's direct {@code submitModel/submitItem/...} entry points (called when callers
- * skip the {@code order(int)} path) deliberately fall through to {@code duplicate(0, ...)}: vanilla's
- * default ordering sits at order 0, so this preserves draw layering for the rare callers that use
- * the storage directly. The inner {@link DuplicatingSubmitNodeCollection} preserves whatever order
- * value was requested via {@link #order(int)}.
+ * skip the {@code order(int)} path) forward to the delegate first and then mirror into
+ * {@code duplicate(0, ...)}: vanilla's default ordering sits at order 0, so this preserves draw
+ * layering for the rare callers that use the storage directly. The inner
+ * {@link DuplicatingSubmitNodeCollection} mirrors at whatever order value was requested via
+ * {@link #order(int)}.
  */
 public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
 

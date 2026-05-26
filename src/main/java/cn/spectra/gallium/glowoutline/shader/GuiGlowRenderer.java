@@ -16,6 +16,10 @@ public final class GuiGlowRenderer {
     private static long lastCopyErrorLogNanos;
     private static final long COPY_ERROR_LOG_INTERVAL_NANOS = 5_000_000_000L; // 5s
 
+    // Scratch buffers reused across renderMaskOnly captures. Render-thread-only.
+    private static final Vector2f SCRATCH_TOP_LEFT = new Vector2f();
+    private static final Vector2f SCRATCH_BOTTOM_RIGHT = new Vector2f();
+
     static {
         GlowResources.register(GuiGlowRenderer::dispose);
     }
@@ -68,8 +72,8 @@ public final class GuiGlowRenderer {
             int copyW = slotPixelSize;
             int copyH = slotPixelSize;
 
-            Vector2f topLeft = c.pose.transformPosition(new Vector2f(c.x, c.y));
-            Vector2f bottomRight = c.pose.transformPosition(new Vector2f(c.x + ITEM_SLOT_SIZE, c.y + ITEM_SLOT_SIZE));
+            Vector2f topLeft = c.pose.transformPosition(c.x, c.y, SCRATCH_TOP_LEFT);
+            Vector2f bottomRight = c.pose.transformPosition(c.x + ITEM_SLOT_SIZE, c.y + ITEM_SLOT_SIZE, SCRATCH_BOTTOM_RIGHT);
             int fbX0 = Math.round(topLeft.x * (float) guiScale);
             int fbY1 = Math.round(bottomRight.y * (float) guiScale);
 

@@ -72,6 +72,15 @@ static def convertDependencyToSuffix(String dependency) {
         return "${version}"
     }
 
+    // Wildcard form like "26.1.x" / "1.21.x" — collapse to "<prefix>+" so the jar name
+    // doesn't carry a literal 'x' that downstream tooling could misread as a real version.
+    def wildcardPattern = ~/^([0-9.]+)x$/
+    def wildcardMatcher = wildcardPattern.matcher(dep)
+    if (wildcardMatcher.find()) {
+        def prefix = wildcardMatcher.group(1).replaceAll(/\.$/, '')
+        return "${prefix}+"
+    }
+
     def rangePattern = ~/>=([0-9.]+)<=([0-9.]+)/
     def rangeMatcher = rangePattern.matcher(dep)
     if (rangeMatcher.find()) {

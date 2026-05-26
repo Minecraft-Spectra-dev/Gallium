@@ -39,7 +39,11 @@ public class GameRendererMixin {
             // CommandEncoder is unobfuscated (com.mojang.blaze3d.* is bytecode-named through the
             // mapping pipeline), so there's nothing to remap and Mixin AP's "Unable to locate
             // method mapping" warning would otherwise fire on loom-remap versions.
-            remap = false))
+            remap = false),
+            // Fail loudly if vanilla rearranges renderLevel and the first clearDepthTexture is
+            // no longer the main-target depth clear we want to copy from. Without expect=1 a
+            // future refactor could silently capture the wrong moment and produce stale glows.
+            expect = 1)
     private void galliumCaptureSceneDepth(DeltaTracker deltaTracker, CallbackInfo ci) {
         if (IrisCompat.isShadowPass()) return;
         if (!ItemEffectsManager.isActive()) return;

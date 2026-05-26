@@ -12,8 +12,8 @@ import net.fabricmc.loader.api.FabricLoader;
  * Iris compatibility shim using cached MethodHandles for hot-path queries.
  * <p>
  * Iris reflection lookup happens once at static init; per-frame calls are reduced to direct
- * {@link MethodHandle} invocations and primitive field access. Gracefully no-ops when Iris
- * is absent or its internals change shape.
+ * {@link MethodHandle} invocations against the underlying primitive fields. Gracefully no-ops
+ * when Iris is absent or its internals change shape.
  * <p>
  * Per-field availability is tracked separately, so partial reflection failures (e.g. {@code bypass}
  * found but {@code renderWithExtendedVertexFormat} renamed) still produce consistent
