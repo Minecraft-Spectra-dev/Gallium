@@ -42,7 +42,9 @@ public class GuiRendererMixin {
 
     @Inject(method = "executeDraw", at = @At(value = "INVOKE",
             target = "Lcom/mojang/blaze3d/systems/RenderPass;setPipeline(Lcom/mojang/blaze3d/pipeline/RenderPipeline;)V",
-            shift = At.Shift.AFTER))
+            shift = At.Shift.AFTER,
+            // RenderPass is unobfuscated; see GameRendererMixin for rationale.
+            remap = false))
     private void galliumBindGlowUbo(@Coerce Object draw,
                                      RenderPass renderPass,
                                      GpuBuffer indexBuffer,

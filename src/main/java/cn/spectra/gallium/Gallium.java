@@ -11,7 +11,7 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 //#else
 //$$ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 //#endif
-import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -32,7 +32,12 @@ public class Gallium implements ClientModInitializer {
 		GalliumConfigIO.load();
 		GlowPipeline.init();
 		GlowResources.eagerInit();
-		ResourceManagerHelper.get(PackType.CLIENT_RESOURCES).registerReloadListener(new ItemEffectsManager());
+		// fabric-resource-loader v1: 26.1 renamed registerReloader -> registerReloadListener.
+		//#if MC>=1_26_00
+		ResourceLoader.get(PackType.CLIENT_RESOURCES).registerReloadListener(ItemEffectsManager.RELOAD_ID, new ItemEffectsManager());
+		//#else
+		//$$ ResourceLoader.get(PackType.CLIENT_RESOURCES).registerReloader(ItemEffectsManager.RELOAD_ID, new ItemEffectsManager());
+		//#endif
 
 		KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MOD_ID, "main"));
 

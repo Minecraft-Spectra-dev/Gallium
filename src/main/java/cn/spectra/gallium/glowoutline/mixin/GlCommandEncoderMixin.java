@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
+//#if MC>=1_26_00
 import cn.spectra.gallium.Gallium;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -8,6 +9,13 @@ import net.minecraft.SharedConstants;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
+// GlCommandEncoder is package-private on 26.1, so it has to be referred to by
+// string (`targets=`). Mixin AP emits "is public and should be specified in
+// value" but the class actually isn't public on this version — javac rejects
+// any direct .class reference. The warning is harmless on 26.1 and the fix
+// is a 26.1-only bug workaround anyway, so we don't compile this mixin on
+// older versions where the warning would also fire (1.21.11 does have a
+// public GlCommandEncoder, but the blit-coord bug doesn't exist there).
 @Mixin(targets = "com.mojang.blaze3d.opengl.GlCommandEncoder")
 public class GlCommandEncoderMixin {
 
@@ -60,3 +68,10 @@ public class GlCommandEncoderMixin {
                 mask, filter);
     }
 }
+//#else
+//$$ // 26.1-only blit-coord workaround. The bug doesn't exist on 1.21.11, and
+//$$ // gating it here keeps the (1.21.11-only) "is public" Mixin AP warning out
+//$$ // of the build log. Stripped from gallium-glowoutline.mixins.json on this
+//$$ // version by common.gradle's STUB_MIXIN_CLASSES_PRE_1_26 mechanism.
+//$$ public class GlCommandEncoderMixin {}
+//#endif

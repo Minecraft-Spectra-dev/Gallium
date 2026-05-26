@@ -123,6 +123,10 @@ public final class GuiGlowDispatcher {
     //$$     float v0 = g;
     //$$     float v1 = g - uvSlot;
     //$$
+    //$$     // Mark this frame as having an active glow capture so onPrepareItemElements
+    //$$     // doesn't early-return — it gates the per-frame UBO update on getActive()
+    //$$     // being non-empty. The other capture fields are 26.1's mask-copy inputs and
+    //$$     // unread on 1.21.11, but populating them keeps the pool usage symmetric.
     //$$     GuiGlowCapture capture = GuiGlowCaptureManager.acquire();
     //$$     capture.set(cfg, atlasView, itemState.pose(),
     //$$             itemState.x(), itemState.y(),

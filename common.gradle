@@ -87,7 +87,8 @@ List<String> MIXIN_CONFIG_PATHS = [
 // versions because the Mixin loader chokes on entries without a @Mixin annotation.
 List<String> STUB_MIXIN_CLASSES_PRE_1_26 = [
         "GuiGraphicsExtractorMixin",
-        "TextureUtilMixin"
+        "GlCommandEncoderMixin",
+        "accessor.GameRendererAccessor"
 ]
 
 // Mirror image: mixin classes that only carry a real @Mixin on <1_26_00. On
@@ -168,12 +169,16 @@ def stripStubMixins(File destinationDir, List<String> mixinConfigPaths, List<Str
 tasks.withType(JavaCompile).configureEach {
     options.encoding = "UTF-8"
     options.release = JAVA_COMPATIBILITY.ordinal() + 1
+    options.compilerArgs << "-Xlint:deprecation"
 }
 
 java {
     sourceCompatibility = JAVA_COMPATIBILITY
     targetCompatibility = JAVA_COMPATIBILITY
     withSourcesJar()
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(JAVA_COMPATIBILITY.ordinal() + 1)
+    }
 }
 
 jar {

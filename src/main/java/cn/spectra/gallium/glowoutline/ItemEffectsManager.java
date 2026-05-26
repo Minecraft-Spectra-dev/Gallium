@@ -8,12 +8,12 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
 import net.minecraft.IdentifierException;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -26,20 +26,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class ItemEffectsManager implements SimpleSynchronousResourceReloadListener {
+public class ItemEffectsManager implements ResourceManagerReloadListener {
 
-    private static final Identifier RELOAD_ID = Identifier.fromNamespaceAndPath("gallium", "item_effects");
+    public static final Identifier RELOAD_ID = Identifier.fromNamespaceAndPath("gallium", "item_effects");
     private static final Identifier RESOURCE_PATH = Identifier.fromNamespaceAndPath("gallium", "item_effects.json");
 
     private static volatile List<ItemEffectRule> rules = List.of();
     private static volatile boolean active = false;
 
     public static boolean isActive() { return active; }
-
-    @Override
-    public Identifier getFabricId() {
-        return RELOAD_ID;
-    }
 
     @Override
     public void onResourceManagerReload(ResourceManager manager) {

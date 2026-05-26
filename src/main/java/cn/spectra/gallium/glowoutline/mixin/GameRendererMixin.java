@@ -32,7 +32,11 @@ public class GameRendererMixin {
 
     @Inject(method = "renderLevel", at = @At(value = "INVOKE",
             target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture(Lcom/mojang/blaze3d/textures/GpuTexture;D)V",
-            ordinal = 0))
+            ordinal = 0,
+            // CommandEncoder is unobfuscated (com.mojang.blaze3d.* is bytecode-named through the
+            // mapping pipeline), so there's nothing to remap and Mixin AP's "Unable to locate
+            // method mapping" warning would otherwise fire on loom-remap versions.
+            remap = false))
     private void galliumCaptureSceneDepth(DeltaTracker deltaTracker, CallbackInfo ci) {
         if (IrisCompat.isShadowPass()) return;
         if (!ItemEffectsManager.isActive()) return;

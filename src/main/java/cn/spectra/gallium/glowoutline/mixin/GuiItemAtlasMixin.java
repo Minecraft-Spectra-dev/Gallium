@@ -33,7 +33,9 @@ public class GuiItemAtlasMixin {
 //$$
 //$$     @ModifyArg(method = "createAtlasTextures(I)V", at = @At(value = "INVOKE",
 //$$             target = "Lcom/mojang/blaze3d/systems/GpuDevice;createTexture(Ljava/lang/String;ILcom/mojang/blaze3d/textures/TextureFormat;IIII)Lcom/mojang/blaze3d/textures/GpuTexture;",
-//$$             ordinal = 0),
+//$$             ordinal = 0,
+//$$             // GpuDevice is unobfuscated; see GameRendererMixin for rationale.
+//$$             remap = false),
 //$$             index = 1)
 //$$     private int galliumAddCopySrcFlag(int usage) {
 //$$         return usage | GpuTexture.USAGE_COPY_SRC;
