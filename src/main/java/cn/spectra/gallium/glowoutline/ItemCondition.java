@@ -103,6 +103,19 @@ public sealed interface ItemCondition permits
                 case EQUALS -> {
                     Object val = stack.get(component);
                     if (val == null) yield value.equals("null");
+                    if (val instanceof Number n) {
+                        // Number.toString is locale-independent, but format varies
+                        // (1 vs 1.0 vs 1.0E0). Parse the user's value as a float
+                        // when possible and compare with a small epsilon so that
+                        // {"equals": "1"} matches a stored 1.0f. Fall back to
+                        // string compare when the user passed a non-numeric value.
+                        try {
+                            float target = java.lang.Float.parseFloat(value);
+                            yield Math.abs(n.floatValue() - target) <= 1.0e-6f;
+                        } catch (NumberFormatException ignored) {
+                            yield val.toString().equals(value);
+                        }
+                    }
                     yield val.toString().equals(value);
                 }
             };

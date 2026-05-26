@@ -50,7 +50,12 @@ public class GuiRendererMixin {
                                      GpuBuffer indexBuffer,
                                      VertexFormat.IndexType indexType,
                                      CallbackInfo ci,
-                                     @Local RenderPipeline pipeline) {
+                                     // ordinal=0 pins to the first RenderPipeline local in executeDraw
+                                     // (the one just bound on the line above). Future vanilla edits that
+                                     // introduce another RenderPipeline local would otherwise make this
+                                     // capture ambiguous; defaultRequire=1 would crash, but failing fast
+                                     // at the right local is clearer.
+                                     @Local(ordinal = 0) RenderPipeline pipeline) {
         GlowUniformBuffer ubo = GuiGlowElementPipeline.getUbo(pipeline);
         if (ubo != null) {
             renderPass.setUniform("GalliumGuiGlow", ubo.getSlice());

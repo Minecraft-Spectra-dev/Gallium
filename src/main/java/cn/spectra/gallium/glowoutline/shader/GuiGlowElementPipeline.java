@@ -90,6 +90,12 @@ public final class GuiGlowElementPipeline {
             configByPipeline.remove(p);
             it.remove();
         }
+        // Counter exists only to disambiguate location strings between live pipelines, so
+        // when nothing is live we can safely rewind. Without this, locationCounter grows
+        // unboundedly across reloads and bloats the pipeline name in logs / RenderDoc.
+        if (pipelinesByConfig.isEmpty()) {
+            locationCounter = 0;
+        }
     }
 
     public static void clear() {

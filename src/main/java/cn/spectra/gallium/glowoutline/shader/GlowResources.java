@@ -68,8 +68,11 @@ public final class GlowResources {
         for (int i = disposers.size() - 1; i >= 0; i--) {
             try {
                 disposers.get(i).run();
-            } catch (Exception e) {
-                Gallium.LOGGER.warn("Failed to dispose glow resource: {}", e.toString());
+            } catch (Throwable t) {
+                // Throwable, not Exception: a disposer that throws Error (OOM, native crash
+                // surfaced as UnsatisfiedLinkError, etc.) must not abort the rest of the
+                // chain — partial cleanup leaks GPU memory across reloads.
+                Gallium.LOGGER.warn("Failed to dispose glow resource: {}", t.toString());
             }
         }
     }

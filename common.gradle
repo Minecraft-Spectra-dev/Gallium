@@ -97,6 +97,8 @@ List<String> STUB_MIXIN_CLASSES_FROM_1_26 = [
         "accessor.GuiRendererAccessor"
 ]
 
+List<String> ACTIVE_STUB_MIXINS = unobfuscated ? STUB_MIXIN_CLASSES_FROM_1_26 : STUB_MIXIN_CLASSES_PRE_1_26
+
 loom {
     runConfigs.configureEach {
         ideConfigGenerated = true
@@ -112,6 +114,9 @@ loom {
 
 processResources {
     inputs.property "version", project.mod_version
+    // Declare the stub list as an input so changes to it (or to the mcVersion
+    // gating that picks the list) invalidate the task and re-run the strip.
+    inputs.property "stubMixins", ACTIVE_STUB_MIXINS
 
     filesMatching("fabric.mod.json") {
         expand(
@@ -129,45 +134,53 @@ processResources {
 
     filesMatching(MIXIN_CONFIG_PATHS) {
         filter { s ->
-            s.replace('{{COMPATIBILITY_LEVEL}}', "JAVA_${JAVA_COMPATIBILITY.ordinal() + 1}")
+            s.replace('{{COMPATIBILITY_LEVEL}}', "JAVA_${JAVA_COMPATIBILITY.majorVersion}")
         }
     }
-    if (!unobfuscated) {
-        // Strip stub mixin entries from mixins.json on pre-1.26 versions: their
-        // target class doesn't exist there, so the source has //#if-gated empty
-        // stubs that the Mixin loader would reject. Must operate on the final
-        // resource (after preprocess + filter) to guarantee well-formed JSON,
-        // hence doLast on processResources.
-        doLast {
-            stripStubMixins(destinationDir, MIXIN_CONFIG_PATHS, STUB_MIXIN_CLASSES_PRE_1_26)
-        }
-    } else {
-        // Symmetric: on 26.1+, the 1.21.x-only mixin classes collapse to stubs.
-        doLast {
-            stripStubMixins(destinationDir, MIXIN_CONFIG_PATHS, STUB_MIXIN_CLASSES_FROM_1_26)
-        }
+    // Strip stub mixin entries from mixins.json: their target class doesn't
+    // exist on this side of the version split, so the source has //#if-gated
+    // empty stubs that the Mixin loader would reject. Must operate on the
+    // final resource (after preprocess + filter) to guarantee well-formed
+    // JSON, hence doLast on processResources.
+    doLast {
+        stripStubMixins(destinationDir, MIXIN_CONFIG_PATHS, ACTIVE_STUB_MIXINS)
     }
 }
 
 def stripStubMixins(File destinationDir, List<String> mixinConfigPaths, List<String> stubs) {
+    // Parse the file as JSON and rewrite the "client"/"mixins"/"server" lists with stubs
+    // removed. Previously this was a line-oriented regex pass, which only worked because
+    // Loom currently emits one entry per line — any future change to the JSON formatting
+    // would silently leave stubs in place and crash the Mixin loader at startup.
+    def slurper = new groovy.json.JsonSlurper()
+    def stubSet = stubs as Set
+    def filterList = { Object value ->
+        if (!(value instanceof List)) return value
+        return value.findAll { entry -> !stubSet.contains(entry?.toString()) }
+    }
     for (String name : mixinConfigPaths) {
         File f = new File(destinationDir, name)
         if (!f.exists()) continue
-        String content = f.text
-        String stripped = content
-        for (String stub : stubs) {
-            stripped = stripped.replaceAll(
-                    '(?m)^\\s*"' + java.util.regex.Pattern.quote(stub) + '"\\s*,?\\s*\\r?\\n', ''
-            )
+        def parsed = slurper.parse(f, 'UTF-8')
+        if (!(parsed instanceof Map)) continue
+        boolean changed = false
+        for (String key : ['client', 'server', 'mixins']) {
+            if (!parsed.containsKey(key)) continue
+            def filtered = filterList(parsed[key])
+            if (filtered != parsed[key]) {
+                parsed[key] = filtered
+                changed = true
+            }
         }
-        stripped = stripped.replaceAll(',(\\s*])', '$1')
-        if (stripped != content) f.text = stripped
+        if (changed) {
+            f.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(parsed)), 'UTF-8')
+        }
     }
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = "UTF-8"
-    options.release = JAVA_COMPATIBILITY.ordinal() + 1
+    options.release = JAVA_COMPATIBILITY.majorVersion as Integer
     options.compilerArgs << "-Xlint:deprecation"
 }
 
@@ -176,7 +189,7 @@ java {
     targetCompatibility = JAVA_COMPATIBILITY
     withSourcesJar()
     toolchain {
-        languageVersion = JavaLanguageVersion.of(JAVA_COMPATIBILITY.ordinal() + 1)
+        languageVersion = JavaLanguageVersion.of(JAVA_COMPATIBILITY.majorVersion as Integer)
     }
 }
 

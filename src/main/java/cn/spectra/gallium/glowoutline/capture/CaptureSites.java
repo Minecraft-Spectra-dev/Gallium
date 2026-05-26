@@ -39,9 +39,10 @@ public final class CaptureSites {
                                                          SubmitNodeCollector original,
                                                          GlowOutlineConfig.Toggle featureFlag,
                                                          boolean firstPerson) {
+        if (!GlowOutlineConfig.isEnabled()) return original;
+        if (!featureFlag.get()) return original;
         if (IrisCompat.isShadowPass()) return original;
         if (stack == null || stack.isEmpty()) return original;
-        if (featureFlag != null && !featureFlag.get()) return original;
         if (!GlowCaptureManager.beginItemCapture(stack, firstPerson)) return original;
         return original instanceof SubmitNodeStorage storage
                 ? new DuplicatingSubmitNodeStorage(storage)

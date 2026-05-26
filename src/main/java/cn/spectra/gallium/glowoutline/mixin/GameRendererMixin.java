@@ -25,7 +25,10 @@ public class GameRendererMixin {
     @Inject(method = "renderLevel", at = @At("HEAD"))
     private void galliumGlowFrameStart(DeltaTracker deltaTracker, CallbackInfo ci) {
         if (IrisCompat.isShadowPass()) return;
-        if (minecraft.player == null) return;
+        // No player==null guard here: beginFrame is pure cleanup (drains stale activeStates,
+        // resets currentCapture, prunes pool above the high-water mark). Skipping it leaves
+        // last frame's capturedThisFrame=true states alive, which the TAIL hook below would
+        // happily re-composite against the new mainTarget — producing ghost glows.
         GlowCaptureManager.beginFrame();
         GlowTime.advanceWorld(deltaTracker.getGameTimeDeltaTicks());
     }

@@ -17,7 +17,6 @@ public final class GlowCaptureState {
     public boolean capturedThisFrame;
     public boolean active;
     public boolean firstPerson;
-    public int slot;
 
     public @Nullable ItemEffectConfig config;
 

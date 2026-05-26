@@ -110,8 +110,13 @@ public final class GlowCaptureManager {
 
         Minecraft mc = Minecraft.getInstance();
         RenderTarget main = mc.getMainRenderTarget();
+        if (main == null) return false;
         if (state.maskTarget == null) {
-            state.maskTarget = new TextureTarget("GlowMask_" + state.slot, main.width, main.height, true);
+            // identityHashCode (not a slot index) gives each state a stable, unique label
+            // for the lifetime of the JVM — survives pool shrinks where a recycled slot
+            // index would otherwise collide with a freshly allocated state's name.
+            state.maskTarget = new TextureTarget("GlowMask_" + Integer.toHexString(System.identityHashCode(state)),
+                    main.width, main.height, true);
         } else if (state.maskTarget.width != main.width || state.maskTarget.height != main.height) {
             state.maskTarget.resize(main.width, main.height);
         }
@@ -228,7 +233,6 @@ public final class GlowCaptureManager {
             if (!state.active) return state;
         }
         GlowCaptureState state = new GlowCaptureState();
-        state.slot = pool.size();
         pool.add(state);
         return state;
     }
