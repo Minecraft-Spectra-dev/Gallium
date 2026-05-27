@@ -86,6 +86,7 @@ List<String> MIXIN_CONFIG_PATHS = [
 // versions because the Mixin loader chokes on entries without a @Mixin annotation.
 List<String> STUB_MIXIN_CLASSES_PRE_1_26 = [
         "GuiGraphicsExtractorMixin",
+        "GuiItemAtlasMixin",
         "GlCommandEncoderMixin",
         "ProjectionMatrixBufferMixin",
         "accessor.GameRendererAccessor"
@@ -146,7 +147,39 @@ processResources {
     // final resource (after preprocess + filter) to guarantee well-formed
     // JSON, hence doLast on processResources.
     doLast {
+        validateStubsListed(destinationDir, MIXIN_CONFIG_PATHS, ACTIVE_STUB_MIXINS)
         stripStubMixins(destinationDir, MIXIN_CONFIG_PATHS, ACTIVE_STUB_MIXINS)
+    }
+}
+
+// Sanity check: every stub we expect to strip should actually appear in the mixin config
+// pre-strip. If a name in the STUB list is missing, it's almost certainly a typo or a
+// rename that drifted between common.gradle and mixins.json — surface that at build time
+// instead of leaving the next reviewer to chase a runtime "unable to find @Mixin" crash.
+def validateStubsListed(File destinationDir, List<String> mixinConfigPaths, List<String> stubs) {
+    if (stubs.isEmpty()) return
+    def slurper = new groovy.json.JsonSlurper()
+    for (String name : mixinConfigPaths) {
+        File f = new File(destinationDir, name)
+        if (!f.exists()) continue
+        def parsed = slurper.parse(f, 'UTF-8')
+        if (!(parsed instanceof Map)) continue
+        Set<String> declared = new HashSet<>()
+        for (String key : ['client', 'server', 'mixins']) {
+            def list = parsed[key]
+            if (list instanceof List) {
+                for (def entry : list) {
+                    if (entry != null) declared.add(entry.toString())
+                }
+            }
+        }
+        def missing = stubs.findAll { !declared.contains(it) }
+        if (!missing.isEmpty()) {
+            throw new GradleException(
+                "STUB_MIXIN_CLASSES list out of sync with ${name}: " +
+                "missing entries ${missing}. Either remove them from the stub list, " +
+                "or add a corresponding line to ${name} so the strip pass actually runs.")
+        }
     }
 }
 

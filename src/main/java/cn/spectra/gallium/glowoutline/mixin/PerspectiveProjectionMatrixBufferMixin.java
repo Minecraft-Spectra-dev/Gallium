@@ -18,7 +18,10 @@ package cn.spectra.gallium.glowoutline.mixin;
 //$$  */
 //$$ @Mixin(PerspectiveProjectionMatrixBuffer.class)
 //$$ public class PerspectiveProjectionMatrixBufferMixin {
-//$$     @Inject(method = "getBuffer", at = @At("RETURN"), remap = false)
+//$$     // No remap=false: getBuffer is a Mojang-mapped Minecraft method and the 1.21.11
+//$$     // runtime is obfuscated (class_11286). The refmap must translate the name or the
+//$$     // mixin loader can't find the target and crashes during APPLY.
+//$$     @Inject(method = "getBuffer", at = @At("RETURN"))
 //$$     private void galliumRememberMatrix(Matrix4f matrix4f,
 //$$                                         CallbackInfoReturnable<GpuBufferSlice> cir) {
 //$$         GpuBufferSlice returned = cir.getReturnValue();

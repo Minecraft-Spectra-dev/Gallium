@@ -96,6 +96,10 @@ public sealed interface ItemCondition permits
                     if (val == null) yield false;
                     if (val instanceof Number n) {
                         float f = n.floatValue();
+                        // Reject non-finite values: NaN compares false against everything (would
+                        // confuse "in range" semantics), and ±Infinity slipping through silently
+                        // treats unbounded values as in-range, which is rarely the author's intent.
+                        if (!java.lang.Float.isFinite(f)) yield false;
                         yield f >= min && f <= max;
                     }
                     yield false;

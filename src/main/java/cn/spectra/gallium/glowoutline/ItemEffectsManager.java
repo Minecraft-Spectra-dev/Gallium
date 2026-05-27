@@ -188,18 +188,34 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
         if (matchObj.has("predicates")) {
             JsonArray preds = matchObj.getAsJsonArray("predicates");
             for (int i = 0; i < preds.size(); i++) {
-                ItemCondition cond = parseConditionNode(preds.get(i).getAsJsonObject(), ruleIndex);
+                ItemCondition cond = parseConditionNode(preds.get(i), ruleIndex, "predicates[" + i + "]");
                 if (cond != null) conditions.add(cond);
             }
         }
     }
 
-    private static ItemCondition parseConditionNode(JsonObject node, int ruleIndex) {
+    static ItemCondition parseConditionNode(JsonElement element, int ruleIndex, String path) {
+        if (element == null || !element.isJsonObject()) {
+            Gallium.LOGGER.warn("item_effects rule[{}] {}: expected object, got {}",
+                    ruleIndex, path, element == null ? "null" : element.getClass().getSimpleName());
+            return null;
+        }
+        JsonObject node = element.getAsJsonObject();
+        try {
+            return parseConditionNodeInner(node, ruleIndex, path);
+        } catch (Exception e) {
+            Gallium.LOGGER.warn("item_effects rule[{}] {}: failed to parse condition: {}",
+                    ruleIndex, path, e.toString());
+            return null;
+        }
+    }
+
+    private static ItemCondition parseConditionNodeInner(JsonObject node, int ruleIndex, String path) {
         if (node.has("and")) {
             JsonArray arr = node.getAsJsonArray("and");
             List<ItemCondition> children = new ArrayList<>();
             for (int i = 0; i < arr.size(); i++) {
-                ItemCondition c = parseConditionNode(arr.get(i).getAsJsonObject(), ruleIndex);
+                ItemCondition c = parseConditionNode(arr.get(i), ruleIndex, path + ".and[" + i + "]");
                 if (c != null) children.add(c);
             }
             return children.isEmpty() ? null : new ItemCondition.And(List.copyOf(children));
@@ -208,31 +224,32 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
             JsonArray arr = node.getAsJsonArray("or");
             List<ItemCondition> children = new ArrayList<>();
             for (int i = 0; i < arr.size(); i++) {
-                ItemCondition c = parseConditionNode(arr.get(i).getAsJsonObject(), ruleIndex);
+                ItemCondition c = parseConditionNode(arr.get(i), ruleIndex, path + ".or[" + i + "]");
                 if (c != null) children.add(c);
             }
             return children.isEmpty() ? null : new ItemCondition.Or(List.copyOf(children));
         }
         if (node.has("not")) {
-            ItemCondition child = parseConditionNode(node.getAsJsonObject("not"), ruleIndex);
+            ItemCondition child = parseConditionNode(node.get("not"), ruleIndex, path + ".not");
             return child == null ? null : new ItemCondition.Not(child);
         }
 
         if (!node.has("path")) {
-            Gallium.LOGGER.warn("item_effects rule[{}]: predicate missing 'path', skipping", ruleIndex);
+            Gallium.LOGGER.warn("item_effects rule[{}] {}: predicate missing 'path', skipping", ruleIndex, path);
             return null;
         }
-        String path = node.get("path").getAsString();
-        if (!path.startsWith("components.")) {
-            Gallium.LOGGER.warn("item_effects rule[{}]: predicate path '{}' must start with 'components.'", ruleIndex, path);
+        String pathValue = node.get("path").getAsString();
+        if (!pathValue.startsWith("components.")) {
+            Gallium.LOGGER.warn("item_effects rule[{}] {}: predicate path '{}' must start with 'components.'",
+                    ruleIndex, path, pathValue);
             return null;
         }
-        String compId = path.substring("components.".length());
+        String compId = pathValue.substring("components.".length());
         Identifier componentId = tryParseId(compId, ruleIndex, "component");
         if (componentId == null) return null;
         DataComponentType<?> compType = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(componentId);
         if (compType == null) {
-            Gallium.LOGGER.warn("item_effects rule[{}]: unknown data component '{}'", ruleIndex, compId);
+            Gallium.LOGGER.warn("item_effects rule[{}] {}: unknown data component '{}'", ruleIndex, path, compId);
             return null;
         }
 

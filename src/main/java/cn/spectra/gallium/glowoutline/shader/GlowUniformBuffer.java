@@ -41,19 +41,25 @@ public class GlowUniformBuffer implements AutoCloseable {
             Std140Builder builder = Std140Builder.onStack(stack, BUFFER_CAPACITY);
             ByteBuffer data;
             try {
+                // Layout (std140):
+                //   float FrameTimeCounter; vec2 ScreenSize; <user params...>; vec4 ShaderAlign;
+                // ShaderAlign sits at the *tail* on purpose — packs that pre-date Iris internal-
+                // resolution scaling never declared it, and putting it here means their shaders
+                // don't need to know about it at all. Old packs read header + params at exactly
+                // the same offsets they always did; the trailing 16 bytes are unused (a UBO can
+                // be larger than what the shader declares without GLSL caring). Packs that need
+                // alignment declare {vec4 ShaderAlign} as the LAST member of their uniform block.
+                //
+                // ShaderAlign vec4 (not vec3): a following scalar would slot into the vec3's
+                // 4-byte tail (std140 offset 12) producing a Java↔GLSL mismatch. With a vec4
+                // tail there's no scalar after, but keeping vec4 documents the contract for
+                // anyone re-extending the block here.
                 builder.putFloat(frameTimeCounter);
                 builder.putVec2((float) screenWidth, (float) screenHeight);
-                // Vec4 of shader-pack-alignment factors: x = mask uv multiplier, y = scene depth
-                // uv multiplier, z/w reserved for future use. Defaults {1, 1, 0, 0} are a no-op
-                // for shader packs that render at full internal resolution. vec4 (not vec3) on
-                // purpose: Std140Builder.putVec3 always writes 16 bytes including a 4-byte tail
-                // pad, but GLSL std140 lets a following scalar slot into the vec3's tail (offset
-                // 12), producing a Java-vs-GLSL layout mismatch that silently zeroes the next
-                // member.
-                builder.putVec4(maskUvFactor, sceneUvFactor, 0.0f, 0.0f);
                 for (ShaderParam param : cfg.params()) {
                     param.pack(builder);
                 }
+                builder.putVec4(maskUvFactor, sceneUvFactor, 0.0f, 0.0f);
                 data = builder.get();
             } catch (BufferOverflowException e) {
                 if (!overflowLogged) {

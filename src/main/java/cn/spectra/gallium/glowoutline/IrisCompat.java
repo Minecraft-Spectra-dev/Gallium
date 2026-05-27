@@ -136,13 +136,16 @@ public final class IrisCompat {
         try {
             if (BYPASS_FIELD_OK) {
                 oldBypass = (boolean) BYPASS_GETTER.invokeExact();
-                BYPASS_SETTER.invokeExact(value);
+                // Mark valid before mutating: if the SETTER below throws partway, we still
+                // owe the caller a restore back to the read-out value. Without this, a
+                // partial mutation would leak the modified Iris state until the next reload.
                 bypassValid = true;
+                BYPASS_SETTER.invokeExact(value);
             }
             if (EXTENDED_FIELD_OK) {
                 oldExtended = (boolean) EXTENDED_GETTER.invokeExact();
-                if (value) EXTENDED_SETTER.invokeExact(false);
                 extendedValid = true;
+                if (value) EXTENDED_SETTER.invokeExact(false);
             }
             return new BypassSnapshot(oldBypass, oldExtended, bypassValid, extendedValid);
         } catch (Throwable t) {

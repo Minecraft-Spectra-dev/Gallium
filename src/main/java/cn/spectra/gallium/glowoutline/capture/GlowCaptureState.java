@@ -21,12 +21,17 @@ public final class GlowCaptureState {
     public @Nullable ItemEffectConfig config;
 
     public @Nullable Matrix4f capturedModelViewMatrix;
+    public boolean capturedModelViewMatrixValid;
     public @Nullable GpuBufferSlice capturedProjectionMatrix;
     public @Nullable ProjectionType capturedProjectionType;
     /** Plain Matrix4f form of {@link #capturedProjectionMatrix} when available. We need it
      *  to apply VertexDownscaling for shader-pack scale alignment on the mask render; when
-     *  null the mask render falls back to the unmodified slice (no downscale). */
-    public @Nullable Matrix4f capturedProjectionMatrix4f;
+     *  {@link #capturedProjectionMatrix4fValid} is {@code false} the mask render falls back
+     *  to the unmodified slice (no downscale). Final & owned per-state to avoid per-frame
+     *  Matrix4f allocations: the pool keeps one of these alive per slot, refilled in place
+     *  via {@link ProjectionMatrixTracker#lookupInto}. */
+    public final Matrix4f capturedProjectionMatrix4f = new Matrix4f();
+    public boolean capturedProjectionMatrix4fValid;
     /** Scale that was actually applied during the most recent mask render. {@code 1.0f} means
      *  the mask is in full-resolution screen space; {@code <1.0f} means the mask was rasterized
      *  into the same {@code [0, scale]²} subrect that Iris uses, and the composite shader must
@@ -38,10 +43,10 @@ public final class GlowCaptureState {
         active = false;
         firstPerson = false;
         config = null;
-        capturedModelViewMatrix = null;
+        capturedModelViewMatrixValid = false;
         capturedProjectionMatrix = null;
         capturedProjectionType = null;
-        capturedProjectionMatrix4f = null;
+        capturedProjectionMatrix4fValid = false;
         lastMaskScale = 1.0f;
     }
 }

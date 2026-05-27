@@ -21,10 +21,11 @@ package cn.spectra.gallium.glowoutline.mixin;
 //$$  */
 //$$ @Mixin(CachedPerspectiveProjectionMatrixBuffer.class)
 //$$ public class CachedPerspectiveProjectionMatrixBufferMixin {
+//$$     // No remap=false: getBuffer/createProjectionMatrix are Mojang-mapped Minecraft
+//$$     // methods and the 1.21.11 runtime is obfuscated. Refmap must translate both.
 //$$     @WrapOperation(method = "getBuffer(IIF)Lcom/mojang/blaze3d/buffers/GpuBufferSlice;",
 //$$             at = @At(value = "INVOKE",
-//$$                     target = "Lnet/minecraft/client/renderer/CachedPerspectiveProjectionMatrixBuffer;createProjectionMatrix(IIF)Lorg/joml/Matrix4f;"),
-//$$             remap = false)
+//$$                     target = "Lnet/minecraft/client/renderer/CachedPerspectiveProjectionMatrixBuffer;createProjectionMatrix(IIF)Lorg/joml/Matrix4f;"))
 //$$     private Matrix4f galliumCaptureMatrix(CachedPerspectiveProjectionMatrixBuffer self,
 //$$                                            int width, int height, float fov,
 //$$                                            Operation<Matrix4f> original) {
@@ -38,7 +39,7 @@ package cn.spectra.gallium.glowoutline.mixin;
 //$$
 //$$     @org.spongepowered.asm.mixin.injection.Inject(
 //$$             method = "getBuffer(IIF)Lcom/mojang/blaze3d/buffers/GpuBufferSlice;",
-//$$             at = @At("RETURN"), remap = false)
+//$$             at = @At("RETURN"))
 //$$     private void galliumAssociateSlice(int width, int height, float fov,
 //$$                                         org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<GpuBufferSlice> cir) {
 //$$         Matrix4f matrix4f = pending;

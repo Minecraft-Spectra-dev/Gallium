@@ -5,6 +5,7 @@ import org.joml.Vector4f;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
  * Locks down the matrix used to align the mask with shader-pack {@code VertexDownscaling}.
@@ -83,6 +84,6 @@ class ScaledProjectionTest {
         Matrix4f result = GlowCaptureManager.computeScaledProjection(base, 0.75f, dest);
         // computeScaledProjection writes into dest and returns the same instance — render-thread
         // reuse depends on this contract.
-        assertEquals(System.identityHashCode(dest), System.identityHashCode(result));
+        assertSame(dest, result);
     }
 }

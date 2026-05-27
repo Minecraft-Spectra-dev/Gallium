@@ -112,4 +112,67 @@ class ItemEffectsManagerTest {
         JsonObject obj = parse("{\"mode\": \"foo\"}").getAsJsonObject();
         assertEquals(MatchMode.ALL_OF, ItemEffectsManager.parseMode(obj, 0));
     }
+
+    // --- parseConditionNode early-exit paths ---
+    // These exercise the structural validation that runs before any registry lookup, so
+    // they don't need vanilla bootstrap. Anything that touches BuiltInRegistries (the
+    // path:components.<id> branch with a real component) is covered by integration runs.
+
+    @Test
+    void parseConditionNode_nullElement_returnsNullAndDoesNotThrow() {
+        assertNull(ItemEffectsManager.parseConditionNode(null, 0, "root"));
+    }
+
+    @Test
+    void parseConditionNode_nonObjectElement_returnsNull() {
+        assertNull(ItemEffectsManager.parseConditionNode(parse("[1, 2, 3]"), 0, "root"));
+        assertNull(ItemEffectsManager.parseConditionNode(parse("\"plain string\""), 0, "root"));
+        assertNull(ItemEffectsManager.parseConditionNode(parse("42"), 0, "root"));
+    }
+
+    @Test
+    void parseConditionNode_missingPath_returnsNull() {
+        // Predicate object with no recognizable shape — no and/or/not, and no path.
+        assertNull(ItemEffectsManager.parseConditionNode(parse("{\"unknown\": true}"), 0, "predicates[0]"));
+    }
+
+    @Test
+    void parseConditionNode_pathWithoutComponentsPrefix_returnsNull() {
+        // path must start with "components." — anything else is rejected before registry lookup.
+        assertNull(ItemEffectsManager.parseConditionNode(parse("{\"path\": \"foo.bar\"}"), 0, "predicates[0]"));
+        assertNull(ItemEffectsManager.parseConditionNode(parse("{\"path\": \"\"}"), 0, "predicates[0]"));
+    }
+
+    @Test
+    void parseConditionNode_andOfEmpty_returnsNull() {
+        // An empty {"and": []} collapses to null (no child conditions to satisfy).
+        assertNull(ItemEffectsManager.parseConditionNode(parse("{\"and\": []}"), 0, "predicates[0]"));
+    }
+
+    @Test
+    void parseConditionNode_orOfEmpty_returnsNull() {
+        assertNull(ItemEffectsManager.parseConditionNode(parse("{\"or\": []}"), 0, "predicates[0]"));
+    }
+
+    @Test
+    void parseConditionNode_notWithInvalidChild_returnsNull() {
+        // not's child fails to parse → not collapses to null instead of wrapping a null child.
+        assertNull(ItemEffectsManager.parseConditionNode(parse("{\"not\": {}}"), 0, "predicates[0]"));
+    }
+
+    @Test
+    void parseConditionNode_andDropsInvalidChildren() {
+        // and with one invalid child + one missing-path child — both get dropped, list ends
+        // empty, the and itself collapses to null. Path arg is just for the warn message.
+        assertNull(ItemEffectsManager.parseConditionNode(
+                parse("{\"and\": [{}, {\"path\": \"not_components.x\"}]}"), 0, "predicates[0]"));
+    }
+
+    @Test
+    void parseConditionNode_malformedAndChildIsCaughtNotPropagated() {
+        // and child that is not an object (number) — handled by parseConditionNode's
+        // early-exit; should not throw out of the parent and corrupt the rule.
+        assertNull(ItemEffectsManager.parseConditionNode(
+                parse("{\"and\": [42, \"str\"]}"), 0, "predicates[0]"));
+    }
 }

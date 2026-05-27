@@ -25,7 +25,9 @@ public class Gallium implements ClientModInitializer {
 	public static final String MOD_ID = "gallium";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-	public static KeyMapping RELOAD_RESOURCE_PACK_KEY;
+	// volatile so other threads (e.g. mod menu integrations that probe key bindings) observe
+	// the post-init reference rather than a stale null. Written once inside onInitializeClient.
+	public static volatile KeyMapping RELOAD_RESOURCE_PACK_KEY;
 
 	@Override
 	public void onInitializeClient() {
@@ -52,7 +54,9 @@ public class Gallium implements ClientModInitializer {
 		));
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
-			while (RELOAD_RESOURCE_PACK_KEY.consumeClick()) {
+			KeyMapping key = RELOAD_RESOURCE_PACK_KEY;
+			if (key == null) return;
+			while (key.consumeClick()) {
 				reloadResourcePack(client);
 			}
 		});

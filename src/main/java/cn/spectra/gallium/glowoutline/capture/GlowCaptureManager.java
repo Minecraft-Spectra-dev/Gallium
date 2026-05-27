@@ -29,8 +29,14 @@ public final class GlowCaptureManager {
 
     /** Hard cap on world capture states. Each holds a screen-sized TextureTarget plus RenderBuffers,
      *  so without this cap a brief peak (many on-screen item entities + armor pieces in one frame)
-     *  pins VRAM forever. Surplus states beyond the mark are released at frame end. */
-    private static final int POOL_HIGH_WATER_MARK = 16;
+     *  pins VRAM forever. Surplus states beyond the mark are released at frame end.
+     *  <p>
+     *  At 1080p one state's mask target is ~8MB; the cap is sized so a steady-state scene with
+     *  hand items + armor + a handful of dropped items + frames stays in pool. Peaks beyond the
+     *  cap (>{@value} simultaneously-glowing items in a single frame) still render correctly —
+     *  surplus states are allocated transient and freed at the next {@link #beginFrame()}, paying
+     *  an alloc/destroy round-trip but bounding VRAM growth. */
+    private static final int POOL_HIGH_WATER_MARK = 32;
 
     private static final List<GlowCaptureState> pool = new ArrayList<>();
     private static final List<GlowCaptureState> activeStates = new ArrayList<>();
@@ -117,15 +123,17 @@ public final class GlowCaptureManager {
         state.active = true;
         state.firstPerson = firstPerson;
         state.config = cfg;
-        state.capturedModelViewMatrix = new Matrix4f(RenderSystem.getModelViewMatrix());
+        if (state.capturedModelViewMatrix == null) state.capturedModelViewMatrix = new Matrix4f();
+        state.capturedModelViewMatrix.set(RenderSystem.getModelViewMatrix());
+        state.capturedModelViewMatrixValid = true;
         state.capturedProjectionMatrix = RenderSystem.getProjectionMatrixBuffer();
         state.capturedProjectionType = RenderSystem.getProjectionType();
         // Snapshot the Matrix4f form too. Vanilla pipelines hand setProjectionMatrix only a
         // GpuBufferSlice (already serialized), so we reconstruct via ProjectionMatrixTracker
-        // which the per-version mixins keep up to date. Null is acceptable — it means we
-        // can't apply VertexDownscaling on the mask render and the no-downscale path is
-        // used instead.
-        state.capturedProjectionMatrix4f = ProjectionMatrixTracker.lookup(state.capturedProjectionMatrix);
+        // which the per-version mixins keep up to date. Invalid means we can't apply
+        // VertexDownscaling on the mask render and the no-downscale path is used instead.
+        state.capturedProjectionMatrix4fValid = ProjectionMatrixTracker.lookupInto(
+                state.capturedProjectionMatrix, state.capturedProjectionMatrix4f) != null;
 
         Minecraft mc = Minecraft.getInstance();
         RenderTarget main = mc.getMainRenderTarget();
@@ -226,7 +234,7 @@ public final class GlowCaptureManager {
         // the pre-scale-support build.
         GpuBufferSlice maskProjectionSlice = state.capturedProjectionMatrix;
         float maskScale = 1.0f;
-        if (state.capturedProjectionMatrix4f != null
+        if (state.capturedProjectionMatrix4fValid
                 && IrisCompat.isShaderActive()
                 && IrisCompat.getShaderInternalScale() < 0.999f) {
             float scale = IrisCompat.getShaderInternalScale();
@@ -243,7 +251,7 @@ public final class GlowCaptureManager {
             RenderSystem.setProjectionMatrix(maskProjectionSlice, state.capturedProjectionType);
         }
 
-        if (state.capturedModelViewMatrix != null) {
+        if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
             RenderSystem.getModelViewStack().pushMatrix();
             RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
         }
@@ -255,7 +263,7 @@ public final class GlowCaptureManager {
             state.captureBuffers.outlineBufferSource().endOutlineBatch();
         } finally {
             IrisCompat.restoreBypass(irisSnapshot);
-            if (state.capturedModelViewMatrix != null) {
+            if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
                 RenderSystem.getModelViewStack().popMatrix();
             }
             if (restoreProjection) {
