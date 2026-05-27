@@ -27,7 +27,7 @@ geometry on packs that do scale (Kappa, Nostalgia, iterationRP, ...).
 ```
 
 `option` names a shader pack option Gallium can read via Iris. The value is parsed as a
-float in `[0.1, 1.0]`; out-of-range or non-numeric values fall back to `1.0`.
+float and clamped into `[0.1, 1.0]`; non-numeric values fall back to `1.0`.
 
 ### Enum / step options
 

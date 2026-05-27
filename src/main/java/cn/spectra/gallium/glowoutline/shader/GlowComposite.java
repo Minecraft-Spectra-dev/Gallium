@@ -75,9 +75,13 @@ public final class GlowComposite {
         // original 1:1 sampling.
         float maskScale = state.lastMaskScale;
         uniformBuffer.update(GlowTime.worldSecondsFloat(), w, h,
-                maskScale, maskScale, 1.0f, state.config);
+                maskScale, maskScale, state.config);
 
         com.mojang.blaze3d.textures.GpuTextureView sceneDepthView = selectSceneDepthView(state, mask, mainTarget);
+        // Mask filter: bilinear in the sub-rect path softens sub-pixel noise that low-res
+        // rasterization introduces, but at 1:1 it would blur the otherwise-pixel-exact 1px
+        // outline silhouette. Pick per state.
+        FilterMode maskFilter = maskScale < 1.0f ? FilterMode.LINEAR : FilterMode.NEAREST;
 
         try (RenderPass pass = RenderSystem.getDevice()
                 .createCommandEncoder()
@@ -89,7 +93,7 @@ public final class GlowComposite {
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
             pass.bindTexture("MaskSampler",
                     mask.getColorTextureView(),
-                    RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+                    RenderSystem.getSamplerCache().getClampToEdge(maskFilter));
             pass.bindTexture("MaskDepthSampler",
                     mask.getDepthTextureView(),
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));

@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.io.Reader;
+import java.io.StringReader;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
@@ -188,12 +189,18 @@ public final class ShaderPackHint {
 
     private static float recomputeScale(Object pack) {
         try {
-            Path hintPath = locateHintFile(pack);
-            if (hintPath == null) return 1.0f;
+            String hint = readHintContent(pack);
+            if (hint == null) return 1.0f;
             Object packOptions = GET_PACK_OPTIONS.invoke(pack);
-            if (packOptions == null) return 1.0f;
+            if (packOptions == null) {
+                Gallium.LOGGER.debug("Iris ShaderPack.getShaderPackOptions() returned null; gallium.json ignored");
+                return 1.0f;
+            }
             Object optionValues = GET_OPTION_VALUES.invoke(packOptions);
-            if (optionValues == null) return 1.0f;
+            if (optionValues == null) {
+                Gallium.LOGGER.debug("Iris ShaderPackOptions.getOptionValues() returned null; gallium.json ignored");
+                return 1.0f;
+            }
             // Closure over the resolved Iris OptionValues for lookups.
             Function<String, String> lookup = name -> {
                 try {
@@ -203,7 +210,7 @@ public final class ShaderPackHint {
                     return null;
                 }
             };
-            return resolveFromHint(hintPath, lookup);
+            return resolveFromHintReader(new StringReader(hint), lookup);
         } catch (Throwable t) {
             Gallium.LOGGER.debug("Failed to recompute shader pack scale: {}", t.toString());
             return 1.0f;
@@ -211,35 +218,33 @@ public final class ShaderPackHint {
     }
 
     /**
-     * Locates {@code gallium.json} for the active pack. Handles both directory and zip packs:
-     * for directories the file lives at {@code shaderpacks/<name>/gallium.json}; for zips we
-     * extract it via a {@link FileSystem} view of the zip and copy out a working path.
+     * Reads {@code gallium.json} contents for the active pack. Handles both directory and zip
+     * packs: for directories the file lives at {@code shaderpacks/<name>/gallium.json}; for zips
+     * we open the entry through a {@link FileSystem} view and read its bytes inline so no temp
+     * file is ever created. Returns {@code null} when the hint file is absent.
      */
-    private static @Nullable Path locateHintFile(Object pack) {
+    private static @Nullable String readHintContent(Object pack) {
         try {
             Path packsDir = (Path) SHADERPACKS_DIRECTORY_FIELD.get(null);
             String name = (String) CURRENT_PACK_NAME_FIELD.get(null);
             if (packsDir == null || name == null) return null;
             // Directory pack
             Path dirCandidate = packsDir.resolve(name).resolve(HINT_FILE_NAME);
-            if (Files.exists(dirCandidate)) return dirCandidate;
-            // Zip pack: open the zip filesystem and read the entry. Cache via NIO FileSystems
-            // would leak file handles across reloads; copy to a temp path instead so the caller
-            // can read it normally and we can close the FileSystem.
+            if (Files.exists(dirCandidate)) {
+                return Files.readString(dirCandidate, StandardCharsets.UTF_8);
+            }
+            // Zip pack: read the entry directly without staging a temp file.
             Path zipCandidate = packsDir.resolve(name);
             if (Files.exists(zipCandidate) && name.endsWith(".zip")) {
                 try (FileSystem fs = FileSystems.newFileSystem(zipCandidate, (ClassLoader) null)) {
                     Path inZip = fs.getPath(HINT_FILE_NAME);
                     if (!Files.exists(inZip)) return null;
-                    Path tmp = Files.createTempFile("gallium-hint-", ".json");
-                    Files.copy(inZip, tmp, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                    tmp.toFile().deleteOnExit();
-                    return tmp;
+                    return Files.readString(inZip, StandardCharsets.UTF_8);
                 }
             }
             return null;
         } catch (Throwable t) {
-            Gallium.LOGGER.debug("Failed to locate gallium.json for active pack: {}", t.toString());
+            Gallium.LOGGER.debug("Failed to read gallium.json for active pack: {}", t.toString());
             return null;
         }
     }

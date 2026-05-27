@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.capture;
 
+import cn.spectra.gallium.glowoutline.shader.GlowResources;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -17,12 +18,17 @@ import org.jspecify.annotations.Nullable;
  * {@code RenderSystem.getProjectionMatrixBuffer()} to recover the matrix.
  * <p>
  * Indexed by {@code IdentityHashMap} (slice identity) so independent projection buffers
- * (level, hud3d, ...) don't overwrite one another's associations. The Minecraft client only
- * holds a handful of projection buffers; the map never grows past that fixed set.
+ * (level, hud3d, ...) don't overwrite one another's associations. Resource-pack reloads can
+ * recreate Iris/vanilla projection buffers, so the map is cleared via {@link GlowResources}
+ * to release stale slice references rather than letting them outlive their owners.
  */
 public final class ProjectionMatrixTracker {
 
     private static final Map<GpuBufferSlice, Matrix4f> ASSOCIATIONS = new IdentityHashMap<>();
+
+    static {
+        GlowResources.register(ProjectionMatrixTracker::clear);
+    }
 
     private ProjectionMatrixTracker() {}
 
@@ -41,5 +47,10 @@ public final class ProjectionMatrixTracker {
         if (slice == null) return null;
         Matrix4f stored = ASSOCIATIONS.get(slice);
         return stored != null ? new Matrix4f(stored) : null;
+    }
+
+    /** Drops every cached association. Invoked by {@link GlowResources} on resource reload. */
+    public static void clear() {
+        ASSOCIATIONS.clear();
     }
 }

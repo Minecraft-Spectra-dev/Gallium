@@ -44,6 +44,9 @@ public final class GlowCaptureManager {
      *  mask render. {@code null} until first use; disposed via the GlowResources hook. */
     private static @Nullable GpuBuffer scaledProjectionBuffer;
     private static @Nullable GpuBufferSlice scaledProjectionSlice;
+    /** Reused holder for the scaled projection. Render thread is single-threaded, so a static
+     *  scratch matrix avoids two {@code Matrix4f} allocations per mask render. */
+    private static final Matrix4f SCRATCH_SCALED_PROJECTION = new Matrix4f();
 
     static {
         cn.spectra.gallium.glowoutline.shader.GlowResources.register(GlowCaptureManager::clearAll);
@@ -279,18 +282,7 @@ public final class GlowCaptureManager {
                     RenderSystem.PROJECTION_MATRIX_UBO_SIZE);
             scaledProjectionSlice = scaledProjectionBuffer.slice(0L, RenderSystem.PROJECTION_MATRIX_UBO_SIZE);
         }
-        // S left-multiplied onto baseProjection. After the perspective divide, this maps
-        // NDC -> NDC * scale - (1 - scale), i.e. the same [0, scale]² subrect VertexDownscaling
-        // produces in the shader pack's vsh. Using the full 4x4 form keeps us robust against
-        // non-standard projection matrices (cubemaps, certain mods).
-        float s = scale;
-        float t = -(1.0f - s);
-        Matrix4f scaleMat = new Matrix4f(
-                s, 0, 0, 0,
-                0, s, 0, 0,
-                0, 0, 1, 0,
-                t, t, 0, 1);
-        Matrix4f result = new Matrix4f(scaleMat).mul(baseProjection);
+        Matrix4f result = computeScaledProjection(baseProjection, scale, SCRATCH_SCALED_PROJECTION);
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
             ByteBuffer data = Std140Builder.onStack(stack, RenderSystem.PROJECTION_MATRIX_UBO_SIZE)
@@ -298,6 +290,26 @@ public final class GlowCaptureManager {
             RenderSystem.getDevice().createCommandEncoder().writeToBuffer(scaledProjectionBuffer.slice(), data);
         }
         return scaledProjectionSlice;
+    }
+
+    /**
+     * Writes {@code S * baseProjection} into {@code dest} and returns it, where {@code S} is the
+     * matrix equivalent of shader-pack {@code VertexDownscaling}. After the perspective divide
+     * this maps NDC -> NDC * scale - (1 - scale), the same {@code [0, scale]²} subrect Iris
+     * produces in the pack vsh. Using the full 4x4 form keeps us robust against non-standard
+     * projection matrices (cubemaps, certain mods). Exposed package-private for tests.
+     */
+    static Matrix4f computeScaledProjection(Matrix4f baseProjection, float scale, Matrix4f dest) {
+        float t = -(1.0f - scale);
+        // S * baseProjection. JOML stores column-major, so the constructor below lists columns.
+        // Layout reads as a transform with diag(scale, scale, 1, 1) and translation (t, t, 0)
+        // applied after the perspective basis — equivalent to xy *= scale; xy += t * w.
+        dest.set(
+                scale, 0,     0, 0,
+                0,     scale, 0, 0,
+                0,     0,     1, 0,
+                t,     t,     0, 1);
+        return dest.mul(baseProjection);
     }
 
     private static GlowCaptureState allocateState() {
