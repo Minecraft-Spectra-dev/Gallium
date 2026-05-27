@@ -87,6 +87,7 @@ List<String> MIXIN_CONFIG_PATHS = [
 List<String> STUB_MIXIN_CLASSES_PRE_1_26 = [
         "GuiGraphicsExtractorMixin",
         "GlCommandEncoderMixin",
+        "ProjectionMatrixBufferMixin",
         "accessor.GameRendererAccessor"
 ]
 
@@ -94,6 +95,8 @@ List<String> STUB_MIXIN_CLASSES_PRE_1_26 = [
 // 26.1+ they collapse to empty stubs and would similarly break the loader.
 List<String> STUB_MIXIN_CLASSES_FROM_1_26 = [
         "GuiGraphicsItemMixin",
+        "PerspectiveProjectionMatrixBufferMixin",
+        "CachedPerspectiveProjectionMatrixBufferMixin",
         "accessor.GuiRendererAccessor"
 ]
 

@@ -31,12 +31,26 @@ public class GlowUniformBuffer implements AutoCloseable {
     }
 
     public void update(float frameTimeCounter, int screenWidth, int screenHeight, ItemEffectConfig cfg) {
+        update(frameTimeCounter, screenWidth, screenHeight, 1.0f, 1.0f, 1.0f, cfg);
+    }
+
+    public void update(float frameTimeCounter, int screenWidth, int screenHeight,
+                       float maskUvFactor, float sceneUvFactor, float outputMax,
+                       ItemEffectConfig cfg) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             Std140Builder builder = Std140Builder.onStack(stack, BUFFER_CAPACITY);
             ByteBuffer data;
             try {
                 builder.putFloat(frameTimeCounter);
                 builder.putVec2((float) screenWidth, (float) screenHeight);
+                // Vec4 of shader-pack-alignment factors: x = mask uv multiplier, y = scene depth
+                // uv multiplier, z = max output uv (fragment.discard above this), w = reserved.
+                // Defaults {1, 1, 1, 0} are a no-op for shader packs that render at full internal
+                // resolution. vec4 (not vec3) on purpose: Std140Builder.putVec3 always writes 16
+                // bytes including a 4-byte tail pad, but GLSL std140 lets a following scalar slot
+                // into the vec3's tail (offset 12), producing a Java-vs-GLSL layout mismatch that
+                // silently zeroes the next member.
+                builder.putVec4(maskUvFactor, sceneUvFactor, outputMax, 0.0f);
                 for (ShaderParam param : cfg.params()) {
                     param.pack(builder);
                 }

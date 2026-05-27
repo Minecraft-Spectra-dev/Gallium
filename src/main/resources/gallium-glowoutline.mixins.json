@@ -19,6 +19,9 @@
 		"GuiItemRenderStateMixin",
 		"GuiRendererMixin",
 		"GlCommandEncoderMixin",
+		"PerspectiveProjectionMatrixBufferMixin",
+		"CachedPerspectiveProjectionMatrixBufferMixin",
+		"ProjectionMatrixBufferMixin",
 		"accessor.FeatureRenderDispatcherAccessor",
 		"accessor.GameRendererAccessor",
 		"accessor.GuiRendererAccessor"

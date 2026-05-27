@@ -67,7 +67,17 @@ public final class GlowComposite {
 
         int w = mainTarget.width;
         int h = mainTarget.height;
-        uniformBuffer.update(GlowTime.worldSecondsFloat(), w, h, state.config);
+        // ShaderAlign uniform: (mask uv multiplier, scene-depth uv multiplier, reserved,
+        // reserved). When the mask was rasterized into the same [0, scale]² subrect Iris
+        // writes its world+entity output into (state.lastMaskScale < 1), shader uvs must
+        // be multiplied by that scale to read the right world ray. lastMaskScale==1
+        // (no Iris, or 100% scale, or projection matrix recovery failed) keeps the
+        // original 1:1 sampling.
+        float maskScale = state.lastMaskScale;
+        uniformBuffer.update(GlowTime.worldSecondsFloat(), w, h,
+                maskScale, maskScale, 1.0f, state.config);
+
+        com.mojang.blaze3d.textures.GpuTextureView sceneDepthView = selectSceneDepthView(state, mask, mainTarget);
 
         try (RenderPass pass = RenderSystem.getDevice()
                 .createCommandEncoder()
@@ -79,12 +89,12 @@ public final class GlowComposite {
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
             pass.bindTexture("MaskSampler",
                     mask.getColorTextureView(),
-                    RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+                    RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
             pass.bindTexture("MaskDepthSampler",
                     mask.getDepthTextureView(),
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
             pass.bindTexture("SceneDepthSampler",
-                    selectSceneDepthView(state, mask, mainTarget),
+                    sceneDepthView,
                     RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
             pass.draw(0, 3);
         }
@@ -92,6 +102,10 @@ public final class GlowComposite {
 
     private static com.mojang.blaze3d.textures.GpuTextureView selectSceneDepthView(
             GlowCaptureState state, TextureTarget mask, RenderTarget mainTarget) {
+        // First-person uses mask self-compare: hud3d projection captured at the hand pass
+        // doesn't match the level/entity projection used for sceneDepthTarget, so depth
+        // comparison would be meaningless. Self-compare = no world occlusion in first-
+        // person, but first-person doesn't show the player's own body anyway.
         if (state.firstPerson) return mask.getDepthTextureView();
         if (!IrisCompat.isShaderActive()) return mainTarget.getDepthTextureView();
         TextureTarget sceneDepth = GlowCaptureManager.getSceneDepthTarget();

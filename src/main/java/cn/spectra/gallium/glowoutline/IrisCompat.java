@@ -116,6 +116,19 @@ public final class IrisCompat {
         return IS_SHADOW_PASS.getAsBoolean();
     }
 
+    /**
+     * Effective internal-resolution scale applied by the active shader pack to its world/hand
+     * passes (e.g. Kappa/Nostalgia {@code VertexDownscaling}, iterationRP {@code fsrRenderScale}).
+     * <p>
+     * Resolved via a per-pack {@code shaderpacks/<pack>/gallium.json} hint file that names the
+     * pack option carrying the scale; see {@link ShaderPackHint}. Returns {@code 1.0f} when no
+     * pack is in use, the hint file is missing, or the option cannot be read.
+     */
+    public static float getShaderInternalScale() {
+        if (!isShaderActive()) return 1.0f;
+        return ShaderPackHint.getInternalScale();
+    }
+
     public static BypassSnapshot setBypass(boolean value) {
         if (!BYPASS_AVAILABLE) return BypassSnapshot.NONE;
         boolean bypassValid = false, extendedValid = false;
