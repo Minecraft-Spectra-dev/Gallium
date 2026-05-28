@@ -4,6 +4,8 @@ import cn.spectra.gallium.Gallium;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 //#if MC>=1_26_00
 import com.mojang.blaze3d.pipeline.ColorTargetState;
+//#else
+//$$ import com.mojang.blaze3d.platform.DepthTestFunction;
 //#endif
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.shaders.UniformType;
@@ -63,6 +65,14 @@ public final class GlowPipeline {
                     .withCull(false)
                     //#if MC>=1_26_00
                     .withDepthStencilState(Optional.empty())
+                    //#else
+                    //$$ // 1.21.10's RenderPipeline.builder() defaults depthTestFunction=LEQUAL_DEPTH_TEST
+                    //$$ // (see RenderPipeline.Builder.build() line ~482). Our composite RenderPass is
+                    //$$ // created without a depth attachment (color-only), so the pipeline-level depth
+                    //$$ // test would either skip the draw or hit a validation path. NO_DEPTH_TEST mirrors
+                    //$$ // the 26.1 path's withDepthStencilState(Optional.empty()).
+                    //$$ .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+                    //$$ .withDepthWrite(false)
                     //#endif
                     .withVertexFormat(DefaultVertexFormat.EMPTY, VertexFormat.Mode.TRIANGLES)
                     .build();

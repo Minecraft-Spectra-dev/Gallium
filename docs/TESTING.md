@@ -1,7 +1,11 @@
 # Gallium 游戏内渲染测试清单
 
-> 适用版本：Minecraft 26.1.2 + Fabric Loader 0.18.4+
+> 适用版本：Minecraft 1.21.10、1.21.11、26.1.2 + Fabric Loader 0.18.4+
 > 必备依赖：Fabric API、Sodium、Gallium
+>
+> 涉及 capture / mixin / pipeline / GUI 渲染的改动，应在**全部三个激活版本**上重跑相关章节（B/C GUI glow、D Iris 深度策略、G Iris/Sodium 组合）。各版本的 API 形态差异较大（sampler 状态、深度测试、GUI 图集路径），逐版本验证是必要的。
+>
+> 版本差异提示：1.21.10 搭配的 Sodium 0.7.3 早于 config API，因此**该版本没有 Sodium 配置 UI**——唯一可达的用户控制是未绑定的资源包重载键位（或 F3+T）。1.21.11+ 才有 Sodium 设置页。
 
 本文档只覆盖**游戏内渲染表现**。解析、配置文件 IO、错误隔离等纯逻辑由 `src/test` 下的 JUnit 单测覆盖。
 

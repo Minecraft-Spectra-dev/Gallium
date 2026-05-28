@@ -1,5 +1,6 @@
 package cn.spectra.gallium.compat.sodium;
 
+//#if MC>=1_21_11
 import cn.spectra.gallium.config.GalliumConfigIO;
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig.Group;
@@ -54,3 +55,12 @@ public class GalliumSodiumConfig implements ConfigEntryPoint {
                 .setBinding(toggle::set, toggle::get);
     }
 }
+//#else
+//$$ // Sodium config API was introduced in Sodium 0.8.x (shipped alongside MC 1.21.11+).
+//$$ // On older versions this entry point is omitted from fabric.mod.json and the class
+//$$ // body collapses to an empty stub so the symbol still resolves if any reflection
+//$$ // probe touches it.
+//$$ public final class GalliumSodiumConfig {
+//$$     private GalliumSodiumConfig() {}
+//$$ }
+//#endif

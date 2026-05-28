@@ -68,6 +68,11 @@ dependencies {
     autoImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
     autoImplementation "maven.modrinth:sodium:${project.sodium_dependency}"
 
+    // Annotation-only (CLASS retention). MC 1.21.11+ pulls jspecify in transitively;
+    // older vanilla doesn't, so declare it compileOnly to keep the @Nullable usages
+    // consistent across versions without forcing a runtime dependency.
+    compileOnly "org.jspecify:jspecify:1.0.0"
+
     testImplementation platform("org.junit:junit-bom:5.11.4")
     testImplementation "org.junit.jupiter:junit-jupiter"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
@@ -101,7 +106,17 @@ List<String> STUB_MIXIN_CLASSES_FROM_1_26 = [
         "accessor.GuiRendererAccessor"
 ]
 
-List<String> ACTIVE_STUB_MIXINS = unobfuscated ? STUB_MIXIN_CLASSES_FROM_1_26 : STUB_MIXIN_CLASSES_PRE_1_26
+// Mixins whose target API only matches its <1_21_11 shape — collapse to empty
+// stubs on 1.21.11+. Strip on 1.21.11 AND 26.1.
+List<String> STUB_MIXIN_CLASSES_FROM_1_21_11 = [
+        "ArmedEntityRenderStateMixin"
+]
+
+List<String> ACTIVE_STUB_MIXINS = []
+ACTIVE_STUB_MIXINS += unobfuscated ? STUB_MIXIN_CLASSES_FROM_1_26 : STUB_MIXIN_CLASSES_PRE_1_26
+if (mcVersion >= 1_21_11) {
+    ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_FROM_1_21_11
+}
 
 loom {
     runConfigs.configureEach {
@@ -122,6 +137,16 @@ processResources {
     // gating that picks the list) invalidate the task and re-run the strip.
     inputs.property "stubMixins", ACTIVE_STUB_MIXINS
 
+    // The Sodium config_api_user entrypoint targets net.caffeinemc.mods.sodium.api.config,
+    // which only exists in Sodium 0.8.x (shipped alongside MC 1.21.11+). On older Sodium
+    // the class loader would crash trying to resolve the entrypoint at startup, so omit
+    // the whole entry on those versions. Emitting "" (empty string) keeps fabric.mod.json
+    // valid; the leading comma + interpolation lives in the template.
+    final String sodiumConfigEntrypoint = mcVersion >= 1_21_11 ? ''',
+		"sodium:config_api_user": [
+			"cn.spectra.gallium.compat.sodium.GalliumSodiumConfig"
+		]''' : ''
+
     filesMatching("fabric.mod.json") {
         expand(
                 "description": project.mod_description,
@@ -132,7 +157,8 @@ processResources {
                 "version": project.mod_version,
                 "minecraft_dependency": project.minecraft_dependency,
                 "java_version": JAVA_COMPATIBILITY.majorVersion,
-                "sources": project.mod_sources
+                "sources": project.mod_sources,
+                "sodium_config_entrypoint": sodiumConfigEntrypoint
         )
     }
 

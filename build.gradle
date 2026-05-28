@@ -9,14 +9,16 @@ plugins {
 preprocess {
     strictExtraMappings = false
 
+    def mc12110 = createNode('1.21.10', 1_21_10, 'mojang')
     def mc12111 = createNode('1.21.11', 1_21_11, 'mojang')
     // Mojang dropped the "1." prefix at MC 26; we keep encoding the implicit
     // leading 1 to preserve the 5-digit width of older versions, so integer
     // comparisons (>= 1_21_00 etc.) stay monotonic.
     def mc2601 = createNode('26.1', 1_26_01, 'mojang')
 
-    // mainProject is 26.1; preprocessor maps from there to 1.21.11.
+    // mainProject is 26.1; preprocessor maps from there to 1.21.11, then 1.21.11 to 1.21.10.
     mc2601.link(mc12111, null)
+    mc12111.link(mc12110, null)
 
     for (final def node in getNodes()) {
         findProject(node.project).ext.mcVersion = node.mcVersion

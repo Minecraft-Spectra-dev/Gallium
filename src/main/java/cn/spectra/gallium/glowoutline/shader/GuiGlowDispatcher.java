@@ -65,8 +65,7 @@ public final class GuiGlowDispatcher {
         TextureTarget maskTarget = GuiGlowRenderer.ensureMaskTarget(screenW, screenH);
         if (maskTarget == null || maskTarget.getColorTextureView() == null) return;
 
-        TextureSetup texSetup = TextureSetup.singleTexture(maskTarget.getColorTextureView(),
-                RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+        TextureSetup texSetup = SamplerHelper.singleTextureClampToEdge(maskTarget.getColorTextureView(), FilterMode.LINEAR);
 
         int qx0 = itemState.x() - MASK_QUAD_MARGIN;
         int qy0 = itemState.y() - MASK_QUAD_MARGIN;
@@ -138,8 +137,7 @@ public final class GuiGlowDispatcher {
     //$$             u0, u1, v0, v1,
     //$$             itemState.scissorArea());
     //$$
-    //$$     TextureSetup texSetup = TextureSetup.singleTexture(atlasView,
-    //$$             RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+    //$$     TextureSetup texSetup = SamplerHelper.singleTextureClampToEdge(atlasView, FilterMode.NEAREST);
     //$$
     //$$     int qx0 = itemState.x();
     //$$     int qy0 = itemState.y();

@@ -42,6 +42,11 @@ public final class GlowComposite {
         if (tempColorTarget == null || tempColorTarget.width != w || tempColorTarget.height != h) {
             if (tempColorTarget != null) tempColorTarget.destroyBuffers();
             tempColorTarget = new TextureTarget("GlowColor", w, h, false);
+            //#if MC<1_21_11
+            //$$ // See GlowCaptureManager: 1.21.10 sampler completeness needs useMipmaps=false on
+            //$$ // single-mip render targets. 1.21.11+ moved this off GpuTexture entirely.
+            //$$ tempColorTarget.getColorTexture().setUseMipmaps(false);
+            //#endif
         }
         if (uniformBuffer == null) uniformBuffer = new GlowUniformBuffer("Glow Uniform Buffer");
 
@@ -88,18 +93,14 @@ public final class GlowComposite {
                 .createRenderPass(() -> "Glow", mainTarget.getColorTextureView(), OptionalInt.empty())) {
             pass.setPipeline(pipeline);
             pass.setUniform("GlowUniforms", uniformBuffer.getSlice());
-            pass.bindTexture("DiffuseSampler",
-                    tempColorTarget.getColorTextureView(),
-                    RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
-            pass.bindTexture("MaskSampler",
-                    mask.getColorTextureView(),
-                    RenderSystem.getSamplerCache().getClampToEdge(maskFilter));
-            pass.bindTexture("MaskDepthSampler",
-                    mask.getDepthTextureView(),
-                    RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
-            pass.bindTexture("SceneDepthSampler",
-                    sceneDepthView,
-                    RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+            SamplerHelper.bindClampToEdge(pass, "DiffuseSampler",
+                    tempColorTarget.getColorTextureView(), FilterMode.LINEAR);
+            SamplerHelper.bindClampToEdge(pass, "MaskSampler",
+                    mask.getColorTextureView(), maskFilter);
+            SamplerHelper.bindClampToEdge(pass, "MaskDepthSampler",
+                    mask.getDepthTextureView(), FilterMode.NEAREST);
+            SamplerHelper.bindClampToEdge(pass, "SceneDepthSampler",
+                    sceneDepthView, FilterMode.NEAREST);
             pass.draw(0, 3);
         }
     }

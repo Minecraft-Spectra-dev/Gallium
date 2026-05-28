@@ -18,10 +18,7 @@
 	"entrypoints": {
 		"client": [
 			"cn.spectra.gallium.Gallium"
-		],
-		"sodium:config_api_user": [
-			"cn.spectra.gallium.compat.sodium.GalliumSodiumConfig"
-		]
+		]${sodium_config_entrypoint}
 	},
 	"mixins": [
 		"gallium-glowoutline.mixins.json"

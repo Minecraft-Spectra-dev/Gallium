@@ -89,6 +89,13 @@ public final class GlowCaptureManager {
         if (sceneDepthTarget == null || sceneDepthTarget.width != w || sceneDepthTarget.height != h) {
             if (sceneDepthTarget != null) sceneDepthTarget.destroyBuffers();
             sceneDepthTarget = new TextureTarget("GlowSceneDepth", w, h, true);
+            //#if MC<1_21_11
+            //$$ // Same sampler-completeness rationale as the mask depth target in
+            //$$ // beginItemCapture: keep useMipmaps=false on the single-mip depth view
+            //$$ // so the composite shader's SceneDepthSampler reads real depth values
+            //$$ // rather than the (1,1,1,1) returned by an incomplete sampler.
+            //$$ sceneDepthTarget.getDepthTexture().setUseMipmaps(false);
+            //#endif
         }
 
         var encoder = RenderSystem.getDevice().createCommandEncoder();
@@ -144,8 +151,23 @@ public final class GlowCaptureManager {
             // index would otherwise collide with a freshly allocated state's name.
             state.maskTarget = new TextureTarget("GlowMask_" + Integer.toHexString(System.identityHashCode(state)),
                     main.width, main.height, true);
+            //#if MC<1_21_11
+            //$$ // 1.21.10's mask textures are mipLevels=1 but GpuTexture defaults
+            //$$ // useMipmaps=true, which makes GL_TEXTURE_MIN_FILTER pick a mipmap
+            //$$ // variant (e.g. GL_NEAREST_MIPMAP_LINEAR). Combined with
+            //$$ // GL_TEXTURE_MAX_LEVEL=0 that leaves the sampler "incomplete" — driver
+            //$$ // returns (1,1,1,1) on read, so the world outline shader read pure
+            //$$ // white masks. 1.21.11+ moved sampler state onto GpuSampler so this
+            //$$ // hack is unnecessary there (and the API is gone).
+            //$$ state.maskTarget.getColorTexture().setUseMipmaps(false);
+            //$$ state.maskTarget.getDepthTexture().setUseMipmaps(false);
+            //#endif
         } else if (state.maskTarget.width != main.width || state.maskTarget.height != main.height) {
             state.maskTarget.resize(main.width, main.height);
+            //#if MC<1_21_11
+            //$$ state.maskTarget.getColorTexture().setUseMipmaps(false);
+            //$$ state.maskTarget.getDepthTexture().setUseMipmaps(false);
+            //#endif
         }
 
         if (state.captureBuffers == null) {
@@ -288,7 +310,9 @@ public final class GlowCaptureManager {
                     () -> "Glow Scaled Projection",
                     GpuBuffer.USAGE_UNIFORM | GpuBuffer.USAGE_COPY_DST,
                     RenderSystem.PROJECTION_MATRIX_UBO_SIZE);
-            scaledProjectionSlice = scaledProjectionBuffer.slice(0L, RenderSystem.PROJECTION_MATRIX_UBO_SIZE);
+            // Buffer offsets stayed `int` in 1.21.10 and were widened to `long` in 1.21.11.
+            // Passing `0` (a literal int) is accepted by both signatures via implicit widening.
+            scaledProjectionSlice = scaledProjectionBuffer.slice(0, RenderSystem.PROJECTION_MATRIX_UBO_SIZE);
         }
         Matrix4f result = computeScaledProjection(baseProjection, scale, SCRATCH_SCALED_PROJECTION);
 
