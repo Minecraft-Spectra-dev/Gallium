@@ -6,7 +6,12 @@ import java.util.List;
 
 public final class GuiGlowCaptureManager {
 
-    /** Hard cap for the pooled capture entries — prevents the pool from being pinned at peak frame size forever. */
+    /**
+     * Hard cap for the pooled capture entries — prevents the pool from being pinned at peak
+     * frame size forever. Set higher than the world path's mark (32) because GUI items are far
+     * more numerous and transient than glowing world entities (a packed inventory can submit
+     * dozens of glowing slots in a single frame), so a larger pool avoids churning allocations.
+     */
     private static final int POOL_HIGH_WATER_MARK = 256;
 
     private static final List<GuiGlowCapture> pool = new ArrayList<>();

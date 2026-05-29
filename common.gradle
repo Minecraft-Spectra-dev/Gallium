@@ -91,8 +91,6 @@ List<String> MIXIN_CONFIG_PATHS = [
 // versions because the Mixin loader chokes on entries without a @Mixin annotation.
 List<String> STUB_MIXIN_CLASSES_PRE_1_26 = [
         "GuiGraphicsExtractorMixin",
-        "GuiItemAtlasMixin",
-        "GlCommandEncoderMixin",
         "ProjectionMatrixBufferMixin",
         "accessor.GameRendererAccessor"
 ]

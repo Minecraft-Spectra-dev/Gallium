@@ -5,20 +5,12 @@ import cn.spectra.gallium.glowoutline.capture.GuiGlowCaptureManager;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
-import net.minecraft.client.Minecraft;
-import org.joml.Vector2f;
 
 public final class GuiGlowRenderer {
-
-    private static final int ITEM_SLOT_SIZE = 16;
 
     private static TextureTarget maskTarget;
     private static long lastCopyErrorLogNanos;
     private static final long COPY_ERROR_LOG_INTERVAL_NANOS = 5_000_000_000L; // 5s
-
-    // Scratch buffers reused across renderMaskOnly captures. Render-thread-only.
-    private static final Vector2f SCRATCH_TOP_LEFT = new Vector2f();
-    private static final Vector2f SCRATCH_BOTTOM_RIGHT = new Vector2f();
 
     static {
         GlowResources.register(GuiGlowRenderer::dispose);
@@ -43,19 +35,11 @@ public final class GuiGlowRenderer {
 
     public static TextureTarget renderMaskOnly(int screenW, int screenH) {
         if (GuiGlowCaptureManager.getActive().isEmpty()) return null;
-        //#if MC<1_26_00
-        //$$ // 1.21.11 path samples the items atlas directly from the GUI glow shader
-        //$$ // (see GuiGlowDispatcher.onItemBlit), so we don't need an intermediate
-        //$$ // mask target / atlas-to-mask copy here.
-        //$$ return null;
-        //#else
         ensureMaskTarget(screenW, screenH);
 
         var encoder = RenderSystem.getDevice().createCommandEncoder();
         encoder.clearColorTexture(maskTarget.getColorTexture(), 0);
 
-        double guiScale = Minecraft.getInstance().getWindow().getGuiScale();
-        int slotPixelSize = (int) Math.round(ITEM_SLOT_SIZE * guiScale);
         GpuTexture maskTex = maskTarget.getColorTexture();
         int actualMaskW = maskTex.getWidth(0);
         int actualMaskH = maskTex.getHeight(0);
@@ -67,18 +51,34 @@ public final class GuiGlowRenderer {
             int atlasW = atlasTex.getWidth(0);
             int atlasH = atlasTex.getHeight(0);
 
+            // Atlas source rect. u0 is the slot's left, v1 its bottom in atlas-uv y-up
+            // (v0 > v1), so the bottom maps to the smaller pixel row — matching the upright
+            // copy that the original 26.1 path used.
             int srcX = Math.round(c.u0 * atlasW);
             int srcY = Math.round(c.v1 * atlasH);
-            int copyW = slotPixelSize;
-            int copyH = slotPixelSize;
 
-            Vector2f topLeft = c.pose.transformPosition(c.x, c.y, SCRATCH_TOP_LEFT);
-            Vector2f bottomRight = c.pose.transformPosition(c.x + ITEM_SLOT_SIZE, c.y + ITEM_SLOT_SIZE, SCRATCH_BOTTOM_RIGHT);
-            int fbX0 = Math.round(topLeft.x * (float) guiScale);
-            int fbY1 = Math.round(bottomRight.y * (float) guiScale);
+            // Destination is the capture's pre-assigned cell interior (framebuffer px, y-up
+            // origin to match copyTextureToTexture / glBlitFramebuffer). The cell layout
+            // guarantees a transparent guard band around this interior.
+            int dstX = c.slotInteriorFbX;
+            int dstY = c.slotInteriorFbY;
+            int copyW = c.slotInteriorFbW;
+            int copyH = c.slotInteriorFbH;
 
-            int dstX = fbX0;
-            int dstY = actualMaskH - fbY1; // 26.1 mask target is y-up; convert from y-down screen coords
+            // Skip degenerate cells. copyW/copyH derive from the cell-layout rounding
+            // (interiorFbSize = slotFbSize - 2*padFb); a non-positive size means a layout
+            // or guiScale regression, so surface it loudly rather than issuing a silent
+            // no-op / corrupt blit.
+            if (copyW <= 0 || copyH <= 0) {
+                long now = System.nanoTime();
+                if (now - lastCopyErrorLogNanos > COPY_ERROR_LOG_INTERVAL_NANOS) {
+                    lastCopyErrorLogNanos = now;
+                    cn.spectra.gallium.Gallium.LOGGER.warn(
+                        "GuiGlow skip: non-positive copy size ({}x{}) for cell at dst=({},{}); check cell-layout rounding",
+                        copyW, copyH, dstX, dstY);
+                }
+                continue;
+            }
 
             // Skip if either source or destination region is out of bounds.
             if (srcX < 0 || srcY < 0 || srcX + copyW > atlasW || srcY + copyH > atlasH) continue;
@@ -92,14 +92,13 @@ public final class GuiGlowRenderer {
                 if (now - lastCopyErrorLogNanos > COPY_ERROR_LOG_INTERVAL_NANOS) {
                     lastCopyErrorLogNanos = now;
                     cn.spectra.gallium.Gallium.LOGGER.warn(
-                        "GuiGlow copy failed: u0={} v0={} -> atlas=({}x{}) src=({},{}) dst=({},{}) mask=({}x{}) err={}",
-                        c.u0, c.v0, atlasW, atlasH, srcX, srcY, dstX, dstY, actualMaskW, actualMaskH, e.getMessage());
+                        "GuiGlow copy failed: u0={} v1={} -> atlas=({}x{}) src=({},{}) dst=({},{}) copy=({}x{}) mask=({}x{}) err={}",
+                        c.u0, c.v1, atlasW, atlasH, srcX, srcY, dstX, dstY, copyW, copyH, actualMaskW, actualMaskH, e.getMessage());
                 }
             }
         }
 
         return maskTarget;
-        //#endif
     }
 
     public static TextureTarget getMaskTarget() {

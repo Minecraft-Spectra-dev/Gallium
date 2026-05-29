@@ -1,38 +1,37 @@
 package cn.spectra.gallium.glowoutline.capture;
 
-import cn.spectra.gallium.glowoutline.ItemEffectConfig;
 import com.mojang.blaze3d.textures.GpuTextureView;
-import net.minecraft.client.gui.navigation.ScreenRectangle;
-import org.joml.Matrix3x2fc;
-import org.jspecify.annotations.Nullable;
 
+/**
+ * Per-item record for the GUI glow mask pass. {@link GuiGlowDispatcher} fills one of these
+ * for every glowing item, then {@link cn.spectra.gallium.glowoutline.shader.GuiGlowRenderer}
+ * copies the item's atlas region (top-left at atlas UV {@code (u0, v1)}) into the capture's
+ * pre-assigned mask cell interior.
+ */
 public class GuiGlowCapture {
-    public ItemEffectConfig config;
     public GpuTextureView atlasTextureView;
-    public Matrix3x2fc pose;
-    public int x, y;
-    public float u0, u1, v0, v1;
-    @Nullable public ScreenRectangle scissorArea;
+    /** Atlas source corner: u0 = slot left edge, v1 = slot bottom edge (atlas-uv y-up). */
+    public float u0, v1;
 
-    public void set(ItemEffectConfig config, GpuTextureView atlasTextureView, Matrix3x2fc pose,
-                    int x, int y, float u0, float u1, float v0, float v1,
-                    @Nullable ScreenRectangle scissorArea) {
-        this.config = config;
+    // Pre-assigned cell interior in the shared mask target (framebuffer px, y-up origin to
+    // match copyTextureToTexture). Each capture owns a unique grid cell with a transparent
+    // guard band, so the fragment shader's ring sampling can never read a neighbouring item.
+    public int slotInteriorFbX, slotInteriorFbY, slotInteriorFbW, slotInteriorFbH;
+
+    public void set(GpuTextureView atlasTextureView, float u0, float v1) {
         this.atlasTextureView = atlasTextureView;
-        this.pose = pose;
-        this.x = x;
-        this.y = y;
         this.u0 = u0;
-        this.u1 = u1;
-        this.v0 = v0;
         this.v1 = v1;
-        this.scissorArea = scissorArea;
+    }
+
+    public void setSlot(int interiorFbX, int interiorFbY, int interiorFbW, int interiorFbH) {
+        this.slotInteriorFbX = interiorFbX;
+        this.slotInteriorFbY = interiorFbY;
+        this.slotInteriorFbW = interiorFbW;
+        this.slotInteriorFbH = interiorFbH;
     }
 
     public void reset() {
-        this.config = null;
         this.atlasTextureView = null;
-        this.pose = null;
-        this.scissorArea = null;
     }
 }

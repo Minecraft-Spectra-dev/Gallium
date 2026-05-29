@@ -148,4 +148,4 @@
 2. `ItemCondition.Path.EXISTS` 等同于 `ItemStack.has(component)`，会返回 prototype 默认值的存在性，不仅是显式覆盖。
 3. 物品框、展示架、怪物手持物品共用 `other_entities` 开关。
 4. `DuplicatingSubmitNodeStorage` 直接 submit（不走 `order(int)`）的调用会被复制到 order=0 层。
-5. `GlCommandEncoderMixin` 修补的是 vanilla 26.1.2 中 `copyTextureToTexture` 的 size→absolute 坐标 bug，未来 Mojang 修复后需要相应处理。
+5. `GlCommandEncoderMixin` 修补的是 vanilla `copyTextureToTexture` 的 size→absolute 坐标 bug（1.21.10、1.21.11、26.1.2 三个版本均存在）。该修复在零偏移拷贝时是 no-op，故无条件应用于所有版本；未来 Mojang 修复上游后需重新加版本门控，否则会双重偏移。
