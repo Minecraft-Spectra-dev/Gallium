@@ -9,6 +9,11 @@ plugins {
 preprocess {
     strictExtraMappings = false
 
+    // 1.21.8 is the floor of the pre-1.21.9 rendering model (immediate-mode
+    // MultiBufferSource, no submit-node system). The published jar targets the
+    // whole hotfix range 1.21.6–1.21.8 (.7/.8 are hotfixes of .6); dev compiles
+    // against 1.21.8. Encoded 1_21_08 so it sorts below 1.21.10 (1_21_10).
+    def mc12108 = createNode('1.21.8', 1_21_08, 'mojang')
     def mc12110 = createNode('1.21.10', 1_21_10, 'mojang')
     def mc12111 = createNode('1.21.11', 1_21_11, 'mojang')
     // Mojang dropped the "1." prefix at MC 26; we keep encoding the implicit
@@ -16,9 +21,10 @@ preprocess {
     // comparisons (>= 1_21_00 etc.) stay monotonic.
     def mc2601 = createNode('26.1', 1_26_01, 'mojang')
 
-    // mainProject is 26.1; preprocessor maps from there to 1.21.11, then 1.21.11 to 1.21.10.
+    // mainProject is 26.1; preprocessor maps 26.1 → 1.21.11 → 1.21.10 → 1.21.8.
     mc2601.link(mc12111, null)
     mc12111.link(mc12110, null)
+    mc12110.link(mc12108, null)
 
     for (final def node in getNodes()) {
         findProject(node.project).ext.mcVersion = node.mcVersion

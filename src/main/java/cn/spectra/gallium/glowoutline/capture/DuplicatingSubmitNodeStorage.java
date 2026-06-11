@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.capture;
 
+//#if MC>=1_21_09
 import com.mojang.blaze3d.vertex.PoseStack;
 import it.unimi.dsi.fastutil.ints.Int2ObjectAVLTreeMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
@@ -221,3 +222,11 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
         }
     }
 }
+//#else
+//$$ // Mirrors submits into the 1.21.9 SubmitNodeStorage; that class is absent on
+//$$ // 1.21.6–1.21.8. The pre-1.21.9 world path uses CaptureSites.DelayingMultiBufferSource
+//$$ // instead. No callers here (CaptureSites is stubbed), so this is an empty placeholder.
+//$$ public final class DuplicatingSubmitNodeStorage {
+//$$     private DuplicatingSubmitNodeStorage() {}
+//$$ }
+//#endif

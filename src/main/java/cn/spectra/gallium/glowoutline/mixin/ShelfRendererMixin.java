@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
+//#if MC>=1_21_09
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import cn.spectra.gallium.glowoutline.capture.CaptureSites;
 import cn.spectra.gallium.glowoutline.capture.ShelfRenderStateAccessor;
@@ -60,3 +61,11 @@ public class ShelfRendererMixin {
         }
     }
 }
+//#else
+//$$ // Shelves (ShelfRenderer) are a 1.21.9 feature absent on 1.21.6–1.21.8; the world
+//$$ // submit path it hooks also doesn't exist here. Empty stub, stripped from mixins.json
+//$$ // via STUB_MIXIN_CLASSES_PRE_1_21_09 in common.gradle.
+//$$ public final class ShelfRendererMixin {
+//$$     private ShelfRendererMixin() {}
+//$$ }
+//#endif

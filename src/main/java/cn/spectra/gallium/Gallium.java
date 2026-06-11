@@ -11,11 +11,19 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 //#else
 //$$ import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 //#endif
+//#if MC>=1_21_09
 import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
+//#else
+//$$ import net.fabricmc.fabric.api.resource.ResourceManagerHelper;
+//#endif
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+//#if MC>=1_21_09
 import net.minecraft.resources.Identifier;
+//#else
+//$$ import net.minecraft.resources.ResourceLocation;
+//#endif
 import net.minecraft.server.packs.PackType;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
@@ -37,11 +45,24 @@ public class Gallium implements ClientModInitializer {
 		// Fabric API renamed registerReloader -> registerReloadListener for MC 26.1+ support.
 		//#if MC>=1_26_00
 		ResourceLoader.get(PackType.CLIENT_RESOURCES).registerReloadListener(ItemEffectsManager.RELOAD_ID, new ItemEffectsManager());
-		//#else
+		//#elseif MC>=1_21_09
 		//$$ ResourceLoader.get(PackType.CLIENT_RESOURCES).registerReloader(ItemEffectsManager.RELOAD_ID, new ItemEffectsManager());
+		//#else
+		//$$ // 1.21.6–1.21.8 fabric-api predates the ResourceLoader facade; register the
+		//$$ // listener through ResourceManagerHelper. ItemEffectsManager implements
+		//$$ // SimpleSynchronousResourceReloadListener (carries its own getFabricId()).
+		//$$ ResourceManagerHelper.get(PackType.CLIENT_RESOURCES).registerReloadListener(new ItemEffectsManager());
 		//#endif
 
+		//#if MC>=1_21_09
 		KeyMapping.Category category = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MOD_ID, "main"));
+		//#else
+		//$$ // 1.21.8 KeyMapping takes a plain String category. Fabric's KeyBindingHelper
+		//$$ // auto-registers unknown category strings into the controls-screen sort order, so we
+		//$$ // pass the mod's own category (translated by "key.category.gallium.main" in lang/) to
+		//$$ // match the dedicated category the >=1.21.9 path registers, rather than landing in Misc.
+		//$$ String category = "key.category.gallium.main";
+		//#endif
 
 		//#if MC>=1_26_00
 		RELOAD_RESOURCE_PACK_KEY = KeyMappingHelper.registerKeyMapping(new KeyMapping(

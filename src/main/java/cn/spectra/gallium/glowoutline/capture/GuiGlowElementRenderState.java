@@ -33,6 +33,7 @@ public record GuiGlowElementRenderState(
                 u0, u1, v0, v1, color, scissorArea, finalBounds);
     }
 
+    //#if MC>=1_21_09
     @Override
     public void buildVertices(VertexConsumer vc) {
         vc.addVertexWith2DPose(this.pose, this.x0, this.y0).setUv(this.u0, this.v0).setColor(this.color);
@@ -40,4 +41,15 @@ public record GuiGlowElementRenderState(
         vc.addVertexWith2DPose(this.pose, this.x1, this.y1).setUv(this.u1, this.v1).setColor(this.color);
         vc.addVertexWith2DPose(this.pose, this.x1, this.y0).setUv(this.u1, this.v0).setColor(this.color);
     }
+    //#else
+    //$$ // 1.21.6–1.21.8: buildVertices takes the per-layer z (float f) and
+    //$$ // addVertexWith2DPose carries an explicit z coordinate.
+    //$$ @Override
+    //$$ public void buildVertices(VertexConsumer vc, float f) {
+    //$$     vc.addVertexWith2DPose(this.pose, this.x0, this.y0, f).setUv(this.u0, this.v0).setColor(this.color);
+    //$$     vc.addVertexWith2DPose(this.pose, this.x0, this.y1, f).setUv(this.u0, this.v1).setColor(this.color);
+    //$$     vc.addVertexWith2DPose(this.pose, this.x1, this.y1, f).setUv(this.u1, this.v1).setColor(this.color);
+    //$$     vc.addVertexWith2DPose(this.pose, this.x1, this.y0, f).setUv(this.u1, this.v0).setColor(this.color);
+    //$$ }
+    //#endif
 }

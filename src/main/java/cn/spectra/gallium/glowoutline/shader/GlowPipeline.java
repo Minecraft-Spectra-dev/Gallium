@@ -18,7 +18,11 @@ import java.util.Map;
 import java.util.Optional;
 //#endif
 import java.util.Set;
+//#if MC>=1_21_09
 import net.minecraft.resources.Identifier;
+//#else
+//$$ import net.minecraft.resources.ResourceLocation;
+//#endif
 
 public final class GlowPipeline {
 
@@ -50,8 +54,13 @@ public final class GlowPipeline {
         return REGISTRY.computeIfAbsent(shaderName, name -> {
             RenderPipeline pipeline = RenderPipeline.builder()
                     .withLocation("pipeline/gallium_glow/" + name)
+                    //#if MC>=1_21_09
                     .withVertexShader(Identifier.fromNamespaceAndPath("gallium", "core/" + name))
                     .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", "core/" + name))
+                    //#else
+                    //$$ .withVertexShader(ResourceLocation.fromNamespaceAndPath("gallium", "core/" + name))
+                    //$$ .withFragmentShader(ResourceLocation.fromNamespaceAndPath("gallium", "core/" + name))
+                    //#endif
                     .withSampler("DiffuseSampler")
                     .withSampler("MaskSampler")
                     .withSampler("MaskDepthSampler")

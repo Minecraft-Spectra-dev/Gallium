@@ -5,7 +5,9 @@ import com.mojang.blaze3d.ProjectionType;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import net.minecraft.client.renderer.RenderBuffers;
+//#if MC>=1_21_09
 import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
+//#endif
 import org.joml.Matrix4f;
 import org.jspecify.annotations.Nullable;
 
@@ -13,7 +15,14 @@ public final class GlowCaptureState {
 
     public @Nullable TextureTarget maskTarget;
     public @Nullable RenderBuffers captureBuffers;
+    //#if MC>=1_21_09
     public @Nullable FeatureRenderDispatcher captureDispatcher;
+    //#endif
+    // Pre-1.21.9 immediate-mode capture buffer. Retained across frames (its native buffers are
+    // pooled like captureBuffers) and freed on release; see GlowCaptureManager.releaseState.
+    //#if MC<1_21_09
+    //$$ public CaptureSites.@Nullable DelayingMultiBufferSource customBufferSource;
+    //#endif
     public boolean capturedThisFrame;
     public boolean active;
     public boolean firstPerson;
@@ -48,5 +57,15 @@ public final class GlowCaptureState {
         capturedProjectionType = null;
         capturedProjectionMatrix4fValid = false;
         lastMaskScale = 1.0f;
+        // Finalize the per-frame capture buffer. On >=1.21.9 there is no customBufferSource;
+        // on 1.21.8 endFrame() finalizes any builder left open when renderCapturedNodes
+        // early-returned, rewinding the retained native buffers for reuse next frame. The
+        // DelayingMultiBufferSource itself (and its pooled off-heap buffers) is kept on the
+        // state and only released in GlowCaptureManager.releaseState.
+        //#if MC<1_21_09
+        //$$ if (customBufferSource != null) {
+        //$$     customBufferSource.endFrame();
+        //$$ }
+        //#endif
     }
 }

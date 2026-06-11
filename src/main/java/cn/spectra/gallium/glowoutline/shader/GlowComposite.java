@@ -101,6 +101,12 @@ public final class GlowComposite {
                     mask.getDepthTextureView(), FilterMode.NEAREST);
             SamplerHelper.bindClampToEdge(pass, "SceneDepthSampler",
                     sceneDepthView, FilterMode.NEAREST);
+            //#if MC<1_21_09
+            //$$ // Pre-1.21.9's GlCommandEncoder requires a vertex buffer bound to slot 0 even if
+            //$$ // the pipeline's VertexFormat is EMPTY, otherwise VertexArrayCache crashes trying
+            //$$ // to read glBuffer.handle from a null buffer.
+            //$$ pass.setVertexBuffer(0, RenderSystem.getQuadVertexBuffer());
+            //#endif
             pass.draw(0, 3);
         }
     }

@@ -28,10 +28,15 @@ import org.spongepowered.asm.mixin.injection.At;
 public class GlCommandEncoderMixin {
 
     @WrapOperation(method = "copyTextureToTexture", at = @At(value = "INVOKE",
-            // DirectStateAccess is com.mojang.blaze3d.* (unobfuscated), so there's nothing to
-            // remap; remap=false avoids a refmap miss on the loom-remap 1.21.10/11 builds.
-            target = "Lcom/mojang/blaze3d/opengl/DirectStateAccess;blitFrameBuffers(IIIIIIIIIIII)V",
-            remap = false))
+            // DirectStateAccess is com.mojang.blaze3d.* so the CLASS name is unobfuscated, but
+            // blitFrameBuffers is package-private and DOES get an intermediary/obfuscated method
+            // name on loom-remap runtimes (1.21.8/.10/.11 map it to method_68812 / 'a'). So this
+            // target MUST participate in remap — remap=false would leave the literal name
+            // "blitFrameBuffers", which the obfuscated runtime can't resolve, failing injection
+            // with "Scanned 0 target(s)". (Public blaze3d methods like RenderPass.setPipeline keep
+            // their names and so can use remap=false; package-private ones cannot.) On 26.1
+            // (unobfuscated) the refmap maps it to itself, so this is correct on every version.
+            target = "Lcom/mojang/blaze3d/opengl/DirectStateAccess;blitFrameBuffers(IIIIIIIIIIII)V"))
     private void galliumFixBlitCoords(DirectStateAccess directStateAccess,
                                        int source, int dest,
                                        // NB: vanilla passes its (width, height) into these slots — that's the

@@ -110,10 +110,23 @@ List<String> STUB_MIXIN_CLASSES_FROM_1_21_11 = [
         "ArmedEntityRenderStateMixin"
 ]
 
+// Mixins/accessors built on the 1.21.9 entity submit-node rendering system
+// (SubmitNodeCollector/Storage, FeatureRenderDispatcher) or on 1.21.9-only
+// content (shelves). They are real on 1_21_09+ and collapse to empty stubs on
+// 1.21.6–1.21.8, so the Mixin loader would reject them there. Strip on <1_21_09.
+List<String> STUB_MIXIN_CLASSES_PRE_1_21_09 = [
+        "ShelfRendererMixin",
+        "ShelfRenderStateMixin",
+        "accessor.FeatureRenderDispatcherAccessor"
+]
+
 List<String> ACTIVE_STUB_MIXINS = []
 ACTIVE_STUB_MIXINS += unobfuscated ? STUB_MIXIN_CLASSES_FROM_1_26 : STUB_MIXIN_CLASSES_PRE_1_26
 if (mcVersion >= 1_21_11) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_FROM_1_21_11
+}
+if (mcVersion < 1_21_09) {
+    ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_PRE_1_21_09
 }
 
 loom {

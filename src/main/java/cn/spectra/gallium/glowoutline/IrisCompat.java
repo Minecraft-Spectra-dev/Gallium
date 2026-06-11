@@ -34,6 +34,15 @@ public final class IrisCompat {
     private static final boolean EXTENDED_FIELD_OK;
     private static final boolean BYPASS_AVAILABLE;
 
+    /** Iris's {@code ImmediateState.skipExtension} ThreadLocal, captured once (the field is
+     *  {@code final}). When set {@code true} around a {@code new BufferBuilder(...)}, Iris's
+     *  {@code MixinBufferBuilder.iris$extendFormat} leaves the vertex format vanilla instead of
+     *  promoting {@code NEW_ENTITY → IrisVertexFormats.ENTITY}. The pre-1.21.9 capture path relies
+     *  on this so its tee'd capture buffer holds vanilla-format vertices that the bypass (vanilla
+     *  pipeline) mask render can actually draw. {@code null} when Iris is absent or the field
+     *  moved. */
+    private static final ThreadLocal<Boolean> SKIP_EXTENSION;
+
     public record BypassSnapshot(boolean bypass, boolean renderWithExtended,
                                   boolean bypassValid, boolean extendedValid) {
         public static final BypassSnapshot NONE = new BypassSnapshot(false, false, false, false);
@@ -46,6 +55,7 @@ public final class IrisCompat {
         BooleanSupplier shaderActive = () -> false;
         BooleanSupplier shadowPass = () -> false;
         MethodHandle bypassGet = null, bypassSet = null, extendedGet = null, extendedSet = null;
+        ThreadLocal<Boolean> skipExtension = null;
 
         if (IRIS_LOADED) {
             try {
@@ -92,6 +102,18 @@ public final class IrisCompat {
                 } catch (Throwable t) {
                     Gallium.LOGGER.debug("Iris ImmediateState.renderWithExtendedVertexFormat reflection failed: {}", t.toString());
                 }
+                try {
+                    // skipExtension is a `public static final ThreadLocal<Boolean>`. Read the
+                    // instance once; toggling it later is a plain ThreadLocal.set, no reflection
+                    // on the hot path.
+                    Field skip = immediateState.getField("skipExtension");
+                    Object value = skip.get(null);
+                    if (value instanceof ThreadLocal<?> tl) {
+                        skipExtension = castThreadLocal(tl);
+                    }
+                } catch (Throwable t) {
+                    Gallium.LOGGER.debug("Iris ImmediateState.skipExtension reflection failed: {}", t.toString());
+                }
             }
         }
 
@@ -104,6 +126,7 @@ public final class IrisCompat {
         BYPASS_FIELD_OK = bypassGet != null && bypassSet != null;
         EXTENDED_FIELD_OK = extendedGet != null && extendedSet != null;
         BYPASS_AVAILABLE = BYPASS_FIELD_OK || EXTENDED_FIELD_OK;
+        SKIP_EXTENSION = skipExtension;
     }
 
     private IrisCompat() {}
@@ -159,5 +182,30 @@ public final class IrisCompat {
             if (snapshot.bypassValid() && BYPASS_FIELD_OK) BYPASS_SETTER.invokeExact(snapshot.bypass());
             if (snapshot.extendedValid() && EXTENDED_FIELD_OK) EXTENDED_SETTER.invokeExact(snapshot.renderWithExtended());
         } catch (Throwable ignored) {}
+    }
+
+    /**
+     * Suppresses Iris's per-{@code BufferBuilder} vertex-format extension for the current thread.
+     * Wrap a {@code new BufferBuilder(...)} construction in a {@code true}/{@code false} pair so
+     * the resulting buffer keeps the vanilla format Iris would otherwise promote to its extended
+     * entity/terrain/glyph layouts. No-op when Iris is absent. Returns the previous value so the
+     * caller can restore it (always pass the returned value back to {@link #setSkipExtension}).
+     */
+    public static boolean setSkipExtension(boolean value) {
+        if (SKIP_EXTENSION == null) return false;
+        boolean old = Boolean.TRUE.equals(SKIP_EXTENSION.get());
+        if (value) {
+            SKIP_EXTENSION.set(true);
+        } else {
+            // Restore to the unset (null) state rather than storing explicit-false, so Iris
+            // logic that distinguishes "not set" from "explicitly false" behaves correctly.
+            SKIP_EXTENSION.remove();
+        }
+        return old;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ThreadLocal<Boolean> castThreadLocal(ThreadLocal<?> tl) {
+        return (ThreadLocal<Boolean>) tl;
     }
 }

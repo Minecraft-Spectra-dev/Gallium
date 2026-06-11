@@ -3,8 +3,10 @@ package cn.spectra.gallium.glowoutline.capture;
 import cn.spectra.gallium.glowoutline.IrisCompat;
 import cn.spectra.gallium.glowoutline.ItemEffectConfig;
 import cn.spectra.gallium.glowoutline.ItemEffectsManager;
+//#if MC>=1_21_09
 import cn.spectra.gallium.glowoutline.mixin.accessor.FeatureRenderDispatcherAccessor;
 import cn.spectra.gallium.glowoutline.mixin.accessor.GameRendererAccessor;
+//#endif
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
@@ -15,8 +17,10 @@ import com.mojang.blaze3d.textures.GpuTexture;
 import java.nio.ByteBuffer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderBuffers;
+//#if MC>=1_21_09
 import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
+//#endif
 import net.minecraft.world.item.ItemStack;
 import org.joml.Matrix4f;
 import org.jspecify.annotations.Nullable;
@@ -133,12 +137,11 @@ public final class GlowCaptureManager {
         if (state.capturedModelViewMatrix == null) state.capturedModelViewMatrix = new Matrix4f();
         state.capturedModelViewMatrix.set(RenderSystem.getModelViewMatrix());
         state.capturedModelViewMatrixValid = true;
-        state.capturedProjectionMatrix = RenderSystem.getProjectionMatrixBuffer();
-        state.capturedProjectionType = RenderSystem.getProjectionType();
         // Snapshot the Matrix4f form too. Vanilla pipelines hand setProjectionMatrix only a
         // GpuBufferSlice (already serialized), so we reconstruct via ProjectionMatrixTracker
-        // which the per-version mixins keep up to date. Invalid means we can't apply
-        // VertexDownscaling on the mask render and the no-downscale path is used instead.
+        // which the per-version mixins keep up to date.
+        state.capturedProjectionMatrix = RenderSystem.getProjectionMatrixBuffer();
+        state.capturedProjectionType = RenderSystem.getProjectionType();
         state.capturedProjectionMatrix4fValid = ProjectionMatrixTracker.lookupInto(
                 state.capturedProjectionMatrix, state.capturedProjectionMatrix4f) != null;
 
@@ -174,6 +177,7 @@ public final class GlowCaptureManager {
             state.captureBuffers = new RenderBuffers(1);
         }
 
+        //#if MC>=1_21_09
         if (state.captureDispatcher == null) {
             FeatureRenderDispatcher mainDispatcher = mc.gameRenderer.getFeatureRenderDispatcher();
             var accessor = (FeatureRenderDispatcherAccessor) mainDispatcher;
@@ -203,6 +207,7 @@ public final class GlowCaptureManager {
         } else {
             state.captureDispatcher.getSubmitNodeStorage().clear();
         }
+        //#endif
 
         activeStates.add(state);
         currentCapture = state;
@@ -218,14 +223,20 @@ public final class GlowCaptureManager {
 
     public static @Nullable GlowCaptureState currentCapture() { return currentCapture; }
 
+    //#if MC>=1_21_09
     public static @Nullable SubmitNodeStorage captureStorageForCurrent() {
         if (currentCapture == null || suppressDepth > 0) return null;
         if (currentCapture.captureDispatcher == null) return null;
         return currentCapture.captureDispatcher.getSubmitNodeStorage();
     }
+    //#endif
 
     public static void renderCapturedNodes(GlowCaptureState state, Minecraft mc) {
+        //#if MC>=1_21_09
         if (state.captureDispatcher == null || state.captureBuffers == null || state.maskTarget == null) return;
+        //#else
+        //$$ if (state.captureBuffers == null || state.maskTarget == null) return;
+        //#endif
 
         var encoder = RenderSystem.getDevice().createCommandEncoder();
         encoder.clearColorTexture(state.maskTarget.getColorTexture(), 0);
@@ -280,9 +291,18 @@ public final class GlowCaptureManager {
 
         var irisSnapshot = IrisCompat.setBypass(true);
         try {
+            //#if MC>=1_21_09
             state.captureDispatcher.renderAllFeatures();
             state.captureBuffers.bufferSource().endBatch();
             state.captureBuffers.outlineBufferSource().endOutlineBatch();
+            //#else
+            //$$ if (state.customBufferSource != null) {
+            //$$     state.customBufferSource.flush();
+            //$$ } else {
+            //$$     state.captureBuffers.bufferSource().endBatch();
+            //$$ }
+            //$$ state.captureBuffers.outlineBufferSource().endOutlineBatch();
+            //#endif
         } finally {
             IrisCompat.restoreBypass(irisSnapshot);
             if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
@@ -359,7 +379,15 @@ public final class GlowCaptureManager {
             state.maskTarget.destroyBuffers();
             state.maskTarget = null;
         }
+        //#if MC>=1_21_09
         state.captureDispatcher = null;
+        //#else
+        //$$ // Release the retained off-heap capture buffers (pooled across frames on 1.21.8).
+        //$$ if (state.customBufferSource != null) {
+        //$$     state.customBufferSource.free();
+        //$$     state.customBufferSource = null;
+        //$$ }
+        //#endif
         state.captureBuffers = null;
     }
 

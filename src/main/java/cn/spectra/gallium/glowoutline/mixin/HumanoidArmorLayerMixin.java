@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
+//#if MC>=1_21_09
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import cn.spectra.gallium.glowoutline.capture.CaptureSites;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -40,3 +41,35 @@ public class HumanoidArmorLayerMixin {
         }
     }
 }
+//#else
+//$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
+//$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+//$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+//$$ import com.mojang.blaze3d.vertex.PoseStack;
+//$$ import net.minecraft.client.model.Model;
+//$$ import net.minecraft.client.renderer.MultiBufferSource;
+//$$ import net.minecraft.client.renderer.entity.layers.EquipmentLayerRenderer;
+//$$ import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
+//$$ import net.minecraft.client.resources.model.EquipmentClientInfo;
+//$$ import net.minecraft.resources.ResourceKey;
+//$$ import net.minecraft.world.item.ItemStack;
+//$$ import org.spongepowered.asm.mixin.Mixin;
+//$$ import org.spongepowered.asm.mixin.injection.At;
+//$$ 
+//$$ @Mixin(HumanoidArmorLayer.class)
+//$$ public class HumanoidArmorLayerMixin {
+//$$ 
+//$$     @WrapOperation(method = "renderArmorPiece", at = @At(value = "INVOKE",
+//$$             target = "Lnet/minecraft/client/renderer/entity/layers/EquipmentLayerRenderer;renderLayers(Lnet/minecraft/client/resources/model/EquipmentClientInfo$LayerType;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/client/model/Model;Lnet/minecraft/world/item/ItemStack;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V"))
+//$$     private void galliumWrapArmorRender(EquipmentLayerRenderer renderer, EquipmentClientInfo.LayerType layerType, ResourceKey<?> assetId, Model model, ItemStack itemStack, PoseStack poseStack, MultiBufferSource bufferSource, int light, Operation<Void> original) {
+//$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
+//$$                 itemStack, bufferSource, GlowOutlineConfig.Toggle.ARMOR);
+//$$         try {
+//$$             original.call(renderer, layerType, assetId, model, itemStack, poseStack, wrapped, light);
+//$$         } finally {
+//$$             CaptureSites.end();
+//$$         }
+//$$     }
+//$$ }
+//#endif

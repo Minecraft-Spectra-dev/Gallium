@@ -13,7 +13,11 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import net.minecraft.client.renderer.RenderPipelines;
+//#if MC>=1_21_09
 import net.minecraft.resources.Identifier;
+//#else
+//$$ import net.minecraft.resources.ResourceLocation;
+//#endif
 
 /**
  * Per-(shader,params) GUI glow pipeline cache. Two rules sharing a shader name but
@@ -47,7 +51,11 @@ public final class GuiGlowElementPipeline {
 
         RenderPipeline p = RenderPipeline.builder(RenderPipelines.GUI_TEXTURED_SNIPPET)
                 .withLocation(location)
+                //#if MC>=1_21_09
                 .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", shaderPath))
+                //#else
+                //$$ .withFragmentShader(ResourceLocation.fromNamespaceAndPath("gallium", shaderPath))
+                //#endif
                 //#if MC>=1_26_00
                 .withColorTargetState(new ColorTargetState(BlendFunction.ADDITIVE))
                 //#else

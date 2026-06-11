@@ -8,12 +8,24 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+//#if MC>=1_21_09
 import net.minecraft.IdentifierException;
+//#else
+//$$ import net.minecraft.ResourceLocationException;
+//#endif
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.BuiltInRegistries;
+//#if MC>=1_21_09
 import net.minecraft.resources.Identifier;
+//#else
+//$$ import net.minecraft.resources.ResourceLocation;
+//#endif
 import net.minecraft.server.packs.resources.ResourceManager;
+//#if MC>=1_21_09
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
+//#else
+//$$ import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
+//#endif
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -26,10 +38,25 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+//#if MC>=1_21_09
 public class ItemEffectsManager implements ResourceManagerReloadListener {
 
     public static final Identifier RELOAD_ID = Identifier.fromNamespaceAndPath("gallium", "item_effects");
     private static final Identifier RESOURCE_PATH = Identifier.fromNamespaceAndPath("gallium", "item_effects.json");
+//#else
+//$$ // 1.21.6–1.21.8 register through ResourceManagerHelper, which wants an
+//$$ // IdentifiableResourceReloadListener. SimpleSynchronousResourceReloadListener
+//$$ // supplies both the sync onResourceManagerReload contract and getFabricId().
+//$$ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListener {
+//$$
+//$$     public static final ResourceLocation RELOAD_ID = ResourceLocation.fromNamespaceAndPath("gallium", "item_effects");
+//$$     private static final ResourceLocation RESOURCE_PATH = ResourceLocation.fromNamespaceAndPath("gallium", "item_effects.json");
+//$$
+//$$     @Override
+//$$     public ResourceLocation getFabricId() {
+//$$         return RELOAD_ID;
+//$$     }
+//#endif
 
     private static volatile List<ItemEffectRule> rules = List.of();
     private static volatile boolean active = false;
@@ -161,7 +188,7 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
             Set<Item> items = new HashSet<>();
             for (JsonElement el : arr) {
                 String id = el.getAsString();
-                Identifier itemId = tryParseId(id, ruleIndex, "item");
+                var itemId = tryParseId(id, ruleIndex, "item");
                 if (itemId == null) continue;
                 var ref = BuiltInRegistries.ITEM.get(itemId);
                 if (ref.isPresent()) {
@@ -178,7 +205,7 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
             for (JsonElement el : arr) {
                 String key = el.getAsString();
                 if (key.startsWith("#")) key = key.substring(1);
-                Identifier tagId = tryParseId(key, ruleIndex, "tag");
+                var tagId = tryParseId(key, ruleIndex, "tag");
                 if (tagId == null) continue;
                 TagKey<Item> tag = TagKey.create(BuiltInRegistries.ITEM.key(), tagId);
                 conditions.add(new ItemCondition.Tag(tag));
@@ -245,7 +272,7 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
             return null;
         }
         String compId = pathValue.substring("components.".length());
-        Identifier componentId = tryParseId(compId, ruleIndex, "component");
+        var componentId = tryParseId(compId, ruleIndex, "component");
         if (componentId == null) return null;
         DataComponentType<?> compType = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(componentId);
         if (compType == null) {
@@ -315,6 +342,7 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
         return null;
     }
 
+    //#if MC>=1_21_09
     private static Identifier tryParseId(String raw, int ruleIndex, String kind) {
         try {
             return Identifier.parse(raw);
@@ -323,6 +351,16 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
             return null;
         }
     }
+    //#else
+    //$$ private static ResourceLocation tryParseId(String raw, int ruleIndex, String kind) {
+    //$$     try {
+    //$$         return ResourceLocation.parse(raw);
+    //$$     } catch (ResourceLocationException e) {
+    //$$         Gallium.LOGGER.warn("item_effects rule[{}]: invalid {} id '{}': {}", ruleIndex, kind, raw, e.getMessage());
+    //$$         return null;
+    //$$     }
+    //$$ }
+    //#endif
 
     public static ItemEffectConfig getConfig(ItemStack stack) {
         if (stack.isEmpty()) return null;

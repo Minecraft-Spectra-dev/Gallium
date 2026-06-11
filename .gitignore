@@ -40,5 +40,9 @@ replay_*.log
 *.hprof
 *.jfr
 
+# Ad-hoc decompiled Mojang reference classes extracted at the repo root for reading.
+# Reference-only (proprietary), never part of the build — keep out of version control.
+net/
+
 # Agent
 .claude/

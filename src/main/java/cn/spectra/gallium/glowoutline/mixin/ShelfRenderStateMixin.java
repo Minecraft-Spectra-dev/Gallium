@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
+//#if MC>=1_21_09
 import cn.spectra.gallium.glowoutline.capture.ShelfRenderStateAccessor;
 import net.minecraft.client.renderer.blockentity.state.ShelfRenderState;
 import net.minecraft.world.item.ItemStack;
@@ -24,3 +25,11 @@ public class ShelfRenderStateMixin implements ShelfRenderStateAccessor {
         }
     }
 }
+//#else
+//$$ // Shelves (ShelfRenderState) are a 1.21.9 feature; the target class does not exist
+//$$ // on 1.21.6–1.21.8, so this collapses to an empty stub stripped from mixins.json
+//$$ // via STUB_MIXIN_CLASSES_PRE_1_21_09 in common.gradle.
+//$$ public final class ShelfRenderStateMixin {
+//$$     private ShelfRenderStateMixin() {}
+//$$ }
+//#endif

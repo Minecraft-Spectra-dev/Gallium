@@ -1,7 +1,11 @@
 package cn.spectra.gallium.glowoutline;
 
 import net.minecraft.core.component.DataComponentType;
+//#if MC>=1_21_09
 import net.minecraft.resources.Identifier;
+//#else
+//$$ import net.minecraft.resources.ResourceLocation;
+//#endif
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 
@@ -82,7 +86,11 @@ public sealed interface ItemCondition permits
                     Object val = stack.get(component);
                     if (val == null) yield false;
                     if (val instanceof ItemEnchantments enchants) {
+                        //#if MC>=1_21_09
                         var id = Identifier.parse(value);
+                        //#else
+                        //$$ var id = ResourceLocation.parse(value);
+                        //#endif
                         boolean found = false;
                         for (var holder : enchants.keySet()) {
                             if (holder.is(id)) { found = true; break; }
