@@ -1,7 +1,8 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
 import cn.spectra.gallium.glowoutline.capture.GuiGlowCaptureManager;
-//#if MC<1_26_00
+//#if MC>=1_26_00
+//#elseif MC>=1_21_06
 //$$ import cn.spectra.gallium.glowoutline.mixin.accessor.GuiRendererAccessor;
 //#endif
 import cn.spectra.gallium.glowoutline.shader.GlowUniformBuffer;
@@ -9,21 +10,26 @@ import cn.spectra.gallium.glowoutline.shader.GuiGlowDispatcher;
 import cn.spectra.gallium.glowoutline.shader.GuiGlowElementPipeline;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.blaze3d.buffers.GpuBuffer;
+//#if MC>=1_21_06
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
+//#endif
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.systems.RenderPass;
-//#if MC<1_26_00
+//#if MC>=1_26_00
+//#elseif MC>=1_21_06
 //$$ import com.mojang.blaze3d.textures.GpuTextureView;
 //#endif
 import com.mojang.blaze3d.vertex.VertexFormat;
 //#if MC>=1_26_00
 import net.minecraft.client.gui.render.GuiItemAtlas;
 //#endif
+//#if MC>=1_21_06
 import net.minecraft.client.gui.render.GuiRenderer;
+//#endif
 //#if MC>=1_26_00
 import net.minecraft.client.renderer.state.gui.GuiItemRenderState;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
-//#else
+//#elseif MC>=1_21_06
 //$$ import net.minecraft.client.gui.render.state.GuiItemRenderState;
 //$$ import net.minecraft.client.gui.render.state.GuiRenderState;
 //#endif
@@ -35,6 +41,7 @@ import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+//#if MC>=1_21_06
 @Mixin(GuiRenderer.class)
 public class GuiRendererMixin {
 
@@ -87,3 +94,6 @@ public class GuiRendererMixin {
         GuiGlowCaptureManager.clear();
     }
 }
+//#else
+//$$ public class GuiRendererMixin {}
+//#endif

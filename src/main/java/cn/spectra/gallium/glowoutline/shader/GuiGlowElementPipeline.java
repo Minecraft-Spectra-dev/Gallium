@@ -28,6 +28,7 @@ import net.minecraft.resources.Identifier;
  * Keying by {@link ItemEffectConfig} (a record whose equality covers shader+params)
  * preserves the originally-intended one-pipeline-per-config invariant.
  */
+//#if MC>=1_21_06
 public final class GuiGlowElementPipeline {
 
     private static final Map<ItemEffectConfig, RenderPipeline> pipelinesByConfig = new HashMap<>();
@@ -61,7 +62,9 @@ public final class GuiGlowElementPipeline {
                 //#else
                 //$$ .withBlend(BlendFunction.ADDITIVE)
                 //#endif
+                //#if MC>=1_21_06
                 .withUniform("GalliumGuiGlow", UniformType.UNIFORM_BUFFER)
+                //#endif
                 .build();
         pipelinesByConfig.put(cfg, p);
         uboByPipeline.put(p, new GlowUniformBuffer("GUI Glow Uniform Buffer"));
@@ -114,3 +117,13 @@ public final class GuiGlowElementPipeline {
         locationCounter = 0;
     }
 }
+//#else
+//$$ public final class GuiGlowElementPipeline {
+//$$     private GuiGlowElementPipeline() {}
+//$$     static { GlowResources.registerPipeline(() -> {}); }
+//$$     public static RenderPipeline getOrCreate(ItemEffectConfig cfg) { return null; }
+//$$     public static GlowUniformBuffer getUbo(RenderPipeline p) { return null; }
+//$$     public static void updateAllForFrame(int w, int h, float t) {}
+//$$     public static void retainOnly(java.util.Set<ItemEffectConfig> live) {}
+//$$ }
+//#endif

@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.shader;
 
+//#if MC>=1_21_06
 import cn.spectra.gallium.glowoutline.capture.GuiGlowCapture;
 import cn.spectra.gallium.glowoutline.capture.GuiGlowCaptureManager;
 import com.mojang.blaze3d.pipeline.TextureTarget;
@@ -105,3 +106,13 @@ public final class GuiGlowRenderer {
         return maskTarget;
     }
 }
+//#else
+//$$ import com.mojang.blaze3d.pipeline.TextureTarget;
+//$$
+//$$ public final class GuiGlowRenderer {
+//$$     private GuiGlowRenderer() {}
+//$$     static { GlowResources.register(() -> {}); }
+//$$     public static TextureTarget ensureMaskTarget(int w, int h) { return null; }
+//$$     public static TextureTarget getMaskTarget() { return null; }
+//$$ }
+//#endif

@@ -1,6 +1,8 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
-//#if MC<1_26_00
+//#if MC>=1_26_00
+public class CachedPerspectiveProjectionMatrixBufferMixin {}
+//#elseif MC>=1_21_06
 //$$ import cn.spectra.gallium.glowoutline.capture.ProjectionMatrixTracker;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -56,5 +58,5 @@ package cn.spectra.gallium.glowoutline.mixin;
 //$$     private static Matrix4f pending;
 //$$ }
 //#else
-public class CachedPerspectiveProjectionMatrixBufferMixin {}
+//$$ public class CachedPerspectiveProjectionMatrixBufferMixin {}
 //#endif

@@ -1,6 +1,8 @@
 package cn.spectra.gallium.glowoutline.mixin.accessor;
 
-//#if MC<1_26_00
+//#if MC>=1_26_00
+public interface GuiRendererAccessor {}
+//#elseif MC>=1_21_06
 //$$ import com.mojang.blaze3d.textures.GpuTextureView;
 //$$ import net.minecraft.client.gui.render.GuiRenderer;
 //$$ import org.spongepowered.asm.mixin.Mixin;
@@ -18,5 +20,5 @@ package cn.spectra.gallium.glowoutline.mixin.accessor;
 //$$     GpuTextureView gallium$getItemsAtlasView();
 //$$ }
 //#else
-public interface GuiRendererAccessor {}
+//$$ public interface GuiRendererAccessor {}
 //#endif

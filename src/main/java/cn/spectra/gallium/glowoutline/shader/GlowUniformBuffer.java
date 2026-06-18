@@ -4,8 +4,10 @@ import cn.spectra.gallium.Gallium;
 import cn.spectra.gallium.glowoutline.ItemEffectConfig;
 import cn.spectra.gallium.glowoutline.ShaderParam;
 import com.mojang.blaze3d.buffers.GpuBuffer;
+//#if MC>=1_21_06
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
+//#endif
 import com.mojang.blaze3d.systems.RenderSystem;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
@@ -14,6 +16,7 @@ import org.lwjgl.system.MemoryStack;
 
 public class GlowUniformBuffer implements AutoCloseable {
 
+    //#if MC>=1_21_06
     // Header consumes 16B (float time at offset 0, vec2 size aligned to offset 8, std140).
     // Remaining 4080B fits ~255 vec4 params, well above any realistic shader's needs. If a
     // packed entry would still overflow we catch BufferOverflowException once and skip the
@@ -29,7 +32,11 @@ public class GlowUniformBuffer implements AutoCloseable {
         Supplier<String> labelSupplier = () -> label;
         this.buffer = RenderSystem.getDevice().createBuffer(labelSupplier, BUFFER_USAGE_FLAGS, BUFFER_CAPACITY);
     }
+    //#else
+    //$$ public GlowUniformBuffer(String label) {}
+    //#endif
 
+    //#if MC>=1_21_06
     public void update(float frameTimeCounter, int screenWidth, int screenHeight, ItemEffectConfig cfg) {
         update(frameTimeCounter, screenWidth, screenHeight, 1.0f, 1.0f, cfg);
     }
@@ -77,9 +84,12 @@ public class GlowUniformBuffer implements AutoCloseable {
     public GpuBufferSlice getSlice() {
         return this.buffer.slice();
     }
+    //#endif
 
     @Override
     public void close() {
+        //#if MC>=1_21_06
         this.buffer.close();
+        //#endif
     }
 }

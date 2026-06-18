@@ -4,12 +4,13 @@ import cn.spectra.gallium.glowoutline.ItemEffectConfig;
 import cn.spectra.gallium.glowoutline.capture.GuiItemRenderStateAccessor;
 //#if MC>=1_26_00
 import net.minecraft.client.renderer.state.gui.GuiItemRenderState;
-//#else
+//#elseif MC>=1_21_06
 //$$ import net.minecraft.client.gui.render.state.GuiItemRenderState;
 //#endif
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
+//#if MC>=1_21_06
 @Mixin(GuiItemRenderState.class)
 public class GuiItemRenderStateMixin implements GuiItemRenderStateAccessor {
 
@@ -26,3 +27,6 @@ public class GuiItemRenderStateMixin implements GuiItemRenderStateAccessor {
         gallium$effectConfig = config;
     }
 }
+//#else
+//$$ public class GuiItemRenderStateMixin {}
+//#endif

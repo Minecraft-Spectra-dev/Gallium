@@ -37,7 +37,9 @@ public final class GuiGlowCaptureManager {
         // Drop strong references the captures held to GpuTextureView etc., so GC can reclaim them
         // even when the slot stays in the pool.
         for (int i = 0; i < activeCount; i++) {
+            //#if MC>=1_21_06
             pool.get(i).reset();
+            //#endif
         }
         // Shrink the pool when it has overgrown — keep up to the high-water mark of slots.
         if (pool.size() > POOL_HIGH_WATER_MARK) {

@@ -2,6 +2,7 @@ package cn.spectra.gallium.glowoutline.shader;
 
 import com.mojang.blaze3d.textures.AddressMode;
 import com.mojang.blaze3d.textures.FilterMode;
+//#if MC>=1_21_06
 import com.mojang.blaze3d.textures.GpuTextureView;
 //#if MC>=1_21_11
 import com.mojang.blaze3d.systems.RenderPass;
@@ -10,6 +11,7 @@ import com.mojang.blaze3d.textures.GpuSampler;
 //#else
 //$$ import com.mojang.blaze3d.systems.RenderPass;
 //$$ import net.minecraft.client.gui.render.TextureSetup;
+//#endif
 //#endif
 
 /**
@@ -29,6 +31,7 @@ public final class SamplerHelper {
 
     private SamplerHelper() {}
 
+    //#if MC>=1_21_06
     /**
      * Bind {@code view} to {@code samplerName} on {@code pass} as a CLAMP_TO_EDGE sampler
      * with the requested filter mode. On 1.21.10 this also mutates the underlying
@@ -65,5 +68,6 @@ public final class SamplerHelper {
     //$$     tex.setAddressMode(AddressMode.CLAMP_TO_EDGE, AddressMode.CLAMP_TO_EDGE);
     //$$     tex.setTextureFilter(filter, false);
     //$$ }
+    //#endif
     //#endif
 }

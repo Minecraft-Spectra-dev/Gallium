@@ -8,8 +8,10 @@ import cn.spectra.gallium.glowoutline.mixin.accessor.FeatureRenderDispatcherAcce
 import cn.spectra.gallium.glowoutline.mixin.accessor.GameRendererAccessor;
 //#endif
 import com.mojang.blaze3d.buffers.GpuBuffer;
+//#if MC>=1_21_06
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
+//#endif
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -53,7 +55,9 @@ public final class GlowCaptureManager {
      *  scaling is active. Reused across captures within a frame; rewritten before each
      *  mask render. {@code null} until first use; disposed via the GlowResources hook. */
     private static @Nullable GpuBuffer scaledProjectionBuffer;
+    //#if MC>=1_21_06
     private static @Nullable GpuBufferSlice scaledProjectionSlice;
+    //#endif
     /** Reused holder for the scaled projection. Render thread is single-threaded, so a static
      *  scratch matrix avoids two {@code Matrix4f} allocations per mask render. */
     private static final Matrix4f SCRATCH_SCALED_PROJECTION = new Matrix4f();
@@ -94,11 +98,13 @@ public final class GlowCaptureManager {
             if (sceneDepthTarget != null) sceneDepthTarget.destroyBuffers();
             sceneDepthTarget = new TextureTarget("GlowSceneDepth", w, h, true);
             //#if MC<1_21_11
+            //#if MC>=1_21_06
             //$$ // Same sampler-completeness rationale as the mask depth target in
             //$$ // beginItemCapture: keep useMipmaps=false on the single-mip depth view
             //$$ // so the composite shader's SceneDepthSampler reads real depth values
             //$$ // rather than the (1,1,1,1) returned by an incomplete sampler.
             //$$ sceneDepthTarget.getDepthTexture().setUseMipmaps(false);
+            //#endif
             //#endif
         }
 
@@ -137,13 +143,18 @@ public final class GlowCaptureManager {
         if (state.capturedModelViewMatrix == null) state.capturedModelViewMatrix = new Matrix4f();
         state.capturedModelViewMatrix.set(RenderSystem.getModelViewMatrix());
         state.capturedModelViewMatrixValid = true;
-        // Snapshot the Matrix4f form too. Vanilla pipelines hand setProjectionMatrix only a
-        // GpuBufferSlice (already serialized), so we reconstruct via ProjectionMatrixTracker
-        // which the per-version mixins keep up to date.
+        //#if MC>=1_21_06
+        // Snapshot via GpuBufferSlice for the deferred render pass (>=1.21.6 API).
         state.capturedProjectionMatrix = RenderSystem.getProjectionMatrixBuffer();
         state.capturedProjectionType = RenderSystem.getProjectionType();
         state.capturedProjectionMatrix4fValid = ProjectionMatrixTracker.lookupInto(
                 state.capturedProjectionMatrix, state.capturedProjectionMatrix4f) != null;
+        //#else
+        //$$ // 1.21.5: capture projection as Matrix4f directly (no GpuBufferSlice API).
+        //$$ state.capturedProjectionMatrix4f.set(RenderSystem.getProjectionMatrix());
+        //$$ state.capturedProjectionType = RenderSystem.getProjectionType();
+        //$$ state.capturedProjectionMatrix4fValid = true;
+        //#endif
 
         Minecraft mc = Minecraft.getInstance();
         RenderTarget main = mc.getMainRenderTarget();
@@ -155,6 +166,7 @@ public final class GlowCaptureManager {
             state.maskTarget = new TextureTarget("GlowMask_" + Integer.toHexString(System.identityHashCode(state)),
                     main.width, main.height, true);
             //#if MC<1_21_11
+            //#if MC>=1_21_06
             //$$ // 1.21.10's mask textures are mipLevels=1 but GpuTexture defaults
             //$$ // useMipmaps=true, which makes GL_TEXTURE_MIN_FILTER pick a mipmap
             //$$ // variant (e.g. GL_NEAREST_MIPMAP_LINEAR). Combined with
@@ -165,11 +177,14 @@ public final class GlowCaptureManager {
             //$$ state.maskTarget.getColorTexture().setUseMipmaps(false);
             //$$ state.maskTarget.getDepthTexture().setUseMipmaps(false);
             //#endif
+            //#endif
         } else if (state.maskTarget.width != main.width || state.maskTarget.height != main.height) {
             state.maskTarget.resize(main.width, main.height);
             //#if MC<1_21_11
+            //#if MC>=1_21_06
             //$$ state.maskTarget.getColorTexture().setUseMipmaps(false);
             //$$ state.maskTarget.getDepthTexture().setUseMipmaps(false);
+            //#endif
             //#endif
         }
 
@@ -234,9 +249,6 @@ public final class GlowCaptureManager {
     public static void renderCapturedNodes(GlowCaptureState state, Minecraft mc) {
         //#if MC>=1_21_09
         if (state.captureDispatcher == null || state.captureBuffers == null || state.maskTarget == null) return;
-        //#else
-        //$$ if (state.captureBuffers == null || state.maskTarget == null) return;
-        //#endif
 
         var encoder = RenderSystem.getDevice().createCommandEncoder();
         encoder.clearColorTexture(state.maskTarget.getColorTexture(), 0);
@@ -291,18 +303,9 @@ public final class GlowCaptureManager {
 
         var irisSnapshot = IrisCompat.setBypass(true);
         try {
-            //#if MC>=1_21_09
             state.captureDispatcher.renderAllFeatures();
             state.captureBuffers.bufferSource().endBatch();
             state.captureBuffers.outlineBufferSource().endOutlineBatch();
-            //#else
-            //$$ if (state.customBufferSource != null) {
-            //$$     state.customBufferSource.flush();
-            //$$ } else {
-            //$$     state.captureBuffers.bufferSource().endBatch();
-            //$$ }
-            //$$ state.captureBuffers.outlineBufferSource().endOutlineBatch();
-            //#endif
         } finally {
             IrisCompat.restoreBypass(irisSnapshot);
             if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
@@ -317,6 +320,166 @@ public final class GlowCaptureManager {
 
         state.lastMaskScale = maskScale;
         state.capturedThisFrame = true;
+        //#elseif MC>=1_21_06
+        //$$ if (state.captureBuffers == null || state.maskTarget == null) return;
+        //$$
+        //$$ var encoder = RenderSystem.getDevice().createCommandEncoder();
+        //$$ encoder.clearColorTexture(state.maskTarget.getColorTexture(), 0);
+        //$$
+        //$$ if (state.firstPerson) {
+        //$$     encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 1.0);
+        //$$ } else if (!sceneDepthCaptured) {
+        //$$     RenderTarget mainTarget = mc.getMainRenderTarget();
+        //$$     encoder.copyTextureToTexture(
+        //$$             mainTarget.getDepthTexture(), state.maskTarget.getDepthTexture(),
+        //$$             0, 0, 0, 0, 0, mainTarget.width, mainTarget.height);
+        //$$ } else if (IrisCompat.isShaderActive()) {
+        //$$     encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 1.0);
+        //$$ }
+        //$$
+        //$$ var oldColor = RenderSystem.outputColorTextureOverride;
+        //$$ var oldDepth = RenderSystem.outputDepthTextureOverride;
+        //$$ RenderSystem.outputColorTextureOverride = state.maskTarget.getColorTextureView();
+        //$$ RenderSystem.outputDepthTextureOverride = state.maskTarget.getDepthTextureView();
+        //$$
+        //$$ GpuBufferSlice maskProjectionSlice = state.capturedProjectionMatrix;
+        //$$ float maskScale = 1.0f;
+        //$$ if (state.capturedProjectionMatrix4fValid
+        //$$         && IrisCompat.isShaderActive()
+        //$$         && IrisCompat.getShaderInternalScale() < 0.999f) {
+        //$$     float scale = IrisCompat.getShaderInternalScale();
+        //$$     GpuBufferSlice scaled = uploadScaledProjection(state.capturedProjectionMatrix4f, scale);
+        //$$     if (scaled != null) {
+        //$$         maskProjectionSlice = scaled;
+        //$$         maskScale = scale;
+        //$$     }
+        //$$ }
+        //$$
+        //$$ boolean restoreProjection = maskProjectionSlice != null && state.capturedProjectionType != null;
+        //$$ if (restoreProjection) {
+        //$$     RenderSystem.backupProjectionMatrix();
+        //$$     RenderSystem.setProjectionMatrix(maskProjectionSlice, state.capturedProjectionType);
+        //$$ }
+        //$$
+        //$$ if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
+        //$$     RenderSystem.getModelViewStack().pushMatrix();
+        //$$     RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
+        //$$ }
+        //$$
+        //$$ var irisSnapshot = IrisCompat.setBypass(true);
+        //$$ try {
+        //$$     if (state.customBufferSource != null) {
+        //$$         state.customBufferSource.flush();
+        //$$     } else {
+        //$$         state.captureBuffers.bufferSource().endBatch();
+        //$$     }
+        //$$     state.captureBuffers.outlineBufferSource().endOutlineBatch();
+        //$$ } finally {
+        //$$     IrisCompat.restoreBypass(irisSnapshot);
+        //$$     if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
+        //$$         RenderSystem.getModelViewStack().popMatrix();
+        //$$     }
+        //$$     if (restoreProjection) {
+        //$$         RenderSystem.restoreProjectionMatrix();
+        //$$     }
+        //$$     RenderSystem.outputColorTextureOverride = oldColor;
+        //$$     RenderSystem.outputDepthTextureOverride = oldDepth;
+        //$$ }
+        //$$
+        //$$ state.lastMaskScale = maskScale;
+        //$$ state.capturedThisFrame = true;
+        //#else
+        //$$ // 1.21.5: no outputColorTextureOverride. DelayingMultiBufferSource.flushToTarget()
+        //$$ // manually uploads meshes and opens a RenderPass targeting the mask textures.
+        //$$ if (state.captureBuffers == null || state.maskTarget == null) return;
+        //$$
+        //$$ var encoder = RenderSystem.getDevice().createCommandEncoder();
+        //$$ encoder.clearColorTexture(state.maskTarget.getColorTexture(), 0);
+        //$$
+        //$$ // Mask depth strategy on 1.21.5 mirrors the >=1.21.6 branch above:
+        //$$ //   * firstPerson: clear to 1.0 (no occlusion within held item).
+        //$$ //   * sceneDepthCaptured (the common world-item path): captureSceneDepth already
+        //$$ //     copied the pre-clear world depth into every existing state's mask depth, so
+        //$$ //     don't overwrite it here. Critically, on 1.21.5 GameRenderer.renderLevel issues
+        //$$ //     a clearDepthTexture(mainDepth, 1.0) right after levelRenderer.renderLevel and
+        //$$ //     before renderItemInHand — so by the time our renderLevel TAIL hook runs,
+        //$$ //     mainTarget.getDepthTexture() is the *cleared* depth (1.0 + held-item), NOT
+        //$$ //     world depth. Copying from it would defeat depth-test occlusion entirely.
+        //$$ //   * Iris shader active: clear to 1.0 and rely on sceneDepthTarget for the
+        //$$ //     composite-time depth comparison (Iris rewrites main depth via deferred
+        //$$ //     pipeline so its post-pipeline value isn't comparable against item z).
+        //$$ //   * Fallback (sceneDepth not yet captured this frame): copy from main as a
+        //$$ //     last resort. This branch should not normally trigger on world items because
+        //$$ //     the captureSceneDepth hook fires before world depth is wiped.
+        //$$ if (state.firstPerson) {
+        //$$     encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 1.0);
+        //$$ } else if (!sceneDepthCaptured) {
+        //$$     RenderTarget mainTarget = mc.getMainRenderTarget();
+        //$$     encoder.copyTextureToTexture(
+        //$$             mainTarget.getDepthTexture(), state.maskTarget.getDepthTexture(),
+        //$$             0, 0, 0, 0, 0, mainTarget.width, mainTarget.height);
+        //$$ } else if (IrisCompat.isShaderActive()) {
+        //$$     encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 1.0);
+        //$$ }
+        //$$ // else: captureSceneDepth already populated mask depth with the pre-clear world depth.
+        //$$
+        //$$ if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
+        //$$     RenderSystem.getModelViewStack().pushMatrix();
+        //$$     RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
+        //$$ }
+        //$$
+        //$$ // Restore the projection matrix that was active during capture so the
+        //$$ // replayed geometry lands at the same screen position. When an Iris pack
+        //$$ // with internal scaling (e.g. Kappa/Nostalgia VertexDownscaling) is active,
+        //$$ // pre-multiply by the scale matrix so the mask is rasterized into the same
+        //$$ // [0, scale]² subrect that the shader pack produces — otherwise the mask is
+        //$$ // full-resolution while sceneDepthTarget (sampled by the composite shader as
+        //$$ // SceneDepthSampler) is in shader-pack space, and the per-pixel depth lookup
+        //$$ // reads from the wrong place, producing a misaligned outline.
+        //$$ //
+        //$$ // 1.21.5 lacks GpuBufferSlice/Std140Builder so we can't share the >=1.21.6
+        //$$ // UBO upload path; instead we set the scaled Matrix4f directly via the
+        //$$ // (Matrix4f, ProjectionType) overload of setProjectionMatrix.
+        //$$ float maskScale = 1.0f;
+        //$$ Matrix4f maskProjection = state.capturedProjectionMatrix4f;
+        //$$ if (state.capturedProjectionMatrix4fValid
+        //$$         && IrisCompat.isShaderActive()
+        //$$         && IrisCompat.getShaderInternalScale() < 0.999f) {
+        //$$     float scale = IrisCompat.getShaderInternalScale();
+        //$$     maskProjection = computeScaledProjection(state.capturedProjectionMatrix4f,
+        //$$             scale, SCRATCH_SCALED_PROJECTION);
+        //$$     maskScale = scale;
+        //$$ }
+        //$$ boolean restoreProj = state.capturedProjectionMatrix4fValid
+        //$$         && state.capturedProjectionType != null;
+        //$$ if (restoreProj) {
+        //$$     RenderSystem.backupProjectionMatrix();
+        //$$     RenderSystem.setProjectionMatrix(maskProjection,
+        //$$             state.capturedProjectionType);
+        //$$ }
+        //$$
+        //$$ var irisSnapshot = IrisCompat.setBypass(true);
+        //$$ try {
+        //$$     if (state.customBufferSource != null) {
+        //$$         state.customBufferSource.flushToTarget(state.maskTarget);
+        //$$     } else {
+        //$$         state.captureBuffers.bufferSource().endBatch();
+        //$$     }
+        //$$     state.captureBuffers.outlineBufferSource().endOutlineBatch();
+        //$$ } finally {
+        //$$     IrisCompat.restoreBypass(irisSnapshot);
+        //$$     if (restoreProj) {
+        //$$         RenderSystem.restoreProjectionMatrix();
+        //$$     }
+        //$$ }
+        //$$
+        //$$ if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
+        //$$     RenderSystem.getModelViewStack().popMatrix();
+        //$$ }
+        //$$
+        //$$ state.lastMaskScale = maskScale;
+        //$$ state.capturedThisFrame = true;
+        //#endif
     }
 
     /**
@@ -324,6 +487,7 @@ public final class GlowCaptureManager {
      * {@code VertexDownscaling}: {@code gl_Position.xy = gl_Position.xy * scale - (1-scale) * gl_Position.w}.
      * Returns a slice into a reused buffer; the contents are valid until the next call.
      */
+    //#if MC>=1_21_06
     private static @Nullable GpuBufferSlice uploadScaledProjection(Matrix4f baseProjection, float scale) {
         if (scaledProjectionBuffer == null) {
             scaledProjectionBuffer = RenderSystem.getDevice().createBuffer(
@@ -343,6 +507,7 @@ public final class GlowCaptureManager {
         }
         return scaledProjectionSlice;
     }
+    //#endif
 
     /**
      * Writes {@code S * baseProjection} into {@code dest} and returns it, where {@code S} is the
@@ -402,7 +567,9 @@ public final class GlowCaptureManager {
         if (scaledProjectionBuffer != null) {
             scaledProjectionBuffer.close();
             scaledProjectionBuffer = null;
+            //#if MC>=1_21_06
             scaledProjectionSlice = null;
+            //#endif
         }
         sceneDepthCaptured = false;
         activeStates.clear();

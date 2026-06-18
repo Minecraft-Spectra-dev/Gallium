@@ -2,7 +2,9 @@ package cn.spectra.gallium.glowoutline.capture;
 
 import cn.spectra.gallium.glowoutline.ItemEffectConfig;
 import com.mojang.blaze3d.ProjectionType;
+//#if MC>=1_21_06
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
+//#endif
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import net.minecraft.client.renderer.RenderBuffers;
 //#if MC>=1_21_09
@@ -31,7 +33,9 @@ public final class GlowCaptureState {
 
     public @Nullable Matrix4f capturedModelViewMatrix;
     public boolean capturedModelViewMatrixValid;
+    //#if MC>=1_21_06
     public @Nullable GpuBufferSlice capturedProjectionMatrix;
+    //#endif
     public @Nullable ProjectionType capturedProjectionType;
     /** Plain Matrix4f form of {@link #capturedProjectionMatrix} when available. We need it
      *  to apply VertexDownscaling for shader-pack scale alignment on the mask render; when
@@ -53,7 +57,9 @@ public final class GlowCaptureState {
         firstPerson = false;
         config = null;
         capturedModelViewMatrixValid = false;
+        //#if MC>=1_21_06
         capturedProjectionMatrix = null;
+        //#endif
         capturedProjectionType = null;
         capturedProjectionMatrix4fValid = false;
         lastMaskScale = 1.0f;

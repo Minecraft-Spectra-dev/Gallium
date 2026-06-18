@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.capture;
 
+//#if MC>=1_21_06
 import cn.spectra.gallium.glowoutline.shader.GlowResources;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -75,3 +76,8 @@ public final class ProjectionMatrixTracker {
         ASSOCIATIONS.clear();
     }
 }
+//#else
+//$$ public final class ProjectionMatrixTracker {
+//$$     private ProjectionMatrixTracker() {}
+//$$ }
+//#endif

@@ -1,6 +1,8 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
-//#if MC<1_26_00
+//#if MC>=1_26_00
+public class PerspectiveProjectionMatrixBufferMixin {}
+//#elseif MC>=1_21_06
 //$$ import cn.spectra.gallium.glowoutline.capture.ProjectionMatrixTracker;
 //$$ import com.mojang.blaze3d.buffers.GpuBufferSlice;
 //$$ import net.minecraft.client.renderer.PerspectiveProjectionMatrixBuffer;
@@ -29,5 +31,5 @@ package cn.spectra.gallium.glowoutline.mixin;
 //$$     }
 //$$ }
 //#else
-public class PerspectiveProjectionMatrixBufferMixin {}
+//$$ public class PerspectiveProjectionMatrixBufferMixin {}
 //#endif

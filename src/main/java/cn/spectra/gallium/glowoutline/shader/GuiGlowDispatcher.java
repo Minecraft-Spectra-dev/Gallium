@@ -5,6 +5,7 @@ import cn.spectra.gallium.glowoutline.capture.GuiGlowCapture;
 import cn.spectra.gallium.glowoutline.capture.GuiGlowCaptureManager;
 import cn.spectra.gallium.glowoutline.capture.GuiGlowElementRenderState;
 import cn.spectra.gallium.glowoutline.capture.GuiItemRenderStateAccessor;
+//#if MC>=1_21_06
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.textures.FilterMode;
@@ -22,6 +23,7 @@ import net.minecraft.client.renderer.state.gui.GuiRenderState;
 //$$ import net.minecraft.client.gui.render.state.GuiRenderState;
 //#endif
 import org.joml.Matrix3x2f;
+//#endif
 
 /**
  * GUI-side glue between item rendering and the glow mask pipeline. Pulled out of
@@ -34,6 +36,7 @@ import org.joml.Matrix3x2f;
  * every side, the fragment shader's ring sampling can never read a neighbouring item's
  * mask — eliminating the cross-item outline bleed that plagued the old screen-space layout.
  */
+//#if MC>=1_21_06
 public final class GuiGlowDispatcher {
 
     /** GUI-px margin around the 16x16 item slot. Both the glow quad and each mask cell's
@@ -162,3 +165,8 @@ public final class GuiGlowDispatcher {
         GuiGlowElementPipeline.updateAllForFrame(screenW, screenH, GlowTime.guiSecondsFloat());
     }
 }
+//#else
+//$$ public final class GuiGlowDispatcher {
+//$$     private GuiGlowDispatcher() {}
+//$$ }
+//#endif

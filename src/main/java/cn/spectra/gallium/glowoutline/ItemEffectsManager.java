@@ -74,6 +74,9 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
             rules = List.of();
             active = false;
             GlowPipeline.retainOnly(java.util.Set.of());
+            //#if MC<1_21_06
+            //$$ GlowPipeline.retainOnlyConfigs(java.util.Set.of());
+            //#endif
             GuiGlowElementPipeline.retainOnly(java.util.Set.of());
             Gallium.LOGGER.info("No item_effects.json found, glow outline inactive.");
             return;
@@ -89,6 +92,9 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
             rules = List.of();
             active = false;
             GlowPipeline.retainOnly(java.util.Set.of());
+            //#if MC<1_21_06
+            //$$ GlowPipeline.retainOnlyConfigs(java.util.Set.of());
+            //#endif
             GuiGlowElementPipeline.retainOnly(java.util.Set.of());
         }
     }
@@ -120,17 +126,28 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
         for (ItemEffectRule rule : parsed) {
             ItemEffectConfig cfg = rule.effect();
             if (cfg == null) continue;
-            shaders.add(cfg.shader());
-            if (!cfg.shader().isEmpty()) liveConfigs.add(cfg);
+            String shader = cfg.shader();
+            if (!shader.isEmpty()) {
+                shaders.add(shader);
+                liveConfigs.add(cfg);
+            }
         }
-        for (String shader : shaders) {
-            if (!shader.isEmpty()) GlowPipeline.getOrCreate(shader);
+        for (ItemEffectConfig cfg : liveConfigs) {
+            GlowPipeline.getOrCreate(cfg);
         }
         for (ItemEffectConfig cfg : liveConfigs) {
             GuiGlowElementPipeline.getOrCreate(cfg);
         }
         // Drop pipelines no longer referenced by any current rule.
         GlowPipeline.retainOnly(shaders);
+        //#if MC<1_21_06
+        //$$ // 1.21.5 also has a per-config pipeline cache (statically declares per-param
+        //$$ // uniforms). retainOnly(Set<String>) only prunes the unused String-keyed
+        //$$ // REGISTRY on 1.21.5; without this, a config whose params changed across
+        //$$ // reload but whose shader name stayed the same would leave its stale,
+        //$$ // wrong-uniforms pipeline cached forever.
+        //$$ GlowPipeline.retainOnlyConfigs(liveConfigs);
+        //#endif
         GuiGlowElementPipeline.retainOnly(liveConfigs);
 
         Gallium.LOGGER.info("Loaded item effects: {} rules, {} shaders", rules.size(), shaders.size());

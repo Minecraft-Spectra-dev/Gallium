@@ -120,10 +120,45 @@ List<String> STUB_MIXIN_CLASSES_PRE_1_21_09 = [
         "accessor.FeatureRenderDispatcherAccessor"
 ]
 
+// Mixins whose target class only exists on >=1_21_06 (absent on 1.21.5).
+// 1.21.6 introduced the GUI deferred render-state system (GuiRenderState,
+// GuiItemRenderState, GuiElementRenderState, GuiRenderer, TextureSetup),
+// blaze3D buffer/texture classes (Std140Builder, GpuTextureView), and
+// projection-matrix buffer classes (PerspectiveProjectionMatrixBuffer,
+// CachedPerspectiveProjectionMatrixBuffer). Mixins targeting any of these
+// collapse to empty stubs on 1.21.5 and must be stripped from mixins.json.
+//
+// GuiGraphicsItemMixin is NOT in this list: GuiGraphics exists on 1.21.5 and
+// the 1.21.5 //#else branch carries a real @Mixin(GuiGraphics.class) for the
+// 1.21.5 GUI glow capture path (immediate-mode tee around the inner
+// ItemStackRenderState.render call). It still shows up in
+// STUB_MIXIN_CLASSES_FROM_1_26 because 26.1 dropped that path in favor of
+// GuiGraphicsExtractorMixin on the deferred render-state.
+List<String> STUB_MIXIN_CLASSES_PRE_1_21_06 = [
+        "accessor.GuiRendererAccessor",
+        "GuiRendererMixin",
+        "GuiItemRenderStateMixin",
+        "GuiItemAtlasMixin",
+        "PerspectiveProjectionMatrixBufferMixin",
+        "CachedPerspectiveProjectionMatrixBufferMixin"
+]
+
+// Mixins that are real on 1.21.5 and collapse to stubs from 1.21.6 onwards.
+// Used for UBO compatibility shims; MC ≥1.21.6 supports UBOs natively.
+List<String> STUB_MIXIN_CLASSES_FROM_1_21_06 = [
+        "ShaderUboCompatMixin"
+]
+
 List<String> ACTIVE_STUB_MIXINS = []
 ACTIVE_STUB_MIXINS += unobfuscated ? STUB_MIXIN_CLASSES_FROM_1_26 : STUB_MIXIN_CLASSES_PRE_1_26
 if (mcVersion >= 1_21_11) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_FROM_1_21_11
+}
+if (mcVersion < 1_21_06) {
+    ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_PRE_1_21_06
+}
+if (mcVersion >= 1_21_06) {
+    ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_FROM_1_21_06
 }
 if (mcVersion < 1_21_09) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_PRE_1_21_09

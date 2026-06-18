@@ -23,6 +23,7 @@
 		"CachedPerspectiveProjectionMatrixBufferMixin",
 		"ProjectionMatrixBufferMixin",
 		"ArmedEntityRenderStateMixin",
+		"ShaderUboCompatMixin",
 		"accessor.FeatureRenderDispatcherAccessor",
 		"accessor.GameRendererAccessor",
 		"accessor.GuiRendererAccessor"

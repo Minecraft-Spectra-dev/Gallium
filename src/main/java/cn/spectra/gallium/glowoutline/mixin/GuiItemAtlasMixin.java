@@ -17,7 +17,7 @@ public class GuiItemAtlasMixin {
         return usage | GpuTexture.USAGE_COPY_SRC;
     }
 }
-//#else
+//#elseif MC>=1_21_06
 //$$ import com.mojang.blaze3d.textures.GpuTexture;
 //$$ import net.minecraft.client.gui.render.GuiRenderer;
 //$$ import org.spongepowered.asm.mixin.Mixin;
@@ -47,4 +47,6 @@ public class GuiItemAtlasMixin {
 //$$         return usage | GpuTexture.USAGE_COPY_SRC;
 //$$     }
 //$$ }
+//#else
+//$$ public class GuiItemAtlasMixin {}
 //#endif

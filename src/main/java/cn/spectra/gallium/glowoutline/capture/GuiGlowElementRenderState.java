@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.capture;
 
+//#if MC>=1_21_06
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
@@ -53,3 +54,6 @@ public record GuiGlowElementRenderState(
     //$$ }
     //#endif
 }
+//#else
+//$$ public record GuiGlowElementRenderState() {}
+//#endif

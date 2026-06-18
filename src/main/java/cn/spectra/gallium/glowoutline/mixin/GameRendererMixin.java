@@ -54,6 +54,10 @@ public class GameRendererMixin {
         GlowCaptureManager.captureSceneDepth(mainTarget);
     }
 
+    //#if MC>=1_21_06
+    // 1.21.6+: Iris's MixinGameRenderer.iris$runColorSpace also injects at renderLevel TAIL,
+    // but on these versions the composite ordering has been observed to work correctly without
+    // intervention. Keep the simple TAIL hook here.
     @Inject(method = "renderLevel", at = @At("TAIL"))
     private void galliumGlowComposite(DeltaTracker deltaTracker, CallbackInfo ci) {
         if (!ItemEffectsManager.isActive()) return;
@@ -66,4 +70,57 @@ public class GameRendererMixin {
 
         GlowComposite.composite(minecraft, mainTarget);
     }
+    //#else
+    //$$ // 1.21.5: three different things ALL fight for the same renderLevel TAIL slot or run
+    //$$ // shortly after, any of which can clobber a composite painted onto mainTarget too early:
+    //$$ //   1. Iris's MixinGameRenderer.iris$runColorSpace injects at renderLevel TAIL too;
+    //$$ //      relative ordering with our hook is decided by mixin apply order, not mixin
+    //$$ //      priority — and Iris's finalize writes the shader pack's final image into
+    //$$ //      mainTarget. If Iris runs after us, our outline is gone.
+    //$$ //   2. After renderLevel returns, GameRenderer.render calls levelRenderer.doEntityOutline
+    //$$ //      which blits the (separate) entity-outline target onto mainTarget. Mostly empty
+    //$$ //      blit when no entity is glowing, but still touches the surface.
+    //$$ //   3. If postEffectId is active (spectator-camera entity invert/sobel/etc.),
+    //$$ //      postChain.process(mainTarget, ...) is called AFTER doEntityOutline; it reads
+    //$$ //      mainTarget, applies the post-shader, and writes it back — destroying our outline.
+    //$$ //
+    //$$ // Fix: target the FIRST clearDepthTexture call inside GameRenderer.render itself
+    //$$ // (1.21.5: line 483, immediately AFTER the `if (level != null)` block closes — i.e.
+    //$$ // past renderLevel-TAIL, past doEntityOutline, past PostChain.process, BEFORE GUI/HUD
+    //$$ // setup). ordinal=0 picks that exact site (line 500 is the second clearDepthTexture
+    //$$ // and runs after GUI, which is too late). expect=1 fails the build loudly if vanilla
+    //$$ // refactors render() and the first clearDepthTexture moves elsewhere; without expect
+    //$$ // a refactor would silently disable our composite.
+    //$$ //
+    //$$ // Note: line 483 sits inside the outer `if (!noRender)` block but OUTSIDE the
+    //$$ // `if (level != null)` block — i.e. it always runs when render produces output. We
+    //$$ // explicitly guard on level == null inside the inject method because composite has
+    //$$ // nothing to do without a world.
+    //$$ @Inject(method = "render(Lnet/minecraft/client/DeltaTracker;Z)V",
+    //$$         at = @At(value = "INVOKE",
+    //$$                 target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture(Lcom/mojang/blaze3d/textures/GpuTexture;D)V",
+    //$$                 ordinal = 0,
+    //$$                 // CommandEncoder is unobfuscated (com.mojang.blaze3d.* lives outside
+    //$$                 // Mojang mappings), so suppress the Mixin AP "Unable to locate method
+    //$$                 // mapping" warning the same way galliumCaptureSceneDepth does.
+    //$$                 remap = false),
+    //$$         expect = 1)
+    //$$ private void galliumGlowComposite(DeltaTracker deltaTracker, boolean bl, CallbackInfo ci) {
+    //$$     if (this.minecraft.level == null) return;
+    //$$     if (!ItemEffectsManager.isActive()) return;
+    //$$     if (!GlowOutlineConfig.isEnabled()) return;
+    //$$     if (IrisCompat.isShadowPass()) return;
+    //$$
+    //$$     RenderTarget mainTarget = minecraft.getMainRenderTarget();
+    //$$     if (mainTarget == null || mainTarget.getColorTexture() == null) return;
+    //$$     if (!GlowComposite.hasAnyValidCapture()) return;
+    //$$
+    //$$     GlowComposite.composite(minecraft, mainTarget);
+    //$$ }
+    //$$
+    //$$ // GUI glow on 1.21.5 is composited per-item in GuiGraphicsItemMixin (atlas-tile
+    //$$ // approach matching 1.21.6+'s alpha-ring sampling). No frame-end hook needed —
+    //$$ // each item draws its outline immediately after its vanilla render, so subsequent
+    //$$ // GUI elements (tooltips, scoreboard, overlays) layer on top naturally.
+    //#endif
 }

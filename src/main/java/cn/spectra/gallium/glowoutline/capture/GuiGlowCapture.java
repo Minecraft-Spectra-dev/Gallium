@@ -1,6 +1,8 @@
 package cn.spectra.gallium.glowoutline.capture;
 
+//#if MC>=1_21_06
 import com.mojang.blaze3d.textures.GpuTextureView;
+//#endif
 
 /**
  * Per-item record for the GUI glow mask pass. {@link GuiGlowDispatcher} fills one of these
@@ -9,6 +11,7 @@ import com.mojang.blaze3d.textures.GpuTextureView;
  * pre-assigned mask cell interior.
  */
 public class GuiGlowCapture {
+    //#if MC>=1_21_06
     public GpuTextureView atlasTextureView;
     /** Atlas source corner: u0 = slot left edge, v1 = slot bottom edge (atlas-uv y-up). */
     public float u0, v1;
@@ -34,4 +37,5 @@ public class GuiGlowCapture {
     public void reset() {
         this.atlasTextureView = null;
     }
+    //#endif
 }
