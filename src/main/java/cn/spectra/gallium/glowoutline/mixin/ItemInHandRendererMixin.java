@@ -118,10 +118,11 @@ public class ItemInHandRendererMixin {
 //$$     }
 //$$ }
 //#else
-//$$ // 1.21.4: ItemRenderer.renderStatic carries an extra `boolean` parameter that 1.21.5
-//$$ // dropped, and ItemInHandRenderer.renderItem itself also takes that boolean. Both the
-//$$ // injection target descriptor and the wrapper signature must match the 10-arg form,
-//$$ // otherwise mixin reports "Scanned 0 target(s)" and crashes at startup.
+//$$ // 1.21.3 / 1.21.4: ItemRenderer.renderStatic carries an extra `boolean` parameter that
+//$$ // 1.21.5 dropped, and ItemInHandRenderer.renderItem itself also takes that boolean. Both
+//$$ // the injection target descriptor and the wrapper signature must match the 10-arg form,
+//$$ // otherwise mixin reports "Scanned 0 target(s)" and crashes at startup. Signature is
+//$$ // identical between 1.21.3 and 1.21.4, so a single branch covers both.
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
 //$$ import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;

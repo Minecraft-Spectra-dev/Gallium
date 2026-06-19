@@ -41,7 +41,7 @@ public class HumanoidArmorLayerMixin {
         }
     }
 }
-//#else
+//#elseif MC>=1_21_04
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -56,13 +56,47 @@ public class HumanoidArmorLayerMixin {
 //$$ import net.minecraft.world.item.ItemStack;
 //$$ import org.spongepowered.asm.mixin.Mixin;
 //$$ import org.spongepowered.asm.mixin.injection.At;
-//$$ 
+//$$
 //$$ @Mixin(HumanoidArmorLayer.class)
 //$$ public class HumanoidArmorLayerMixin {
-//$$ 
+//$$
 //$$     @WrapOperation(method = "renderArmorPiece", at = @At(value = "INVOKE",
 //$$             target = "Lnet/minecraft/client/renderer/entity/layers/EquipmentLayerRenderer;renderLayers(Lnet/minecraft/client/resources/model/EquipmentClientInfo$LayerType;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/client/model/Model;Lnet/minecraft/world/item/ItemStack;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V"))
 //$$     private void galliumWrapArmorRender(EquipmentLayerRenderer renderer, EquipmentClientInfo.LayerType layerType, ResourceKey<?> assetId, Model model, ItemStack itemStack, PoseStack poseStack, MultiBufferSource bufferSource, int light, Operation<Void> original) {
+//$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
+//$$                 itemStack, bufferSource, GlowOutlineConfig.Toggle.ARMOR);
+//$$         try {
+//$$             original.call(renderer, layerType, assetId, model, itemStack, poseStack, wrapped, light);
+//$$         } finally {
+//$$             CaptureSites.end();
+//$$         }
+//$$     }
+//$$ }
+//#else
+//$$ // 1.21.3: EquipmentLayerRenderer.renderLayers takes EquipmentModel.LayerType +
+//$$ // ResourceLocation (1.21.4 renamed to EquipmentClientInfo.LayerType + ResourceKey<EquipmentAsset>).
+//$$ // Same wrap shape, just with the older type names in the descriptor and signature.
+//$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
+//$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+//$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+//$$ import com.mojang.blaze3d.vertex.PoseStack;
+//$$ import net.minecraft.client.model.Model;
+//$$ import net.minecraft.client.renderer.MultiBufferSource;
+//$$ import net.minecraft.client.renderer.entity.layers.EquipmentLayerRenderer;
+//$$ import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
+//$$ import net.minecraft.resources.ResourceLocation;
+//$$ import net.minecraft.world.item.ItemStack;
+//$$ import net.minecraft.world.item.equipment.EquipmentModel;
+//$$ import org.spongepowered.asm.mixin.Mixin;
+//$$ import org.spongepowered.asm.mixin.injection.At;
+//$$
+//$$ @Mixin(HumanoidArmorLayer.class)
+//$$ public class HumanoidArmorLayerMixin {
+//$$
+//$$     @WrapOperation(method = "renderArmorPiece", at = @At(value = "INVOKE",
+//$$             target = "Lnet/minecraft/client/renderer/entity/layers/EquipmentLayerRenderer;renderLayers(Lnet/minecraft/world/item/equipment/EquipmentModel$LayerType;Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/model/Model;Lnet/minecraft/world/item/ItemStack;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V"))
+//$$     private void galliumWrapArmorRender(EquipmentLayerRenderer renderer, EquipmentModel.LayerType layerType, ResourceLocation assetId, Model model, ItemStack itemStack, PoseStack poseStack, MultiBufferSource bufferSource, int light, Operation<Void> original) {
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
 //$$                 itemStack, bufferSource, GlowOutlineConfig.Toggle.ARMOR);
 //$$         try {

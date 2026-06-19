@@ -155,6 +155,14 @@ List<String> STUB_MIXIN_CLASSES_PRE_1_21_05 = [
         "GlCommandEncoderMixin"
 ]
 
+// Mixins whose target class was introduced in 1.21.4. 1.21.3 stores hand items
+// (rightHandItem/leftHandItem) directly on LivingEntityRenderState as raw
+// ItemStacks, so the ArmedEntityRenderState side-channel mixin has no class
+// to attach to and is collapsed to an empty stub on this version.
+List<String> STUB_MIXIN_CLASSES_PRE_1_21_04 = [
+        "ArmedEntityRenderStateMixin"
+]
+
 List<String> ACTIVE_STUB_MIXINS = []
 ACTIVE_STUB_MIXINS += unobfuscated ? STUB_MIXIN_CLASSES_FROM_1_26 : STUB_MIXIN_CLASSES_PRE_1_26
 if (mcVersion >= 1_21_11) {
@@ -165,6 +173,9 @@ if (mcVersion < 1_21_06) {
 }
 if (mcVersion < 1_21_05) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_PRE_1_21_05
+}
+if (mcVersion < 1_21_04) {
+    ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_PRE_1_21_04
 }
 if (mcVersion >= 1_21_06) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_FROM_1_21_06

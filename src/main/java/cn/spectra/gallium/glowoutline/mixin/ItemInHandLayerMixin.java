@@ -111,7 +111,7 @@ public class ItemInHandLayerMixin {
 //$$         }
 //$$     }
 //$$ }
-//#else
+//#elseif MC>=1_21_04
 //$$ // 1.21.4: same renderArmWithItem flow as 1.21.5/1.21.8, but EntityRenderState lacks the
 //$$ // `entityType` field (added in 1.21.5). Use `instanceof PlayerRenderState` to distinguish
 //$$ // player-vs-other-mob third-person held item rendering.
@@ -158,6 +158,51 @@ public class ItemInHandLayerMixin {
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(itemStack, bufferSource, flag);
 //$$         try {
 //$$             original.call(renderState, poseStack, wrapped, light, overlay);
+//$$         } finally {
+//$$             CaptureSites.end();
+//$$         }
+//$$     }
+//$$ }
+//#else
+//$$ // 1.21.3: hand items live on LivingEntityRenderState directly as raw ItemStack +
+//$$ // @Nullable BakedModel — there's no ArmedEntityRenderState class, no ItemStackRenderState,
+//$$ // and renderArmWithItem already takes the ItemStack as a parameter. We hook the inner
+//$$ // ItemRenderer.render(...,BakedModel) call and read the ItemStack from the enclosing
+//$$ // method's parameters; no side-channel accessor needed.
+//$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
+//$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+//$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+//$$ import com.mojang.blaze3d.vertex.PoseStack;
+//$$ import net.minecraft.client.renderer.MultiBufferSource;
+//$$ import net.minecraft.client.renderer.entity.ItemRenderer;
+//$$ import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
+//$$ import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
+//$$ import net.minecraft.client.renderer.entity.state.PlayerRenderState;
+//$$ import net.minecraft.client.resources.model.BakedModel;
+//$$ import net.minecraft.world.entity.HumanoidArm;
+//$$ import net.minecraft.world.item.ItemDisplayContext;
+//$$ import net.minecraft.world.item.ItemStack;
+//$$ import org.spongepowered.asm.mixin.Mixin;
+//$$ import org.spongepowered.asm.mixin.injection.At;
+//$$
+//$$ @Mixin(ItemInHandLayer.class)
+//$$ public class ItemInHandLayerMixin {
+//$$
+//$$     @WrapOperation(method = "renderArmWithItem", at = @At(value = "INVOKE",
+//$$             target = "Lnet/minecraft/client/renderer/entity/ItemRenderer;render(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemDisplayContext;ZLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;IILnet/minecraft/client/resources/model/BakedModel;)V"))
+//$$     private void galliumWrapItemRender(ItemRenderer renderer, ItemStack itemStack, ItemDisplayContext ctx, boolean leftHand,
+//$$                                        PoseStack poseStack, MultiBufferSource bufferSource, int light, int overlay, BakedModel bakedModel,
+//$$                                        Operation<Void> original,
+//$$                                        LivingEntityRenderState state, BakedModel bm, ItemStack stack, ItemDisplayContext dc,
+//$$                                        HumanoidArm arm, PoseStack ps, MultiBufferSource bs, int i) {
+//$$         boolean isPlayer = state instanceof PlayerRenderState;
+//$$         GlowOutlineConfig.Toggle flag = isPlayer
+//$$                 ? GlowOutlineConfig.Toggle.THIRD_PERSON
+//$$                 : GlowOutlineConfig.Toggle.OTHER_ENTITIES;
+//$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(itemStack, bufferSource, flag);
+//$$         try {
+//$$             original.call(renderer, itemStack, ctx, leftHand, poseStack, wrapped, light, overlay, bakedModel);
 //$$         } finally {
 //$$             CaptureSites.end();
 //$$         }

@@ -1,6 +1,6 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
-//#if MC<1_21_11
+//#if MC>=1_21_04 && MC<1_21_11
 //$$ import cn.spectra.gallium.glowoutline.capture.ArmedEntityRenderStateAccessor;
 //$$ import net.minecraft.client.renderer.entity.state.ArmedEntityRenderState;
 //$$ import net.minecraft.client.renderer.item.ItemModelResolver;
@@ -23,8 +23,11 @@ package cn.spectra.gallium.glowoutline.mixin;
  * mixin config via {@code STUB_MIXIN_CLASSES_FROM_1_21_11} (in {@code common.gradle}),
  * because {@code submitArmWithItem} on 1.21.11+ already carries the {@code ItemStack}
  * and {@code ItemInHandLayerMixin} no longer needs this side-channel cache.
+ * On 1.21.3 the class doesn't exist (hand items live directly on
+ * {@code LivingEntityRenderState} as raw stacks); the stub is stripped via
+ * {@code STUB_MIXIN_CLASSES_PRE_1_21_04}.
  */
-//#if MC<1_21_11
+//#if MC>=1_21_04 && MC<1_21_11
 //$$ @Mixin(ArmedEntityRenderState.class)
 //$$ public abstract class ArmedEntityRenderStateMixin implements ArmedEntityRenderStateAccessor {
 //$$

@@ -96,7 +96,7 @@ public class ItemEntityRendererMixin {
 //$$         }
 //$$     }
 //$$ }
-//#else
+//#elseif MC>=1_21_04
 //$$ // 1.21.4: ItemEntityRenderer.renderMultipleFromCount has no AABB parameter — that
 //$$ // was added in 1.21.5 alongside the model bounding-box pre-pass. Both the injection
 //$$ // descriptor and the wrapper signature must drop AABB to match this version.
@@ -138,6 +138,45 @@ public class ItemEntityRendererMixin {
 //$$                 itemStack, bufferSource, GlowOutlineConfig.Toggle.DROPPED_ITEMS);
 //$$         try {
 //$$             original.call(poseStack, wrapped, lightCoords, clusterState, random);
+//$$         } finally {
+//$$             CaptureSites.end();
+//$$         }
+//$$     }
+//$$ }
+//#else
+//$$ // 1.21.3: renderMultipleFromCount is an 8-arg STATIC method
+//$$ // (ItemRenderer, PoseStack, MultiBufferSource, int, ItemStack, BakedModel, boolean, RandomSource);
+//$$ // ItemClusterRenderState doesn't exist yet. We wrap that static call directly and
+//$$ // read the ItemStack from its 5th arg — no side-channel accessor needed.
+//$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
+//$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+//$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+//$$ import com.mojang.blaze3d.vertex.PoseStack;
+//$$ import net.minecraft.client.renderer.MultiBufferSource;
+//$$ import net.minecraft.client.renderer.entity.ItemEntityRenderer;
+//$$ import net.minecraft.client.renderer.entity.ItemRenderer;
+//$$ import net.minecraft.client.renderer.entity.state.ItemEntityRenderState;
+//$$ import net.minecraft.client.resources.model.BakedModel;
+//$$ import net.minecraft.util.RandomSource;
+//$$ import net.minecraft.world.item.ItemStack;
+//$$ import org.spongepowered.asm.mixin.Mixin;
+//$$ import org.spongepowered.asm.mixin.injection.At;
+//$$
+//$$ @Mixin(ItemEntityRenderer.class)
+//$$ public class ItemEntityRendererMixin {
+//$$
+//$$     @WrapOperation(method = "render(Lnet/minecraft/client/renderer/entity/state/ItemEntityRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At(value = "INVOKE",
+//$$             target = "Lnet/minecraft/client/renderer/entity/ItemEntityRenderer;renderMultipleFromCount(Lnet/minecraft/client/renderer/entity/ItemRenderer;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILnet/minecraft/world/item/ItemStack;Lnet/minecraft/client/resources/model/BakedModel;ZLnet/minecraft/util/RandomSource;)V"))
+//$$     private void galliumWrapRenderMultiple(ItemRenderer renderer, PoseStack poseStack, MultiBufferSource bufferSource,
+//$$                                            int lightCoords, ItemStack itemStack, BakedModel bakedModel,
+//$$                                            boolean gui3d, RandomSource random,
+//$$                                            Operation<Void> original,
+//$$                                            ItemEntityRenderState state, PoseStack ps, MultiBufferSource bs, int i) {
+//$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
+//$$                 itemStack, bufferSource, GlowOutlineConfig.Toggle.DROPPED_ITEMS);
+//$$         try {
+//$$             original.call(renderer, poseStack, wrapped, lightCoords, itemStack, bakedModel, gui3d, random);
 //$$         } finally {
 //$$             CaptureSites.end();
 //$$         }

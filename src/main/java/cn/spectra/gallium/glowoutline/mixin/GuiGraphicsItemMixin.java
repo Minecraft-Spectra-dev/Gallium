@@ -44,7 +44,7 @@ package cn.spectra.gallium.glowoutline.mixin;
 //$$         return state;
 //$$     }
 //$$ }
-//#else
+//#elseif MC>=1_21_04
 //$$ import cn.spectra.gallium.Gallium;
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 //$$ import cn.spectra.gallium.glowoutline.ItemEffectConfig;
@@ -185,6 +185,140 @@ package cn.spectra.gallium.glowoutline.mixin;
 //$$             // is the safety net for the throw paths above so the next call sees a clean buf.
 //$$             buf.endFrame();
 //$$         }
+//$$     }
+//$$ }
+//#else
+//$$ // 1.21.3: no ItemStackRenderState yet — GUI items are drawn through either
+//$$ // ItemRenderer.render(itemStack, GUI, false, pose, bufferSource, light, overlay, BakedModel)
+//$$ // or, for #minecraft:bundles items, ItemRenderer.renderBundleItem(...). Both invokes live
+//$$ // inside the same private GuiGraphics.renderItem, and exactly one runs per item (vanilla's
+//$$ // if/else on the BUNDLES tag), so we wrap both to cover bundles too — matching the unified
+//$$ // ItemStackRenderState path on 1.21.4+. Same per-item composite flow as the 1.21.5 branch
+//$$ // (tee non-glint vertices into a pooled DelayingMultiBufferSource, then composeForItem),
+//$$ // only the wrapped invoke shape differs.
+//$$ import cn.spectra.gallium.Gallium;
+//$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
+//$$ import cn.spectra.gallium.glowoutline.ItemEffectConfig;
+//$$ import cn.spectra.gallium.glowoutline.ItemEffectsManager;
+//$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import cn.spectra.gallium.glowoutline.shader.GlowResources;
+//$$ import cn.spectra.gallium.glowoutline.shader.GuiImmediateGlowComposite;
+//$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+//$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+//$$ import com.mojang.blaze3d.vertex.PoseStack;
+//$$ import net.minecraft.client.gui.GuiGraphics;
+//$$ import net.minecraft.client.renderer.MultiBufferSource;
+//$$ import net.minecraft.client.renderer.entity.ItemRenderer;
+//$$ import net.minecraft.client.resources.model.BakedModel;
+//$$ import net.minecraft.world.entity.LivingEntity;
+//$$ import net.minecraft.world.item.ItemDisplayContext;
+//$$ import net.minecraft.world.item.ItemStack;
+//$$ import net.minecraft.world.level.Level;
+//$$ import org.joml.Matrix4f;
+//$$ import org.jspecify.annotations.Nullable;
+//$$ import org.spongepowered.asm.mixin.Mixin;
+//$$ import org.spongepowered.asm.mixin.Unique;
+//$$ import org.spongepowered.asm.mixin.injection.At;
+//$$
+//$$ @Mixin(GuiGraphics.class)
+//$$ public class GuiGraphicsItemMixin {
+//$$
+//$$     private static CaptureSites.@Nullable DelayingMultiBufferSource gallium$pooledBuf;
+//$$
+//$$     static {
+//$$         GlowResources.register(() -> {
+//$$             if (gallium$pooledBuf != null) {
+//$$                 gallium$pooledBuf.free();
+//$$                 gallium$pooledBuf = null;
+//$$             }
+//$$         });
+//$$     }
+//$$
+//$$     // Non-bundle items: vanilla calls ItemRenderer.render(..., BakedModel).
+//$$     @WrapOperation(method = "renderItem(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/item/ItemStack;IIII)V",
+//$$             at = @At(value = "INVOKE",
+//$$                     target = "Lnet/minecraft/client/renderer/entity/ItemRenderer;render(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemDisplayContext;ZLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;IILnet/minecraft/client/resources/model/BakedModel;)V"))
+//$$     private void galliumGuiWrapRender(ItemRenderer renderer, ItemStack itemStack, ItemDisplayContext ctx, boolean leftHand,
+//$$                                        PoseStack pose, MultiBufferSource bufferSource, int light, int overlay, BakedModel bakedModel,
+//$$                                        Operation<Void> original,
+//$$                                        LivingEntity owner, Level level, ItemStack stack,
+//$$                                        int x, int y, int seed, int guiOffset) {
+//$$         ItemEffectConfig cfg = gallium$beginGlow(stack);
+//$$         if (cfg == null) {
+//$$             original.call(renderer, itemStack, ctx, leftHand, pose, bufferSource, light, overlay, bakedModel);
+//$$             return;
+//$$         }
+//$$         MultiBufferSource wrapped = CaptureSites.teeGuiNonGlint(bufferSource, gallium$pooledBuf);
+//$$         try {
+//$$             original.call(renderer, itemStack, ctx, leftHand, pose, wrapped, light, overlay, bakedModel);
+//$$         } finally {
+//$$             gallium$endGlow(cfg, stack, pose);
+//$$         }
+//$$     }
+//$$
+//$$     // #minecraft:bundles items take a different vanilla path: ItemRenderer.renderBundleItem(...).
+//$$     // The wrapped buffer propagates through every inner draw (open back/front model + selected
+//$$     // item), so the tee captures the whole composited bundle.
+//$$     @WrapOperation(method = "renderItem(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/item/ItemStack;IIII)V",
+//$$             at = @At(value = "INVOKE",
+//$$                     target = "Lnet/minecraft/client/renderer/entity/ItemRenderer;renderBundleItem(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemDisplayContext;ZLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;IILnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/LivingEntity;I)V"))
+//$$     private void galliumGuiWrapBundleRender(ItemRenderer renderer, ItemStack itemStack, ItemDisplayContext ctx, boolean leftHand,
+//$$                                              PoseStack pose, MultiBufferSource bufferSource, int light, int overlay, BakedModel bakedModel,
+//$$                                              Level bundleLevel, LivingEntity bundleOwner, int bundleSeed,
+//$$                                              Operation<Void> original,
+//$$                                              LivingEntity owner, Level level, ItemStack stack,
+//$$                                              int x, int y, int seed, int guiOffset) {
+//$$         ItemEffectConfig cfg = gallium$beginGlow(stack);
+//$$         if (cfg == null) {
+//$$             original.call(renderer, itemStack, ctx, leftHand, pose, bufferSource, light, overlay, bakedModel, bundleLevel, bundleOwner, bundleSeed);
+//$$             return;
+//$$         }
+//$$         MultiBufferSource wrapped = CaptureSites.teeGuiNonGlint(bufferSource, gallium$pooledBuf);
+//$$         try {
+//$$             original.call(renderer, itemStack, ctx, leftHand, pose, wrapped, light, overlay, bakedModel, bundleLevel, bundleOwner, bundleSeed);
+//$$         } finally {
+//$$             gallium$endGlow(cfg, stack, pose);
+//$$         }
+//$$     }
+//$$
+//$$     // Returns the effect config to glow with, or null if this item shouldn't glow. Lazily
+//$$     // allocates the shared capture buffer as a side effect whenever it returns non-null.
+//$$     @Unique
+//$$     private ItemEffectConfig gallium$beginGlow(ItemStack stack) {
+//$$         if (stack == null || stack.isEmpty()
+//$$                 || !ItemEffectsManager.isActive()
+//$$                 || !GlowOutlineConfig.isEnabled()
+//$$                 || !GlowOutlineConfig.isGui()) {
+//$$             return null;
+//$$         }
+//$$         ItemEffectConfig cfg = ItemEffectsManager.getConfig(stack);
+//$$         if (cfg == null || cfg.shader().isEmpty()) return null;
+//$$         if (gallium$pooledBuf == null) {
+//$$             gallium$pooledBuf = new CaptureSites.DelayingMultiBufferSource();
+//$$         }
+//$$         return cfg;
+//$$     }
+//$$
+//$$     // Replays the captured mesh into the off-screen tile and composites the outline onto
+//$$     // mainTarget. Always rewinds the shared buffer (endFrame) so the next item sees it clean.
+//$$     @Unique
+//$$     private void gallium$endGlow(ItemEffectConfig cfg, ItemStack stack, PoseStack pose) {
+//$$         CaptureSites.DelayingMultiBufferSource buf = gallium$pooledBuf;
+//$$         // Same absolute-position derivation as the 1.21.5 branch — see comments there.
+//$$         Matrix4f matrix = pose.last().pose();
+//$$         float outerSx = matrix.m00() / 16f;
+//$$         float outerSy = -matrix.m11() / 16f;
+//$$         if (Math.abs(outerSx) < 1e-6f) outerSx = 1f;
+//$$         if (Math.abs(outerSy) < 1e-6f) outerSy = 1f;
+//$$         int absItemX = Math.round(matrix.m30() - 8f * outerSx);
+//$$         int absItemY = Math.round(matrix.m31() - 8f * outerSy);
+//$$         try {
+//$$             GuiImmediateGlowComposite.composeForItem(cfg, buf, absItemX, absItemY);
+//$$         } catch (Throwable t) {
+//$$             Gallium.LOGGER.error("GuiImmediateGlow compose failed for item {}: {}",
+//$$                     stack.getItem(), t.toString(), t);
+//$$         }
+//$$         buf.endFrame();
 //$$     }
 //$$ }
 //#endif
