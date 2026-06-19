@@ -81,12 +81,10 @@ public final class GuiGlowRenderer {
                 continue;
             }
 
-            // Skip if either source or destination region is out of bounds.
             if (srcX < 0 || srcY < 0 || srcX + copyW > atlasW || srcY + copyH > atlasH) continue;
             if (dstX < 0 || dstY < 0 || dstX + copyW > actualMaskW || dstY + copyH > actualMaskH) continue;
 
             try {
-                // CommandEncoder.copyTextureToTexture signature: (src, dst, mip, destX, destY, srcX, srcY, w, h)
                 encoder.copyTextureToTexture(atlasTex, maskTex, 0, dstX, dstY, srcX, srcY, copyW, copyH);
             } catch (IllegalArgumentException e) {
                 long now = System.nanoTime();

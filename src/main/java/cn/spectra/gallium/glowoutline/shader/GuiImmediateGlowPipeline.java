@@ -55,11 +55,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$         String location = "pipeline/gallium_gui_glow_immediate/" + shader + "_" + (locationCounter++);
 //$$         String shaderPath = "core/" + shader + "_gui";
 //$$
-//$$         // Inherit base GUI snippet for ProjMat / ModelViewMat / ColorModulator / Sampler0
-//$$         // / POSITION_TEX_COLOR vertex format / "core/position_tex_color" vertex shader.
-//$$         // Override fragment shader to load core/<shader>_gui.fsh, override blend to ADDITIVE
-//$$         // (so multiple overlapping outlines compound rather than alpha-blending), and
-//$$         // declare each shader-side uniform individually.
+//$$         // ADDITIVE blend: overlapping outlines compound rather than alpha-blending.
 //$$         var builder = RenderPipeline.builder(RenderPipelines.GUI_TEXTURED_SNIPPET)
 //$$                 .withLocation(location)
 //$$                 .withFragmentShader(ResourceLocation.fromNamespaceAndPath("gallium", shaderPath))
@@ -76,10 +72,8 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$                 .withUniform("FrameTimeCounter", UniformType.FLOAT)
 //$$                 .withUniform("ScreenSize", UniformType.VEC2)
 //$$                 .withUniform("ShaderAlign", UniformType.VEC4);
-//$$         // Per-config user params (Intensity, PulseSpeed, WaveSpeed, InnerColor, OuterColor,
-//$$         // or whatever the config's shader declares). Each one becomes an individual uniform
-//$$         // declaration on the pipeline AND a matching individual uniform in the shader after
-//$$         // ShaderUboCompatMixin runs.
+//$$         // Per-config user params — pipeline declares each individually, shader's matching
+//$$         // UBO members are flattened by ShaderUboCompatMixin to match.
 //$$         for (ShaderParam p : cfg.params()) {
 //$$             switch (p) {
 //$$                 case ShaderParam.Float f -> builder.withUniform(f.name(), UniformType.FLOAT);
@@ -100,9 +94,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$     /** Drop pipelines whose config is no longer referenced. */
 //$$     public static void retainOnly(Set<ItemEffectConfig> liveConfigs) {
 //$$         pipelinesByConfig.keySet().removeIf(cfg -> !liveConfigs.contains(cfg));
-//$$         // Counter exists only to disambiguate location strings between live pipelines, so
-//$$         // when nothing is live we can safely rewind. Without this, locationCounter grows
-//$$         // unboundedly across reloads and bloats the pipeline name in logs / RenderDoc.
+//$$         // See GuiGlowElementPipeline.retainOnly: rewind counter when empty.
 //$$         if (pipelinesByConfig.isEmpty()) {
 //$$             locationCounter = 0;
 //$$         }

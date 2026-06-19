@@ -93,10 +93,8 @@ public final class GalliumConfigIO {
     }
 
     static void doApplyToRuntime(JsonObject root) {
-        // Hook for future schema migrations: read the on-disk version and warn if it's
-        // newer than what we know how to handle. Today we only have v1, so anything
-        // newer is logged but parsed best-effort. Backward migrations (older diskVersion)
-        // would need a separate branch alongside this one once we bump CURRENT_VERSION.
+        // Forward-compat: warn (don't fail) when diskVersion > CURRENT_VERSION.
+        // When CURRENT_VERSION is bumped, add a backward-migration branch here.
         int diskVersion = CURRENT_VERSION;
         if (root.has(CONFIG_VERSION_KEY)) {
             try {
@@ -115,12 +113,9 @@ public final class GalliumConfigIO {
 
         JsonObject targets = root.has(RENDER_TARGETS_KEY) && root.get(RENDER_TARGETS_KEY).isJsonObject()
                 ? root.getAsJsonObject(RENDER_TARGETS_KEY) : null;
-        // Per-toggle isolation: a single malformed value (string instead of bool, nested
-        // object, etc.) must not abort loading later toggles in the same group. Each bad
-        // entry warns and stays at its default; the next save() rewrites a clean file.
-        // We explicitly require a JsonPrimitive boolean — Gson's getAsBoolean() silently
-        // calls Boolean.parseBoolean on strings, which would treat "garbage" as false
-        // and quietly clobber the default rather than rejecting the bad entry.
+        // Per-toggle isolation: bad entries warn and keep default rather than abort the loop.
+        // Require JsonPrimitive boolean explicitly — getAsBoolean() falls back to
+        // Boolean.parseBoolean which would silently treat "garbage" as false.
         for (Toggle t : Toggle.values()) {
             JsonObject src = t.group() == Group.GLOBAL ? root : targets;
             if (src == null || !src.has(t.jsonKey())) continue;

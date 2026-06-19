@@ -156,7 +156,6 @@ class ItemEffectsManagerTest {
 
     @Test
     void parseConditionNode_notWithInvalidChild_returnsNull() {
-        // not's child fails to parse → not collapses to null instead of wrapping a null child.
         assertNull(ItemEffectsManager.parseConditionNode(parse("{\"not\": {}}"), 0, "predicates[0]"));
     }
 

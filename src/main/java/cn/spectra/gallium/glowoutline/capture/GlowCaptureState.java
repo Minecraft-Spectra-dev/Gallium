@@ -63,11 +63,8 @@ public final class GlowCaptureState {
         capturedProjectionType = null;
         capturedProjectionMatrix4fValid = false;
         lastMaskScale = 1.0f;
-        // Finalize the per-frame capture buffer. On >=1.21.9 there is no customBufferSource;
-        // on 1.21.8 endFrame() finalizes any builder left open when renderCapturedNodes
-        // early-returned, rewinding the retained native buffers for reuse next frame. The
-        // DelayingMultiBufferSource itself (and its pooled off-heap buffers) is kept on the
-        // state and only released in GlowCaptureManager.releaseState.
+        // Pre-1.21.9: rewind any builder left open by an early-returned renderCapturedNodes
+        // (see DelayingMultiBufferSource.endFrame). Native buffers are pooled, only released in releaseState.
         //#if MC<1_21_09
         //$$ if (customBufferSource != null) {
         //$$     customBufferSource.endFrame();

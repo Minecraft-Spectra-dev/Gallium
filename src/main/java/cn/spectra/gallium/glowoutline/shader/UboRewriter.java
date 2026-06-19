@@ -23,32 +23,15 @@ import java.util.regex.Pattern;
  *
  * <h2>Brace handling</h2>
  *
- * Pack authors are not Gallium developers — their shaders may legitimately
- * contain nested braces inside a UBO block. The realistic cases are GLSL
- * block comments (delimited by slash-star and star-slash) that wrap members
- * and contain stray brace or semicolon characters, plus the rarer-but-valid
- * inline struct declaration with its own pair of braces. A naive regex like
- * {@code [^}]*} stops at the first inner closing brace — leaving the rest
- * of the block as a raw {@code uniform} declaration the driver still
- * rejects, exactly the bug this rewriter is meant to prevent.
- *
- * <p>The implementation finds the block <i>header</i> with a regex (cheap,
- * unique) but locates the matching closing brace by walking the source,
- * skipping line and block comments, and counting brace depth. Member
- * splitting in the body uses the same comment-aware walker so a semicolon
- * inside a comment doesn't fragment a declaration.
- *
- * <p>The block-name alternation in the header pattern is anchored so a
- * future block name typo doesn't silently pass through unconverted.
+ * Pack-author shaders may contain block comments with stray braces or struct
+ * declarations inside the UBO. We locate the matching closing brace by walking
+ * the source comment-aware and counting depth — a naive {@code [^}]*} regex
+ * bites here. Member splitting in the body uses the same comment-aware walker
+ * so a semicolon inside a comment doesn't fragment a declaration.
  */
 public final class UboRewriter {
 
-    /**
-     * Matches the block header up to and including its opening brace.
-     * Group 0 covers everything from {@code layout} through the brace; the
-     * matcher's {@code end()} is the byte just past the brace, where the
-     * member list begins.
-     */
+    /** Block header up to & including the opening brace; m.end() = body start. */
     private static final Pattern BLOCK_HEADER = Pattern.compile(
             "layout\\s*\\(\\s*std140\\s*\\)\\s*uniform\\s+(?:GlowUniforms|GalliumGuiGlow)\\s*\\{",
             Pattern.DOTALL

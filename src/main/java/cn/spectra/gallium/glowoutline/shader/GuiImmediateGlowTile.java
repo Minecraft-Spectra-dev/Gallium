@@ -32,7 +32,6 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$     public static final int ITEM_SLOT_GUI_PX = 16;
 //$$     /** Mirror of 1.21.6+'s {@code GuiGlowDispatcher.MASK_QUAD_MARGIN} — must stay in sync. */
 //$$     public static final int MASK_QUAD_MARGIN_GUI_PX = 4;
-//$$     /** Total tile edge in GUI-px = item slot + margin on each side. */
 //$$     public static final int TILE_GUI_PX = ITEM_SLOT_GUI_PX + 2 * MASK_QUAD_MARGIN_GUI_PX;
 //$$
 //$$     @Nullable private static TextureTarget tile;

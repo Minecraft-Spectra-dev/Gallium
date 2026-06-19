@@ -21,8 +21,8 @@ package cn.spectra.gallium.glowoutline.mixin;
  * Only needed on 1.21.10 — see {@link cn.spectra.gallium.glowoutline.capture.ArmedEntityRenderStateAccessor}.
  * On 1.21.11+ the class collapses to an empty stub and is stripped from the runtime
  * mixin config via {@code STUB_MIXIN_CLASSES_FROM_1_21_11} (in {@code common.gradle}),
- * because the target API ({@code extractArmedEntityRenderState} without an {@code ItemStack}
- * parameter) only exists on 1.21.10.
+ * because {@code submitArmWithItem} on 1.21.11+ already carries the {@code ItemStack}
+ * and {@code ItemInHandLayerMixin} no longer needs this side-channel cache.
  */
 //#if MC<1_21_11
 //$$ @Mixin(ArmedEntityRenderState.class)

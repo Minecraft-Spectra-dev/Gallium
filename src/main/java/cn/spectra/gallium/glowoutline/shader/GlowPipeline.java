@@ -30,11 +30,8 @@ public final class GlowPipeline {
 
     private static final Map<String, RenderPipeline> REGISTRY = new HashMap<>();
     //#if MC<1_21_06
-    //$$ // 1.21.5 keys by ItemEffectConfig — the per-config user-param uniforms (declared
-    //$$ // statically in the pipeline because 1.21.5 has no UBO API) make two configs
-    //$$ // sharing a shader name with different params NON-interchangeable. Mirrors
-    //$$ // GuiGlowElementPipeline's config-keyed map, with the same one-pipeline-per-config
-    //$$ // invariant. The String-keyed REGISTRY above stays unused on 1.21.5.
+    //$$ // 1.21.5: keyed by ItemEffectConfig because per-config uniforms are baked into the
+    //$$ // pipeline (no UBO). REGISTRY above is unused on this version. See getOrCreate(cfg).
     //$$ private static final Map<ItemEffectConfig, RenderPipeline> BY_CONFIG = new HashMap<>();
     //$$ private static int worldLocationCounter;
     //#endif
@@ -88,11 +85,6 @@ public final class GlowPipeline {
     //$$  * members.  As long as no buffer is bound to the block binding point
     //$$  * (UBOs are unsupported by the 1.21.5 pipeline API), the driver
     //$$  * honours the individual {@code glUniform*} calls.
-    //$$  * <p>
-    //$$  * Keyed by {@link ItemEffectConfig} (not just shader name) — two configs
-    //$$  * sharing a shader name with different params build separate pipelines so
-    //$$  * each pipeline's static uniform declarations match its config's params,
-    //$$  * mirroring GuiGlowElementPipeline.
     //$$  */
     //$$ public static RenderPipeline getOrCreate(ItemEffectConfig cfg) {
     //$$     if (cfg.shader().isEmpty()) return null;
@@ -187,9 +179,7 @@ public final class GlowPipeline {
     //$$ }
     //#endif
 
-    public static void init() {
-        // Force static init.
-    }
+    public static void init() {}
 }
 //#else
 //$$ import cn.spectra.gallium.Gallium;
@@ -247,14 +237,10 @@ public final class GlowPipeline {
 //$$     public static CompiledShaderProgram get(ItemEffectConfig cfg) { return BY_CONFIG.get(cfg); }
 //$$     public static void init() {}
 //$$
-//$$     // try-with-resources closes BOTH compiled shaders deterministically — once on the
-//$$     // success path (after glLinkProgram, glDeleteShader on the attached shaders just
-//$$     // marks them for deletion; the program holds the GL refs alive until program.close()
-//$$     // and they get freed then), and once on every failure path (vertex compiled but
-//$$     // fragment compile/link threw — vertex still gets closed on unwind). Without this,
-//$$     // each successful compile leaks 2 GL shader IDs that survive every resource reload,
-//$$     // since CompiledShaderProgram.close() only calls glDeleteProgram, not glDeleteShader
-//$$     // on attached shaders.
+//$$     // try-with-resources closes both shaders deterministically. CompiledShaderProgram.close
+//$$     // only calls glDeleteProgram, not glDeleteShader on attached shaders, so without this each
+//$$     // reload leaks 2 GL shader ids. Also covers the partial-failure path (vertex compiled,
+//$$     // fragment threw) where vertex still gets unwound.
 //$$     private static CompiledShaderProgram compileProgram(ItemEffectConfig cfg) {
 //$$         String shaderName = cfg.shader();
 //$$         ResourceLocation shaderId = ResourceLocation.fromNamespaceAndPath("gallium", "core/" + shaderName);

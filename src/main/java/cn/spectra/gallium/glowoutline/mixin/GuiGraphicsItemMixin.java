@@ -105,14 +105,7 @@ package cn.spectra.gallium.glowoutline.mixin;
 //$$     // resource reloads — released only on JVM exit. ~256 KiB per layer × ~3 typical
 //$$     // RenderTypes (item_entity_translucent_cull, item_entity_solid, ...) = under 1 MiB
 //$$     // of fixed VRAM/RAM overhead for the GUI glow path.
-//$$     //
-//$$     // Disposer registration: GlowResources.register fires the runtime-disposer chain
-//$$     // on every resource reload (F3+T or pack swap). Freeing the pooled native buffers
-//$$     // on reload drops stale-RenderType references and re-establishes the codebase's
-//$$     // contract (CLAUDE.md: "When you allocate any VRAM-backed object ... register an
-//$$     // idempotent disposer."). Static-init runs the first time the mixin class is
-//$$     // touched — i.e. when the first GuiGraphics call is intercepted. Idempotent:
-//$$     // safe to fire when gallium$pooledBuf is null.
+//$$     // Idempotent disposer so resource reload frees the pooled native buffers and drops stale RenderType refs.
 //$$     private static CaptureSites.@Nullable DelayingMultiBufferSource gallium$pooledBuf;
 //$$
 //$$     static {
@@ -163,25 +156,10 @@ package cn.spectra.gallium.glowoutline.mixin;
 //$$             original.call(self, pose, wrapped, light, overlay);
 //$$         } finally {
 //$$             // Resolve the item's ABSOLUTE screen-px position from the pose matrix's
-//$$             // translation column. Vanilla GuiGraphics.renderItem applies its own
-//$$             // pose.translate(x+8, y+8, 150+l) and pose.scale(16, -16, 16) on top of
-//$$             // whatever the screen pushed (e.g. AbstractContainerScreen.render does
-//$$             // pose.translate(leftPos, topPos, 0) and renderSlot adds (0, 0, 100)
+//$$             // translation column. Vanilla applies pose.translate(x+8, y+8, 150+l) and
+//$$             // pose.scale(16, -16, 16) on top of whatever the screen pushed (e.g.
+//$$             // AbstractContainerScreen.render does pose.translate(leftPos, topPos, 0)
 //$$             // before passing slot-LOCAL coords to renderItem).
-//$$             //
-//$$             // Derivation (column-major, JOML right-multiply semantics):
-//$$             //   outer pose:        T_outer * S_outer  (assume affine, no rotation —
-//$$             //                                          which is true for every vanilla
-//$$             //                                          screen and 99% of mods)
-//$$             //   after vanilla translate(x+8, y+8, ...) and scale(16, -16, ...):
-//$$             //       m00 = 16 * outerSx
-//$$             //       m11 = -16 * outerSy
-//$$             //       m30 = outerSx * (x+8) + outerX
-//$$             //       m31 = outerSy * (y+8) + outerY
-//$$             //   we want slot-top-left in absolute screen-px:
-//$$             //       absX = outerSx * x + outerX = m30 - 8 * outerSx
-//$$             //       absY = outerSy * y + outerY = m31 - 8 * outerSy
-//$$             //   with outerSx = m00 / 16, outerSy = -m11 / 16.
 //$$             //
 //$$             // The original "m30 - 8" formula assumed outerSx = 1 (unit-scale outer pose).
 //$$             // True for hotbar/inventory/most modded GUIs. The general form below stays
@@ -197,19 +175,14 @@ package cn.spectra.gallium.glowoutline.mixin;
 //$$             int absItemX = Math.round(matrix.m30() - 8f * outerSx);
 //$$             int absItemY = Math.round(matrix.m31() - 8f * outerSy);
 //$$
-//$$             // Compose the outline immediately. Wrapping in try/catch keeps a render-time
-//$$             // exception (e.g. a buggy shader pack) from poisoning the GUI render — log
-//$$             // and fall through to the cleanup endFrame so leftover open builders inside
-//$$             // buf get rewound for the next call.
 //$$             try {
 //$$                 GuiImmediateGlowComposite.composeForItem(cfg, buf, absItemX, absItemY);
 //$$             } catch (Throwable t) {
 //$$                 Gallium.LOGGER.error("GuiImmediateGlow compose failed for item {}: {}",
 //$$                         stack.getItem(), t.toString(), t);
 //$$             }
-//$$             // composeForItem already calls flushToTarget which builds and nulls every
-//$$             // layer's BufferBuilder. endFrame() is the safety net for the throw paths
-//$$             // above — finalises any builder still open so the next call sees a clean buf.
+//$$             // composeForItem already builds and nulls every layer's BufferBuilder; endFrame
+//$$             // is the safety net for the throw paths above so the next call sees a clean buf.
 //$$             buf.endFrame();
 //$$         }
 //$$     }

@@ -101,8 +101,7 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
 
     private static void parseConfig(JsonObject root) {
         List<ItemEffectRule> parsed = new ArrayList<>();
-        // Tracks per-reload whether we've already logged the flat-schema deprecation, so a
-        // pack with many legacy rules emits at most one warn per resource reload.
+        // One-shot per reload: silence repeat flat-schema deprecation warns from large packs.
         boolean[] flatSchemaWarned = { false };
 
         if (root.has("rules")) {
@@ -138,7 +137,6 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
         for (ItemEffectConfig cfg : liveConfigs) {
             GuiGlowElementPipeline.getOrCreate(cfg);
         }
-        // Drop pipelines no longer referenced by any current rule.
         GlowPipeline.retainOnly(shaders);
         //#if MC<1_21_06
         //$$ // 1.21.5 also has a per-config pipeline cache (statically declares per-param

@@ -51,23 +51,10 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$     private GuiImmediateGlowComposite() {}
 //$$
 //$$     /**
-//$$      * Compose one item's glow. Fills the shared tile from {@code buf} and overlays a
-//$$      * glow quad on {@code mainTarget} at the item's GUI screen position.
-//$$      *
-//$$      * <p>Caller (GuiGraphicsItemMixin) is responsible for:
-//$$      * <ul>
-//$$      *   <li>Filtering on stack / config / feature toggle BEFORE building {@code buf}.</li>
-//$$      *   <li>Pooling {@code buf}'s lifetime (typically allocated lazily and reused
-//$$      *       across calls).</li>
-//$$      *   <li>Ensuring {@code buf} contains the item's mesh in vertex GUI-screen-space
-//$$      *       — i.e., the tee was active during {@code ItemStackRenderState.render(pose, ...)}
-//$$      *       with the same pose vanilla applied.</li>
-//$$      *   <li>Resolving {@code itemX} / {@code itemY} as ABSOLUTE GUI-px coordinates of the
-//$$      *       slot's top-left corner. The renderItem args are slot-local under any outer
-//$$      *       {@code pose.translate(...)} applied by the screen (e.g. AbstractContainerScreen
-//$$      *       translates by {@code (leftPos, topPos, 0)} before slot rendering); pass the
-//$$      *       absolute screen position derived from {@code pose.last()} translation column.</li>
-//$$      * </ul>
+//$$      * Compose one item's glow. Caller must pass ABSOLUTE GUI-px coordinates of the slot's
+//$$      * top-left — vanilla renderItem args are slot-local under any outer pose.translate
+//$$      * (e.g. AbstractContainerScreen translates by leftPos/topPos before slot rendering),
+//$$      * so derive screen position from {@code pose.last()}'s translation column.
 //$$      */
 //$$     public static void composeForItem(ItemEffectConfig cfg,
 //$$                                        CaptureSites.DelayingMultiBufferSource buf,
@@ -88,13 +75,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$         drawGlowQuad(cfg, tile, itemX, itemY, mainTarget, mc);
 //$$     }
 //$$
-//$$     /**
-//$$      * Emits the additive overlay quad (24 GUI-px on each side, centred on the item's
-//$$      * 16-px slot with 4-px padding) on mainTarget. Sampler0 = tile, fragment shader =
-//$$      * {@code core/<shader>_gui.fsh} (same shader 1.21.6+ uses; the
-//$$      * {@code GalliumGuiGlow} UBO block is rewritten to individual uniforms by
-//$$      * {@link cn.spectra.gallium.glowoutline.mixin.ShaderUboCompatMixin}).
-//$$      */
+//$$     /** Additive overlay quad on mainTarget. UBO block rewritten by ShaderUboCompatMixin. */
 //$$     private static void drawGlowQuad(ItemEffectConfig cfg, TextureTarget tile,
 //$$                                       int itemX, int itemY, RenderTarget mainTarget,
 //$$                                       Minecraft mc) {
@@ -113,13 +94,8 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$         // pass the CLIP volume so the fragment is rasterized.
 //$$         float z = 0.0f;
 //$$
-//$$         // Build a single quad (4 vertices in QUADS mode → indexed via vanilla's
-//$$         // sequential 0,1,2,2,3,0 buffer). Standard top-left/top-right/bottom-right/
-//$$         // bottom-left winding to match POSITION_TEX_COLOR's QUADS expectations.
-//$$         // UVs: top-left of quad in GUI = top-left of texture (uv 0,1 in OpenGL); the
-//$$         // tile was rendered with its bottom-left at uv 0,0 corresponding to GUI bottom
-//$$         // (yflipped via the entry ortho), so this UV mapping plays back the alpha
-//$$         // shape upright on screen.
+//$$         // QUADS top-left → bottom-left winding for POSITION_TEX_COLOR. UVs play back the
+//$$         // tile upright on screen — tile entry ortho rendered with bottom-left at uv (0,0).
 //$$         BufferBuilder bb = new BufferBuilder(QUAD_BUF, VertexFormat.Mode.QUADS,
 //$$                 DefaultVertexFormat.POSITION_TEX_COLOR);
 //$$         bb.addVertex(x0, y0, z).setUv(0f, 1f).setColor(0xFFFFFFFF);
@@ -177,8 +153,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$                 pass.setUniform("ScreenSize",
 //$$                         (float) window.getWidth(), (float) window.getHeight());
 //$$                 pass.setUniform("ShaderAlign", 1f, 1f, 0f, 0f);
-//$$                 // Per-config user params (Intensity, PulseSpeed, WaveSpeed, InnerColor,
-//$$                 // OuterColor, ...). Match the pipeline's individual uniform declarations.
+//$$                 // Per-config user params; must match pipeline's individual uniform decls.
 //$$                 for (ShaderParam p : cfg.params()) {
 //$$                     switch (p) {
 //$$                         case ShaderParam.Float f -> pass.setUniform(f.name(), f.value());
@@ -216,13 +191,9 @@ public final class GuiImmediateGlowComposite {
 //$$ import net.minecraft.client.renderer.CompiledShaderProgram;
 //$$
 //$$ public final class GuiImmediateGlowComposite {
-//$$     // Lazily allocated reusable native buffer for the GUI glow quad. Held in a static
-//$$     // field so per-item composite calls don't malloc/free each frame, but registered
-//$$     // with GlowResources so the off-heap allocation gets released on resource reload
-//$$     // / disposeAll() — matches the disposer convention used by GuiImmediateGlowTile
-//$$     // (the project invariant: anything VRAM- or native-backed registers a disposer).
-//$$     // Re-allocated lazily on next use after a reload so it tolerates being disposed
-//$$     // and re-acquired across reloads.
+//$$     // Reused native buffer; held statically to avoid per-frame malloc. Registered with
+//$$     // GlowResources so the native allocation is released on resource reload (re-allocated
+//$$     // lazily on next use after dispose).
 //$$     private static ByteBufferBuilder QUAD_BUF;
 //$$
 //$$     static {
@@ -233,7 +204,7 @@ public final class GuiImmediateGlowComposite {
 //$$
 //$$     private static ByteBufferBuilder quadBuf() {
 //$$         if (QUAD_BUF == null) {
-//$$             // 4 vertices × 24B (POSITION_TEX_COLOR) ≈ 96B; 1 KiB amortizes any alignment slack.
+//$$             // 4 vertices × 24B (POSITION_TEX_COLOR) ≈ 96B; 1 KiB amortizes alignment slack.
 //$$             QUAD_BUF = new ByteBufferBuilder(1024);
 //$$         }
 //$$         return QUAD_BUF;

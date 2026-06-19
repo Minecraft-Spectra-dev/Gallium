@@ -167,7 +167,6 @@ public final class CaptureSites {
 //$$             for (Layer l : layers) {
 //$$                 if (l.builder == null) continue;
 //$$                 try (var mesh = l.builder.build()) {
-//$$                     // Discarded, not drawn — building rewinds the native buffer for reuse.
 //$$                 } catch (Exception e) {
 //$$                     // build() throws e.g. when an upstream flush left this builder in an
 //$$                     // already-built state; warn rather than silently swallow so the symptom
@@ -248,6 +247,7 @@ public final class CaptureSites {
 //$$ public final class CaptureSites {
 //$$     private CaptureSites() {}
 //$$
+//$$     // See >=1_21_06 branch above for rationale.
 //$$     private static final Set<String> GLINT_LAYER_NAMES = Set.of(
 //$$             "glint", "entity_glint", "armor_entity_glint", "glint_translucent"
 //$$     );
@@ -296,9 +296,6 @@ public final class CaptureSites {
 //$$             }
 //$$         }
 //$$
-//$$         // 1.21.5: renderType.draw(mesh) opens its own RenderPass which cannot be
-//$$         // redirected (no outputColorTextureOverride). Instead, manually upload mesh
-//$$         // data and draw into a RenderPass targeting the mask.
 //$$         public void flushToTarget(com.mojang.blaze3d.pipeline.TextureTarget target) {
 //$$             if (target == null) return;
 //$$             var colorTex = target.getColorTexture();
@@ -394,10 +391,8 @@ public final class CaptureSites {
 //$$             for (Layer l : layers) {
 //$$                 if (l.builder == null) continue;
 //$$                 try (var mesh = l.builder.build()) {
-//$$                     // Discarded — building rewinds the native buffer for reuse.
 //$$                 } catch (Exception e) {
-//$$                     // Same diagnostic value as the >=1_21_06 endFrame: surface
-//$$                     // already-built / corrupt-builder state in logs rather than swallow.
+//$$                     // Mirrors the >=1_21_06 endFrame: surface already-built / corrupt-builder state.
 //$$                     cn.spectra.gallium.Gallium.LOGGER.warn(
 //$$                         "endFrame: discard build failed for layer {}: {}", l.type, e.toString());
 //$$                 }

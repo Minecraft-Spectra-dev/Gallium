@@ -79,20 +79,17 @@ public final class ShaderPackHint {
 
             MethodHandles.Lookup lookup = MethodHandles.lookup();
 
-            // Iris.getCurrentPack() returns Optional<ShaderPack>
             Method m = irisClass.getMethod("getCurrentPack");
             getCurrentPack = lookup.unreflect(m);
 
-            // ShaderPack.getShaderPackOptions() returns ShaderPackOptions
             m = shaderPackClass.getMethod("getShaderPackOptions");
             getPackOptions = lookup.unreflect(m);
 
-            // ShaderPackOptions.getOptionValues() returns OptionValues
             m = packOptionsClass.getMethod("getOptionValues");
             getOptionValues = lookup.unreflect(m);
 
-            // OptionValues.getStringValueOrDefault(String) is a default method on the interface;
-            // it falls back to the pack's default value when the user hasn't overridden the option.
+            // getStringValueOrDefault is a default method that falls back to the pack's
+            // default value when the user hasn't overridden the option.
             m = optionValuesClass.getMethod("getStringValueOrDefault", String.class);
             getStringValueOrDefault = lookup.unreflect(m);
 
@@ -201,7 +198,6 @@ public final class ShaderPackHint {
                 Gallium.LOGGER.debug("Iris ShaderPackOptions.getOptionValues() returned null; gallium.json ignored");
                 return 1.0f;
             }
-            // Closure over the resolved Iris OptionValues for lookups.
             Function<String, String> lookup = name -> {
                 try {
                     Object result = GET_STRING_VALUE_OR_DEFAULT.invoke(optionValues, name);

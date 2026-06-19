@@ -36,10 +36,7 @@ public class ItemInHandRendererMixin {
         }
     }
 
-    // WrapMethod gives a single hook for HEAD+TAIL begin/end, so an exception inside the
-    // original still runs endSuppress() and keeps suppressDepth balanced. Previously a
-    // throw from renderPlayerArm would leak the increment; beginFrame's per-frame reset
-    // hid the symptom but the invariant was unsafe.
+    // WrapMethod (HEAD+TAIL) keeps suppressDepth balanced even if the original throws.
     @WrapMethod(method = "renderPlayerArm")
     private void galliumWrapRenderPlayerArm(PoseStack poseStack, SubmitNodeCollector collector, int light,
                                             float equipped, float swing, net.minecraft.world.entity.HumanoidArm arm,

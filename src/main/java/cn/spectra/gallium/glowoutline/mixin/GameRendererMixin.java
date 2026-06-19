@@ -115,9 +115,7 @@ public class GameRendererMixin {
     //$$         at = @At(value = "INVOKE",
     //$$                 target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture(Lcom/mojang/blaze3d/textures/GpuTexture;D)V",
     //$$                 ordinal = 0,
-    //$$                 // CommandEncoder is unobfuscated (com.mojang.blaze3d.* lives outside
-    //$$                 // Mojang mappings), so suppress the Mixin AP "Unable to locate method
-    //$$                 // mapping" warning the same way galliumCaptureSceneDepth does.
+    //$$                 // remap=false: same blaze3d-unobfuscated rationale as galliumCaptureSceneDepth above.
     //$$                 remap = false),
     //$$         expect = 1)
     //$$ private void galliumGlowComposite(DeltaTracker deltaTracker, boolean bl, CallbackInfo ci) {

@@ -35,15 +35,10 @@ import java.util.List;
 
 public final class GlowCaptureManager {
 
-    /** Hard cap on world capture states. Each holds a screen-sized TextureTarget plus RenderBuffers,
-     *  so without this cap a brief peak (many on-screen item entities + armor pieces in one frame)
-     *  pins VRAM forever. Surplus states beyond the mark are released at frame end.
-     *  <p>
-     *  At 1080p one state's mask target is ~8MB; the cap is sized so a steady-state scene with
-     *  hand items + armor + a handful of dropped items + frames stays in pool. Peaks beyond the
-     *  cap (>{@value} simultaneously-glowing items in a single frame) still render correctly —
-     *  surplus states are allocated transient and freed at the next {@link #beginFrame()}, paying
-     *  an alloc/destroy round-trip but bounding VRAM growth. */
+    /** Hard cap on world capture states. Each holds a screen-sized TextureTarget (~8MB at 1080p)
+     *  plus RenderBuffers; the cap stops a brief peak (many on-screen items + armor) from pinning
+     *  VRAM forever. Peaks beyond the cap still render — surplus states are freed at the next
+     *  {@link #beginFrame()} (alloc/destroy round-trip, but VRAM stays bounded). */
     private static final int POOL_HIGH_WATER_MARK = 32;
 
     private static final List<GlowCaptureState> pool = new ArrayList<>();
@@ -343,8 +338,7 @@ public final class GlowCaptureManager {
         // the depth buffer that the shader pack writes its world+entity output into. Without
         // that alignment, sceneDepth max-pool sampling on the body silhouette flips per
         // sub-pixel jitter and produces visible outline-edge wobble. With alignment our mask
-        // and sceneDepth are pixel-coincident, so a 3x3 max-pool absorbs noise as it did in
-        // the pre-scale-support build.
+        // and sceneDepth are pixel-coincident, so a 3x3 max-pool absorbs noise.
         GpuBufferSlice maskProjectionSlice = state.capturedProjectionMatrix;
         float maskScale = 1.0f;
         if (state.capturedProjectionMatrix4fValid
@@ -464,21 +458,13 @@ public final class GlowCaptureManager {
         //$$ var encoder = RenderSystem.getDevice().createCommandEncoder();
         //$$ encoder.clearColorTexture(state.maskTarget.getColorTexture(), 0);
         //$$
-        //$$ // Mask depth strategy on 1.21.5 mirrors the >=1.21.6 branch above:
-        //$$ //   * firstPerson: clear to 1.0 (no occlusion within held item).
-        //$$ //   * sceneDepthCaptured (the common world-item path): captureSceneDepth already
-        //$$ //     copied the pre-clear world depth into every existing state's mask depth, so
-        //$$ //     don't overwrite it here. Critically, on 1.21.5 GameRenderer.renderLevel issues
-        //$$ //     a clearDepthTexture(mainDepth, 1.0) right after levelRenderer.renderLevel and
-        //$$ //     before renderItemInHand — so by the time our renderLevel TAIL hook runs,
-        //$$ //     mainTarget.getDepthTexture() is the *cleared* depth (1.0 + held-item), NOT
-        //$$ //     world depth. Copying from it would defeat depth-test occlusion entirely.
-        //$$ //   * Iris shader active: clear to 1.0 and rely on sceneDepthTarget for the
-        //$$ //     composite-time depth comparison (Iris rewrites main depth via deferred
-        //$$ //     pipeline so its post-pipeline value isn't comparable against item z).
-        //$$ //   * Fallback (sceneDepth not yet captured this frame): copy from main as a
-        //$$ //     last resort. This branch should not normally trigger on world items because
-        //$$ //     the captureSceneDepth hook fires before world depth is wiped.
+        //$$ // Mask depth strategy mirrors the >=1_21_06 branch above; one local twist:
+        //$$ // 1.21.5's GameRenderer.renderLevel issues clearDepthTexture(mainDepth, 1.0)
+        //$$ // right after levelRenderer.renderLevel and BEFORE renderItemInHand — so by
+        //$$ // the time the renderLevel TAIL hook runs, mainTarget.getDepthTexture() is
+        //$$ // the *cleared* depth (1.0 + held item), not world depth. Copying from it
+        //$$ // would defeat occlusion entirely. captureSceneDepth handles this by copying
+        //$$ // the pre-clear world depth into every active state's mask depth ahead of time.
         //$$ if (state.firstPerson) {
         //$$     encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 1.0);
         //$$ } else if (!sceneDepthCaptured) {
@@ -496,18 +482,10 @@ public final class GlowCaptureManager {
         //$$     RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
         //$$ }
         //$$
-        //$$ // Restore the projection matrix that was active during capture so the
-        //$$ // replayed geometry lands at the same screen position. When an Iris pack
-        //$$ // with internal scaling (e.g. Kappa/Nostalgia VertexDownscaling) is active,
-        //$$ // pre-multiply by the scale matrix so the mask is rasterized into the same
-        //$$ // [0, scale]² subrect that the shader pack produces — otherwise the mask is
-        //$$ // full-resolution while sceneDepthTarget (sampled by the composite shader as
-        //$$ // SceneDepthSampler) is in shader-pack space, and the per-pixel depth lookup
-        //$$ // reads from the wrong place, producing a misaligned outline.
-        //$$ //
-        //$$ // 1.21.5 lacks GpuBufferSlice/Std140Builder so we can't share the >=1.21.6
-        //$$ // UBO upload path; instead we set the scaled Matrix4f directly via the
-        //$$ // (Matrix4f, ProjectionType) overload of setProjectionMatrix.
+        //$$ // Apply VertexDownscaling-equivalent scale; see >=1_21_06 branch above for full rationale.
+        //$$ // 1.21.5 lacks GpuBufferSlice/Std140Builder so we can't share the >=1.21.6 UBO upload
+        //$$ // path; instead we set the scaled Matrix4f directly via the (Matrix4f, ProjectionType)
+        //$$ // overload of setProjectionMatrix.
         //$$ float maskScale = 1.0f;
         //$$ Matrix4f maskProjection = state.capturedProjectionMatrix4f;
         //$$ if (state.capturedProjectionMatrix4fValid
@@ -552,18 +530,9 @@ public final class GlowCaptureManager {
         //$$ TextureTarget mask = state.maskTarget;
         //$$ mask.setClearColor(0.0F, 0.0F, 0.0F, 0.0F);
         //$$ mask.clear();
-        //$$ // Mask depth strategy mirrors the >=1.21.6 branch:
-        //$$ //   firstPerson  → keep depth=1.0 from clear (no occlusion within held item)
-        //$$ //   Iris active  → keep depth=1.0; Iris rewrites mainTarget depth in its deferred
-        //$$ //                  pipeline so the pre-pipeline scene depth can't be LEQUAL-compared
-        //$$ //                  against vanilla item z. Composite shader does occlusion via
-        //$$ //                  SceneDepthSampler (which we wire to sceneDepthTarget on Iris path).
-        //$$ //                  Without this branch the LEQUAL test in flushToTarget bounces in
-        //$$ //                  sub-pixel against an unrelated scene depth → edge jitter every frame.
-        //$$ //   else (vanilla, scene depth captured) → mask depth = pre-clear world depth, so
-        //$$ //                  flushToTarget LEQUAL only writes item pixels that are in front of
-        //$$ //                  world geometry → the silhouette gets occluded by walls correctly.
-        //$$ //   else (fallback when capture didn't run this frame) → copy live mainTarget depth.
+        //$$ // Mask depth strategy mirrors the >=1_21_06 branch above; see comments there.
+        //$$ // Local difference: 1.21.4 uses RenderTarget.copyDepthFrom(sceneDepthTarget) instead
+        //$$ // of CommandEncoder.copyTextureToTexture (no GpuTexture API on this version).
         //$$ if (state.firstPerson || IrisCompat.isShaderActive()) {
         //$$     // depth already 1.0 from mask.clear()
         //$$ } else if (sceneDepthCaptured && sceneDepthTarget != null) {
