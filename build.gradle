@@ -27,6 +27,10 @@ preprocess {
     }
 }
 
+tasks.named('build') {
+    dependsOn 'buildAndGather'
+}
+
 tasks.register('buildAndGather') {
     group = 'build'
     description = 'Builds all versions and gathers them into root build/libs'
