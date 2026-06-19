@@ -149,6 +149,12 @@ List<String> STUB_MIXIN_CLASSES_FROM_1_21_06 = [
         "ShaderUboCompatMixin"
 ]
 
+// Mixins whose target API was introduced in 1.21.5's render-graph rewrite.
+// 1.21.4 still uses direct GL calls and has no GlCommandEncoder.
+List<String> STUB_MIXIN_CLASSES_PRE_1_21_05 = [
+        "GlCommandEncoderMixin"
+]
+
 List<String> ACTIVE_STUB_MIXINS = []
 ACTIVE_STUB_MIXINS += unobfuscated ? STUB_MIXIN_CLASSES_FROM_1_26 : STUB_MIXIN_CLASSES_PRE_1_26
 if (mcVersion >= 1_21_11) {
@@ -156,6 +162,9 @@ if (mcVersion >= 1_21_11) {
 }
 if (mcVersion < 1_21_06) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_PRE_1_21_06
+}
+if (mcVersion < 1_21_05) {
+    ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_PRE_1_21_05
 }
 if (mcVersion >= 1_21_06) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_FROM_1_21_06

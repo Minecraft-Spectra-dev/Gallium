@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
+//#if MC>=1_21_05
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.opengl.DirectStateAccess;
@@ -54,3 +55,6 @@ public class GlCommandEncoderMixin {
                 mask, filter);
     }
 }
+//#else
+//$$ public class GlCommandEncoderMixin {}
+//#endif

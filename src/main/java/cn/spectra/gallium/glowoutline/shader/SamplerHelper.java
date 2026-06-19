@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.shader;
 
+//#if MC>=1_21_05
 import com.mojang.blaze3d.textures.AddressMode;
 import com.mojang.blaze3d.textures.FilterMode;
 //#if MC>=1_21_06
@@ -71,3 +72,8 @@ public final class SamplerHelper {
     //#endif
     //#endif
 }
+//#else
+//$$ public final class SamplerHelper {
+//$$     private SamplerHelper() {}
+//$$ }
+//#endif

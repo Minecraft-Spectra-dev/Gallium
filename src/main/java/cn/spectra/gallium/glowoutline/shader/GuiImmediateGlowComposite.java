@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.shader;
 
+//#if MC>=1_21_05
 //#if MC<1_21_06
 //$$ import cn.spectra.gallium.glowoutline.ItemEffectConfig;
 //$$ import cn.spectra.gallium.glowoutline.ShaderParam;
@@ -198,4 +199,142 @@ package cn.spectra.gallium.glowoutline.shader;
 public final class GuiImmediateGlowComposite {
     private GuiImmediateGlowComposite() {}
 }
+//#endif
+//#else
+//$$ import cn.spectra.gallium.glowoutline.ItemEffectConfig;
+//$$ import cn.spectra.gallium.glowoutline.ShaderParam;
+//$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import com.mojang.blaze3d.pipeline.RenderTarget;
+//$$ import com.mojang.blaze3d.pipeline.TextureTarget;
+//$$ import com.mojang.blaze3d.systems.RenderSystem;
+//$$ import com.mojang.blaze3d.vertex.BufferBuilder;
+//$$ import com.mojang.blaze3d.vertex.BufferUploader;
+//$$ import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+//$$ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+//$$ import com.mojang.blaze3d.vertex.VertexFormat;
+//$$ import net.minecraft.client.Minecraft;
+//$$ import net.minecraft.client.renderer.CompiledShaderProgram;
+//$$
+//$$ public final class GuiImmediateGlowComposite {
+//$$     // Lazily allocated reusable native buffer for the GUI glow quad. Held in a static
+//$$     // field so per-item composite calls don't malloc/free each frame, but registered
+//$$     // with GlowResources so the off-heap allocation gets released on resource reload
+//$$     // / disposeAll() — matches the disposer convention used by GuiImmediateGlowTile
+//$$     // (the project invariant: anything VRAM- or native-backed registers a disposer).
+//$$     // Re-allocated lazily on next use after a reload so it tolerates being disposed
+//$$     // and re-acquired across reloads.
+//$$     private static ByteBufferBuilder QUAD_BUF;
+//$$
+//$$     static {
+//$$         GlowResources.register(GuiImmediateGlowComposite::disposeQuadBuf);
+//$$     }
+//$$
+//$$     private GuiImmediateGlowComposite() {}
+//$$
+//$$     private static ByteBufferBuilder quadBuf() {
+//$$         if (QUAD_BUF == null) {
+//$$             // 4 vertices × 24B (POSITION_TEX_COLOR) ≈ 96B; 1 KiB amortizes any alignment slack.
+//$$             QUAD_BUF = new ByteBufferBuilder(1024);
+//$$         }
+//$$         return QUAD_BUF;
+//$$     }
+//$$
+//$$     private static void disposeQuadBuf() {
+//$$         if (QUAD_BUF != null) {
+//$$             QUAD_BUF.close();
+//$$             QUAD_BUF = null;
+//$$         }
+//$$     }
+//$$
+//$$     public static void composeForItem(ItemEffectConfig cfg,
+//$$                                        CaptureSites.DelayingMultiBufferSource buf,
+//$$                                        int itemX, int itemY) {
+//$$         if (cfg == null || buf == null) return;
+//$$         Minecraft mc = Minecraft.getInstance();
+//$$         RenderTarget mainTarget = mc.getMainRenderTarget();
+//$$         if (mainTarget == null || mainTarget.getColorTextureId() == -1) return;
+//$$         int guiScale = (int) Math.max(1, Math.round(mc.getWindow().getGuiScale()));
+//$$         TextureTarget tile = GuiImmediateGlowTile.ensureTile(guiScale);
+//$$         if (tile == null) return;
+//$$         try {
+//$$             GuiImmediateGlowTile.renderMeshToTile(buf, itemX, itemY);
+//$$             drawGlowQuad(cfg, tile, itemX, itemY, mainTarget, mc);
+//$$         } finally {
+//$$             // renderMeshToTile binds the tile target then unbinds (FB=0). If drawGlowQuad
+//$$             // returns early (e.g. program failed to compile), no path re-binds mainTarget,
+//$$             // and the next GUI element rendered after this item lands on the default
+//$$             // framebuffer (window backbuffer) instead of mainTarget — invisible until
+//$$             // the next vanilla bindWrite. Restore here so every composeForItem call is
+//$$             // a no-op on the surrounding GUI framebuffer state.
+//$$             mainTarget.bindWrite(true);
+//$$         }
+//$$     }
+//$$
+//$$     private static void drawGlowQuad(ItemEffectConfig cfg, TextureTarget tile,
+//$$                                       int itemX, int itemY, RenderTarget mainTarget,
+//$$                                       Minecraft mc) {
+//$$         CompiledShaderProgram program = GuiImmediateGlowPipeline.getOrCreate(cfg);
+//$$         if (program == null) return;
+//$$         int margin = GuiImmediateGlowTile.MASK_QUAD_MARGIN_GUI_PX;
+//$$         int slot = GuiImmediateGlowTile.ITEM_SLOT_GUI_PX;
+//$$         int x0 = itemX - margin;
+//$$         int x1 = itemX + slot + margin;
+//$$         int y0 = itemY - margin;
+//$$         int y1 = itemY + slot + margin;
+//$$
+//$$         // BufferUploader.drawWithShader → VertexBuffer.drawWithShader → setDefaultUniforms
+//$$         // unconditionally calls bindSampler("Sampler" + i, RenderSystem.getShaderTexture(i))
+//$$         // for i=0..11, OVERWRITING any prior explicit Sampler0 binding. Setting the tile
+//$$         // via RenderSystem.setShaderTexture(0, ...) means setDefaultUniforms re-binds
+//$$         // Sampler0 to the tile (not whatever was last in slot 0). The named-sampler bindings
+//$$         // we use for the world shader (DiffuseSampler / MaskSampler / ...) escape this because
+//$$         // setDefaultUniforms only resets the Sampler0..11 slots, not arbitrary names.
+//$$         RenderSystem.setShaderTexture(0, tile.getColorTextureId());
+//$$         program.safeGetUniform("ColorModulator").set(1f, 1f, 1f, 1f);
+//$$         program.safeGetUniform("FrameTimeCounter").set(GlowTime.guiSecondsFloat());
+//$$         program.safeGetUniform("ScreenSize").set((float) mc.getWindow().getWidth(), (float) mc.getWindow().getHeight());
+//$$         program.safeGetUniform("ShaderAlign").set(1f, 1f, 0f, 0f);
+//$$         for (ShaderParam p : cfg.params()) {
+//$$             switch (p) {
+//$$                 case ShaderParam.Float f -> program.safeGetUniform(f.name()).set(f.value());
+//$$                 case ShaderParam.Vec2 v -> program.safeGetUniform(v.name()).set(v.x(), v.y());
+//$$                 case ShaderParam.Vec3 v -> program.safeGetUniform(v.name()).set(v.x(), v.y(), v.z());
+//$$                 case ShaderParam.Vec4 v -> program.safeGetUniform(v.name()).set(v.x(), v.y(), v.z(), v.w());
+//$$             }
+//$$         }
+//$$
+//$$         RenderSystem.bindTexture(tile.getColorTextureId());
+//$$         com.mojang.blaze3d.platform.GlStateManager._texParameter(3553, 10241, 9729);
+//$$         com.mojang.blaze3d.platform.GlStateManager._texParameter(3553, 10240, 9729);
+//$$         com.mojang.blaze3d.platform.GlStateManager._texParameter(3553, 10242, 33071);
+//$$         com.mojang.blaze3d.platform.GlStateManager._texParameter(3553, 10243, 33071);
+//$$
+//$$         mainTarget.bindWrite(true);
+//$$         RenderSystem.disableDepthTest();
+//$$         RenderSystem.depthMask(false);
+//$$         RenderSystem.disableCull();
+//$$         RenderSystem.enableBlend();
+//$$         RenderSystem.blendFuncSeparate(1, 1, 1, 0);
+//$$         RenderSystem.setShader(program);
+//$$         try (var mesh = buildQuad(x0, y0, x1, y1)) {
+//$$             BufferUploader.drawWithShader(mesh);
+//$$         } finally {
+//$$             RenderSystem.defaultBlendFunc();
+//$$             RenderSystem.disableBlend();
+//$$             RenderSystem.enableCull();
+//$$             RenderSystem.depthMask(true);
+//$$             RenderSystem.enableDepthTest();
+//$$         }
+//$$     }
+//$$
+//$$     private static com.mojang.blaze3d.vertex.MeshData buildQuad(int x0, int y0, int x1, int y1) {
+//$$         BufferBuilder bb = new BufferBuilder(quadBuf(), VertexFormat.Mode.QUADS,
+//$$                 DefaultVertexFormat.POSITION_TEX_COLOR);
+//$$         bb.addVertex(x0, y0, 0.0f).setUv(0f, 1f).setColor(0xFFFFFFFF);
+//$$         bb.addVertex(x0, y1, 0.0f).setUv(0f, 0f).setColor(0xFFFFFFFF);
+//$$         bb.addVertex(x1, y1, 0.0f).setUv(1f, 0f).setColor(0xFFFFFFFF);
+//$$         bb.addVertex(x1, y0, 0.0f).setUv(1f, 1f).setColor(0xFFFFFFFF);
+//$$         return bb.buildOrThrow();
+//$$     }
+//$$ }
 //#endif

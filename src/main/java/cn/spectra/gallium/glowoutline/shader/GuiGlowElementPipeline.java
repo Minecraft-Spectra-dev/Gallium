@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.shader;
 
+//#if MC>=1_21_05
 import cn.spectra.gallium.Gallium;
 import cn.spectra.gallium.glowoutline.ItemEffectConfig;
 import com.mojang.blaze3d.pipeline.BlendFunction;
@@ -125,5 +126,18 @@ public final class GuiGlowElementPipeline {
 //$$     public static GlowUniformBuffer getUbo(RenderPipeline p) { return null; }
 //$$     public static void updateAllForFrame(int w, int h, float t) {}
 //$$     public static void retainOnly(java.util.Set<ItemEffectConfig> live) {}
+//$$ }
+//#endif
+//#else
+//$$ import cn.spectra.gallium.glowoutline.ItemEffectConfig;
+//$$ import java.util.Set;
+//$$
+//$$ public final class GuiGlowElementPipeline {
+//$$     private GuiGlowElementPipeline() {}
+//$$     static { GlowResources.registerPipeline(() -> {}); }
+//$$     public static Object getOrCreate(ItemEffectConfig cfg) { return null; }
+//$$     public static void updateAllForFrame(int w, int h, float t) {}
+//$$     public static void retainOnly(Set<ItemEffectConfig> live) {}
+//$$     public static void clear() {}
 //$$ }
 //#endif

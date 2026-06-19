@@ -9,27 +9,18 @@ plugins {
 preprocess {
     strictExtraMappings = false
 
-    // 1.21.5 is pre-1.21.6: no GUI deferred render-state (no GuiItemRenderState,
-    // GuiElementRenderState, GuiRenderer). The GUI glow path must be stubbed.
-    // World rendering is immediate-mode MultiBufferSource (same as 1.21.8).
+    def mc12104 = createNode('1.21.4', 1_21_04, 'mojang')
     def mc12105 = createNode('1.21.5', 1_21_05, 'mojang')
-    // 1.21.8 is the floor of the pre-1.21.9 rendering model (immediate-mode
-    // MultiBufferSource, no submit-node system). The published jar targets the
-    // whole hotfix range 1.21.6–1.21.8 (.7/.8 are hotfixes of .6); dev compiles
-    // against 1.21.8. Encoded 1_21_08 so it sorts below 1.21.10 (1_21_10).
     def mc12108 = createNode('1.21.8', 1_21_08, 'mojang')
     def mc12110 = createNode('1.21.10', 1_21_10, 'mojang')
     def mc12111 = createNode('1.21.11', 1_21_11, 'mojang')
-    // Mojang dropped the "1." prefix at MC 26; we keep encoding the implicit
-    // leading 1 to preserve the 5-digit width of older versions, so integer
-    // comparisons (>= 1_21_00 etc.) stay monotonic.
-    def mc2601 = createNode('26.1', 1_26_01, 'mojang')
+    def mc26010 = createNode('26.1', 1_26_01, 'mojang')
 
-    // mainProject is 26.1; preprocessor maps 26.1 → 1.21.11 → 1.21.10 → 1.21.8 → 1.21.5.
-    mc2601.link(mc12111, null)
+    mc26010.link(mc12111, null)
     mc12111.link(mc12110, null)
     mc12110.link(mc12108, null)
     mc12108.link(mc12105, null)
+    mc12105.link(mc12104, null)
 
     for (final def node in getNodes()) {
         findProject(node.project).ext.mcVersion = node.mcVersion

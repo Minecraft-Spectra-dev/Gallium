@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.shader;
 
+//#if MC>=1_21_05
 //#if MC<1_21_06
 //$$ import cn.spectra.gallium.Gallium;
 //$$ import cn.spectra.gallium.glowoutline.ItemEffectConfig;
@@ -116,4 +117,138 @@ package cn.spectra.gallium.glowoutline.shader;
 public final class GuiImmediateGlowPipeline {
     private GuiImmediateGlowPipeline() {}
 }
+//#endif
+//#else
+//$$ import cn.spectra.gallium.Gallium;
+//$$ import cn.spectra.gallium.glowoutline.ItemEffectConfig;
+//$$ import cn.spectra.gallium.glowoutline.ShaderParam;
+//$$ import com.google.common.io.CharStreams;
+//$$ import com.mojang.blaze3d.preprocessor.GlslPreprocessor;
+//$$ import com.mojang.blaze3d.shaders.CompiledShader;
+//$$ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+//$$ import java.io.Reader;
+//$$ import java.util.ArrayList;
+//$$ import java.util.HashMap;
+//$$ import java.util.List;
+//$$ import java.util.Map;
+//$$ import java.util.Set;
+//$$ import net.minecraft.FileUtil;
+//$$ import net.minecraft.ResourceLocationException;
+//$$ import net.minecraft.client.Minecraft;
+//$$ import net.minecraft.client.renderer.CompiledShaderProgram;
+//$$ import net.minecraft.client.renderer.ShaderProgramConfig;
+//$$ import net.minecraft.resources.ResourceLocation;
+//$$ import net.minecraft.server.packs.resources.Resource;
+//$$
+//$$ public final class GuiImmediateGlowPipeline {
+//$$     private static final Map<ItemEffectConfig, CompiledShaderProgram> pipelinesByConfig = new HashMap<>();
+//$$
+//$$     private GuiImmediateGlowPipeline() {}
+//$$     static { GlowResources.registerPipeline(GuiImmediateGlowPipeline::clear); }
+//$$
+//$$     public static CompiledShaderProgram getOrCreate(ItemEffectConfig cfg) {
+//$$         if (cfg == null || cfg.shader().isEmpty()) return null;
+//$$         return pipelinesByConfig.computeIfAbsent(cfg, GuiImmediateGlowPipeline::compileProgram);
+//$$     }
+//$$     public static void retainOnly(Set<ItemEffectConfig> liveConfigs) {
+//$$         pipelinesByConfig.entrySet().removeIf(e -> {
+//$$             boolean remove = !liveConfigs.contains(e.getKey());
+//$$             if (remove) e.getValue().close();
+//$$             return remove;
+//$$         });
+//$$     }
+//$$     public static void clear() {
+//$$         for (CompiledShaderProgram p : pipelinesByConfig.values()) p.close();
+//$$         pipelinesByConfig.clear();
+//$$     }
+//$$
+//$$     // try-with-resources closes BOTH compiled shaders deterministically — both on success
+//$$     // (after link, glDeleteShader marks them; the program holds the GL refs alive until
+//$$     // program.close()) and on failure (vertex compiled but fragment compile/link threw —
+//$$     // vertex still gets closed on unwind). See GlowPipeline.compileProgram for full notes.
+//$$     private static CompiledShaderProgram compileProgram(ItemEffectConfig cfg) {
+//$$         ResourceLocation vertexId = ResourceLocation.withDefaultNamespace("core/position_tex_color");
+//$$         ResourceLocation fragmentId = ResourceLocation.fromNamespaceAndPath("gallium", "core/" + cfg.shader() + "_gui");
+//$$         try (CompiledShader vertex = compileShader(vertexId, CompiledShader.Type.VERTEX);
+//$$              CompiledShader fragment = compileShader(fragmentId, CompiledShader.Type.FRAGMENT)) {
+//$$             CompiledShaderProgram program = CompiledShaderProgram.link(vertex, fragment, DefaultVertexFormat.POSITION_TEX_COLOR);
+//$$             program.setupUniforms(uniformsFor(cfg), List.of(new ShaderProgramConfig.Sampler("Sampler0")));
+//$$             Gallium.LOGGER.info("Created 1.21.4 immediate GUI glow shader program '{}' ({} params)", cfg.shader(), cfg.params().size());
+//$$             return program;
+//$$         } catch (Exception e) {
+//$$             Gallium.LOGGER.error("Failed to create 1.21.4 GUI glow shader program '{}'", cfg.shader(), e);
+//$$             return null;
+//$$         }
+//$$     }
+//$$
+//$$     private static CompiledShader compileShader(ResourceLocation shaderId, CompiledShader.Type type) throws Exception {
+//$$         ResourceLocation fileId = ResourceLocation.fromNamespaceAndPath(shaderId.getNamespace(),
+//$$                 "shaders/" + shaderId.getPath() + (type == CompiledShader.Type.VERTEX ? ".vsh" : ".fsh"));
+//$$         Resource resource = Minecraft.getInstance().getResourceManager().getResourceOrThrow(fileId);
+//$$         try (Reader reader = resource.openAsReader()) {
+//$$             GlslPreprocessor preprocessor = preprocessorFor(fileId);
+//$$             // Same UBO → individual-uniform rewrite as GlowPipeline. The shader pack ships
+//$$             // `layout(std140) uniform GalliumGuiGlow { ... };` for the 1.21.6+ deferred path;
+//$$             // on 1.21.4 we can't bind UBOs, so we transform the source via the shared
+//$$             // UboRewriter before glCompile.
+//$$             String processed = String.join("", preprocessor.process(CharStreams.toString(reader)));
+//$$             processed = UboRewriter.rewrite(processed);
+//$$             return CompiledShader.compile(shaderId, type, processed);
+//$$         }
+//$$     }
+//$$
+//$$     private static GlslPreprocessor preprocessorFor(ResourceLocation sourceFile) {
+//$$         final ResourceLocation base = sourceFile.withPath(FileUtil::getFullResourcePath);
+//$$         return new GlslPreprocessor() {
+//$$             @Override
+//$$             public String applyImport(boolean quoted, String path) {
+//$$                 try {
+//$$                     ResourceLocation importId = quoted
+//$$                             ? base.withPath(p -> FileUtil.normalizeResourcePath(p + path))
+//$$                             : ResourceLocation.parse(path).withPrefix("shaders/include/");
+//$$                     try (Reader reader = Minecraft.getInstance().getResourceManager().getResourceOrThrow(importId).openAsReader()) {
+//$$                         return CharStreams.toString(reader);
+//$$                     }
+//$$                 } catch (ResourceLocationException e) {
+//$$                     return "#error " + e.getMessage();
+//$$                 } catch (Exception e) {
+//$$                     return "#error " + e.getMessage();
+//$$                 }
+//$$             }
+//$$         };
+//$$     }
+//$$
+//$$     private static List<ShaderProgramConfig.Uniform> uniformsFor(ItemEffectConfig cfg) {
+//$$         List<ShaderProgramConfig.Uniform> uniforms = new ArrayList<>();
+//$$         // Vanilla position_tex_color.vsh declares `uniform mat4 ModelViewMat; uniform mat4 ProjMat;`
+//$$         // and uses them to transform Position. CompiledShaderProgram.setDefaultUniforms only
+//$$         // writes MODEL_VIEW_MATRIX/PROJECTION_MATRIX if the corresponding Uniform was registered
+//$$         // here — declaring them sets up `getUniform("ModelViewMat")` so vanilla can drive them.
+//$$         // Without these, both matrices stay at their GL default zero, gl_Position = 0 for every
+//$$         // vertex, the quad collapses to the origin, and nothing rasterizes.
+//$$         uniforms.add(matrixUniform("ModelViewMat"));
+//$$         uniforms.add(matrixUniform("ProjMat"));
+//$$         uniforms.add(uniform("ColorModulator", 4));
+//$$         uniforms.add(uniform("FrameTimeCounter", 1));
+//$$         uniforms.add(uniform("ScreenSize", 2));
+//$$         uniforms.add(uniform("ShaderAlign", 4));
+//$$         for (ShaderParam p : cfg.params()) {
+//$$             switch (p) {
+//$$                 case ShaderParam.Float f -> uniforms.add(uniform(f.name(), 1));
+//$$                 case ShaderParam.Vec2 v -> uniforms.add(uniform(v.name(), 2));
+//$$                 case ShaderParam.Vec3 v -> uniforms.add(uniform(v.name(), 3));
+//$$                 case ShaderParam.Vec4 v -> uniforms.add(uniform(v.name(), 4));
+//$$             }
+//$$         }
+//$$         return uniforms;
+//$$     }
+//$$     private static ShaderProgramConfig.Uniform uniform(String name, int count) {
+//$$         return new ShaderProgramConfig.Uniform(name, "float", count, List.of(0.0F));
+//$$     }
+//$$     // Matrix uniforms must be declared with type "matrix4x4" and count=16 (4x4 floats);
+//$$     // count=1 with type "float" would register them as scalar floats and silently fail.
+//$$     private static ShaderProgramConfig.Uniform matrixUniform(String name) {
+//$$         return new ShaderProgramConfig.Uniform(name, "matrix4x4", 16, List.of(0.0F));
+//$$     }
+//$$ }
 //#endif

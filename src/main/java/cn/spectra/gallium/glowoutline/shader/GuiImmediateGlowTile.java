@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.shader;
 
+//#if MC>=1_21_05
 //#if MC<1_21_06
 //$$ import cn.spectra.gallium.glowoutline.IrisCompat;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
@@ -122,4 +123,62 @@ package cn.spectra.gallium.glowoutline.shader;
 public final class GuiImmediateGlowTile {
     private GuiImmediateGlowTile() {}
 }
+//#endif
+//#else
+//$$ import cn.spectra.gallium.glowoutline.IrisCompat;
+//$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import com.mojang.blaze3d.ProjectionType;
+//$$ import com.mojang.blaze3d.pipeline.TextureTarget;
+//$$ import com.mojang.blaze3d.systems.RenderSystem;
+//$$ import org.joml.Matrix4f;
+//$$ import org.jspecify.annotations.Nullable;
+//$$
+//$$ public final class GuiImmediateGlowTile {
+//$$     public static final int ITEM_SLOT_GUI_PX = 16;
+//$$     public static final int MASK_QUAD_MARGIN_GUI_PX = 4;
+//$$     public static final int TILE_GUI_PX = ITEM_SLOT_GUI_PX + 2 * MASK_QUAD_MARGIN_GUI_PX;
+//$$     @Nullable private static TextureTarget tile;
+//$$     private static final Matrix4f SCRATCH_PROJ = new Matrix4f();
+//$$     static { GlowResources.register(GuiImmediateGlowTile::dispose); }
+//$$     private GuiImmediateGlowTile() {}
+//$$
+//$$     public static TextureTarget ensureTile(int guiScale) {
+//$$         int sizeFb = Math.max(1, TILE_GUI_PX * Math.max(1, guiScale));
+//$$         if (tile == null || tile.width != sizeFb || tile.height != sizeFb) {
+//$$             if (tile != null) tile.destroyBuffers();
+//$$             tile = new TextureTarget(sizeFb, sizeFb, true);
+//$$         }
+//$$         return tile;
+//$$     }
+//$$
+//$$     public static void renderMeshToTile(CaptureSites.DelayingMultiBufferSource buf,
+//$$                                          int itemX, int itemY) {
+//$$         if (buf == null || tile == null) return;
+//$$         tile.setClearColor(0.0F, 0.0F, 0.0F, 0.0F);
+//$$         tile.clear();
+//$$         int margin = MASK_QUAD_MARGIN_GUI_PX;
+//$$         int slot = ITEM_SLOT_GUI_PX;
+//$$         Matrix4f proj = SCRATCH_PROJ.identity().setOrtho(
+//$$                 itemX - margin, itemX + slot + margin,
+//$$                 itemY + slot + margin, itemY - margin,
+//$$                 1000.0f, 21000.0f);
+//$$         RenderSystem.backupProjectionMatrix();
+//$$         RenderSystem.setProjectionMatrix(proj, ProjectionType.ORTHOGRAPHIC);
+//$$         var irisSnap = IrisCompat.setBypass(true);
+//$$         try {
+//$$             buf.flushToTarget(tile);
+//$$         } finally {
+//$$             IrisCompat.restoreBypass(irisSnap);
+//$$             RenderSystem.restoreProjectionMatrix();
+//$$         }
+//$$     }
+//$$
+//$$     public static @Nullable TextureTarget getTile() { return tile; }
+//$$     private static void dispose() {
+//$$         if (tile != null) {
+//$$             tile.destroyBuffers();
+//$$             tile = null;
+//$$         }
+//$$     }
+//$$ }
 //#endif

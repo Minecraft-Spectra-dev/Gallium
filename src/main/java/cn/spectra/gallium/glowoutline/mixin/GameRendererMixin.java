@@ -33,6 +33,7 @@ public class GameRendererMixin {
         GlowTime.advanceWorld(deltaTracker.getGameTimeDeltaTicks());
     }
 
+    //#if MC>=1_21_05
     @Inject(method = "renderLevel", at = @At(value = "INVOKE",
             target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearDepthTexture(Lcom/mojang/blaze3d/textures/GpuTexture;D)V",
             ordinal = 0,
@@ -53,6 +54,20 @@ public class GameRendererMixin {
 
         GlowCaptureManager.captureSceneDepth(mainTarget);
     }
+    //#else
+    //$$ @Inject(method = "renderLevel", at = @At(value = "INVOKE",
+    //$$         target = "Lcom/mojang/blaze3d/systems/RenderSystem;clear(I)V",
+    //$$         ordinal = 0,
+    //$$         shift = At.Shift.BEFORE,
+    //$$         remap = false))
+    //$$ private void galliumCaptureSceneDepth(DeltaTracker deltaTracker, CallbackInfo ci) {
+    //$$     if (IrisCompat.isShadowPass()) return;
+    //$$     if (!ItemEffectsManager.isActive()) return;
+    //$$     RenderTarget mainTarget = minecraft.getMainRenderTarget();
+    //$$     if (mainTarget == null || mainTarget.getDepthTextureId() == -1) return;
+    //$$     GlowCaptureManager.captureSceneDepth(mainTarget);
+    //$$ }
+    //#endif
 
     //#if MC>=1_21_06
     // 1.21.6+: Iris's MixinGameRenderer.iris$runColorSpace also injects at renderLevel TAIL,
@@ -70,7 +85,7 @@ public class GameRendererMixin {
 
         GlowComposite.composite(minecraft, mainTarget);
     }
-    //#else
+    //#elseif MC>=1_21_05
     //$$ // 1.21.5: three different things ALL fight for the same renderLevel TAIL slot or run
     //$$ // shortly after, any of which can clobber a composite painted onto mainTarget too early:
     //$$ //   1. Iris's MixinGameRenderer.iris$runColorSpace injects at renderLevel TAIL too;
@@ -122,5 +137,25 @@ public class GameRendererMixin {
     //$$ // approach matching 1.21.6+'s alpha-ring sampling). No frame-end hook needed —
     //$$ // each item draws its outline immediately after its vanilla render, so subsequent
     //$$ // GUI elements (tooltips, scoreboard, overlays) layer on top naturally.
+    //#else
+    //$$ @Inject(method = "render(Lnet/minecraft/client/DeltaTracker;Z)V",
+    //$$         at = @At(value = "INVOKE",
+    //$$                 target = "Lcom/mojang/blaze3d/systems/RenderSystem;clear(I)V",
+    //$$                 ordinal = 0,
+    //$$                 shift = At.Shift.BEFORE,
+    //$$                 remap = false),
+    //$$         expect = 1)
+    //$$ private void galliumGlowComposite(DeltaTracker deltaTracker, boolean bl, CallbackInfo ci) {
+    //$$     if (this.minecraft.level == null) return;
+    //$$     if (!ItemEffectsManager.isActive()) return;
+    //$$     if (!GlowOutlineConfig.isEnabled()) return;
+    //$$     if (IrisCompat.isShadowPass()) return;
+    //$$
+    //$$     RenderTarget mainTarget = minecraft.getMainRenderTarget();
+    //$$     if (mainTarget == null || mainTarget.getColorTextureId() == -1) return;
+    //$$     if (!GlowComposite.hasAnyValidCapture()) return;
+    //$$
+    //$$     GlowComposite.composite(minecraft, mainTarget);
+    //$$ }
     //#endif
 }

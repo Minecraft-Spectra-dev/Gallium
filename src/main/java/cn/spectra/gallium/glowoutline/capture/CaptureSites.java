@@ -228,7 +228,7 @@ public final class CaptureSites {
 //$$         GlowCaptureManager.endItemCapture();
 //$$     }
 //$$ }
-//#else
+//#elseif MC>=1_21_05
 //$$ // === 1.21.5: no outputColorTextureOverride, no GpuTextureView ===
 //$$ // DelayingMultiBufferSource with flushToTarget(TextureTarget) that manually
 //$$ // uploads mesh data and opens a RenderPass targeting the mask textures.
@@ -473,6 +473,167 @@ public final class CaptureSites {
 //$$             VertexConsumer cap = capture.getBuffer(renderType);
 //$$             return VertexMultiConsumer.create(orig, cap);
 //$$         };
+//$$     }
+//$$
+//$$     public static void end() {
+//$$         GlowCaptureManager.endItemCapture();
+//$$     }
+//$$ }
+//#else
+//$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
+//$$ import cn.spectra.gallium.glowoutline.IrisCompat;
+//$$ import com.mojang.blaze3d.pipeline.TextureTarget;
+//$$ import com.mojang.blaze3d.vertex.BufferBuilder;
+//$$ import com.mojang.blaze3d.vertex.BufferUploader;
+//$$ import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+//$$ import com.mojang.blaze3d.vertex.VertexConsumer;
+//$$ import com.mojang.blaze3d.vertex.VertexMultiConsumer;
+//$$ import java.util.ArrayList;
+//$$ import java.util.List;
+//$$ import net.minecraft.client.renderer.MultiBufferSource;
+//$$ import net.minecraft.client.renderer.RenderType;
+//$$ import net.minecraft.world.item.ItemStack;
+//$$
+//$$ public final class CaptureSites {
+//$$     private CaptureSites() {}
+//$$
+//$$     public static MultiBufferSource beginIfCapturable(ItemStack stack,
+//$$                                                        MultiBufferSource original,
+//$$                                                        GlowOutlineConfig.Toggle featureFlag) {
+//$$         return beginIfCapturable(stack, original, featureFlag, false);
+//$$     }
+//$$
+//$$     public static MultiBufferSource beginIfCapturable(ItemStack stack,
+//$$                                                        MultiBufferSource original,
+//$$                                                        GlowOutlineConfig.Toggle featureFlag,
+//$$                                                        boolean firstPerson) {
+//$$         if (!GlowOutlineConfig.isEnabled()) return original;
+//$$         if (!featureFlag.get()) return original;
+//$$         if (IrisCompat.isShadowPass()) return original;
+//$$         if (stack == null || stack.isEmpty()) return original;
+//$$         if (!GlowCaptureManager.beginItemCapture(stack, firstPerson)) return original;
+//$$
+//$$         GlowCaptureState state = GlowCaptureManager.currentCapture();
+//$$         if (state == null) return original;
+//$$         if (state.customBufferSource == null) {
+//$$             state.customBufferSource = new DelayingMultiBufferSource();
+//$$         }
+//$$         DelayingMultiBufferSource captureSource = state.customBufferSource;
+//$$
+//$$         return renderType -> teeVertexConsumer(original, captureSource, renderType);
+//$$     }
+//$$
+//$$     // Substring match (rather than the exact-name Set used on 1.21.5+/1.21.6+) because
+//$$     // 1.21.4's RenderType.toString includes a "renderType[<name>]" wrapper or appended
+//$$     // modifier in some cases — exact equality on the bare layer name misses those, so
+//$$     // glint geometry would slip into the capture buffer and produce a brightly-shaded
+//$$     // outline. Substring is broader (matches anything containing "glint") which is the
+//$$     // intended behaviour: any layer ultimately drawing glint vertices should not feed
+//$$     // the mask, regardless of how its toString is formatted.
+//$$     private static VertexConsumer teeVertexConsumer(MultiBufferSource original,
+//$$                                                     DelayingMultiBufferSource capture,
+//$$                                                     RenderType renderType) {
+//$$         VertexConsumer orig = original.getBuffer(renderType);
+//$$         String name = renderType.toString();
+//$$         if (name != null && name.contains("glint")) return orig;
+//$$         GlowCaptureState state = GlowCaptureManager.currentCapture();
+//$$         if (state != null) state.capturedThisFrame = true;
+//$$         return VertexMultiConsumer.create(orig, capture.getBuffer(renderType));
+//$$     }
+//$$
+//$$     public static class DelayingMultiBufferSource implements MultiBufferSource {
+//$$         private static final class Layer {
+//$$             final RenderType type;
+//$$             final ByteBufferBuilder nativeBuffer;
+//$$             BufferBuilder builder;
+//$$             Layer(RenderType type, ByteBufferBuilder nativeBuffer) {
+//$$                 this.type = type;
+//$$                 this.nativeBuffer = nativeBuffer;
+//$$             }
+//$$         }
+//$$         private final List<Layer> layers = new ArrayList<>();
+//$$
+//$$         @Override
+//$$         public VertexConsumer getBuffer(RenderType renderType) {
+//$$             for (Layer l : layers) {
+//$$                 if (l.type == renderType) {
+//$$                     if (l.builder == null) l.builder = newBuilder(l.nativeBuffer, renderType);
+//$$                     return l.builder;
+//$$                 }
+//$$             }
+//$$             ByteBufferBuilder nb = new ByteBufferBuilder(262144);
+//$$             Layer l = new Layer(renderType, nb);
+//$$             l.builder = newBuilder(nb, renderType);
+//$$             layers.add(l);
+//$$             return l.builder;
+//$$         }
+//$$
+//$$         private static BufferBuilder newBuilder(ByteBufferBuilder nativeBuffer, RenderType renderType) {
+//$$             var prevBypass = IrisCompat.setBypass(true);
+//$$             boolean prevSkip = IrisCompat.setSkipExtension(true);
+//$$             try {
+//$$                 return new BufferBuilder(nativeBuffer, renderType.mode(), renderType.format());
+//$$             } finally {
+//$$                 IrisCompat.setSkipExtension(prevSkip);
+//$$                 IrisCompat.restoreBypass(prevBypass);
+//$$             }
+//$$         }
+//$$
+//$$         public void flushToTarget(TextureTarget target) {
+//$$             if (target == null) return;
+//$$             for (Layer l : layers) {
+//$$                 if (l.builder == null) continue;
+//$$                 try {
+//$$                     try (var mesh = l.builder.build()) {
+//$$                         if (mesh != null) {
+//$$                             // RenderType.draw(mesh) does setupRenderState() → BufferUploader.drawWithShader → clearRenderState().
+//$$                             // The setupRenderState() runs every CompositeState shard, including OutputStateShard which
+//$$                             // rebinds vanilla's framebuffer (e.g. item_entity_translucent_cull's "item_entity_target"
+//$$                             // shard rebinds Minecraft.getMainRenderTarget()/itemEntityTarget). That clobbers our
+//$$                             // mask FBO bind and the captured mesh ends up drawn onto vanilla's render target instead
+//$$                             // — visible to the user as the captured item appearing in the wrong screen corner.
+//$$                             // Fix: invoke setupRenderState() and clearRenderState() manually around the draw, and
+//$$                             // re-bind the mask target *after* setupRenderState so our binding wins.
+//$$                             l.type.setupRenderState();
+//$$                             try {
+//$$                                 target.bindWrite(true);
+//$$                                 BufferUploader.drawWithShader(mesh);
+//$$                             } finally {
+//$$                                 l.type.clearRenderState();
+//$$                             }
+//$$                         }
+//$$                     }
+//$$                 } catch (Exception e) {
+//$$                     cn.spectra.gallium.Gallium.LOGGER.error(
+//$$                             "Error flushing 1.21.4 mesh for layer {}: {}", l.type, e.toString(), e);
+//$$                 } finally {
+//$$                     l.builder = null;
+//$$                 }
+//$$             }
+//$$             target.unbindWrite();
+//$$         }
+//$$
+//$$         public void endFrame() {
+//$$             for (Layer l : layers) {
+//$$                 if (l.builder == null) continue;
+//$$                 try (var ignored = l.builder.build()) {
+//$$                 } catch (Exception e) {
+//$$                     cn.spectra.gallium.Gallium.LOGGER.warn(
+//$$                             "endFrame: discard build failed for 1.21.4 layer {}: {}", l.type, e.toString());
+//$$                 }
+//$$                 l.builder = null;
+//$$             }
+//$$         }
+//$$
+//$$         public void free() {
+//$$             for (Layer l : layers) l.nativeBuffer.close();
+//$$             layers.clear();
+//$$         }
+//$$     }
+//$$
+//$$     public static MultiBufferSource teeGuiNonGlint(MultiBufferSource original,
+//$$                                                     DelayingMultiBufferSource capture) {
+//$$         return renderType -> teeVertexConsumer(original, capture, renderType);
 //$$     }
 //$$
 //$$     public static void end() {

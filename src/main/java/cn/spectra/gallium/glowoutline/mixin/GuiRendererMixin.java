@@ -13,8 +13,10 @@ import com.mojang.blaze3d.buffers.GpuBuffer;
 //#if MC>=1_21_06
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 //#endif
+//#if MC>=1_21_06
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.systems.RenderPass;
+//#endif
 //#if MC>=1_26_00
 //#elseif MC>=1_21_06
 //$$ import com.mojang.blaze3d.textures.GpuTextureView;

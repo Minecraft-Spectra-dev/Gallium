@@ -15,7 +15,9 @@ import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
+//#if MC>=1_21_05
 import com.mojang.blaze3d.textures.GpuTexture;
+//#endif
 import java.nio.ByteBuffer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderBuffers;
@@ -89,6 +91,7 @@ public final class GlowCaptureManager {
     }
 
     public static void captureSceneDepth(RenderTarget mainTarget) {
+        //#if MC>=1_21_05
         if (sceneDepthCaptured) return;
         GpuTexture srcDepth = mainTarget.getDepthTexture();
         if (srcDepth == null) return;
@@ -119,6 +122,28 @@ public final class GlowCaptureManager {
             }
         }
         sceneDepthCaptured = true;
+        //#else
+        //$$ if (sceneDepthCaptured) return;
+        //$$ int w = mainTarget.width, h = mainTarget.height;
+        //$$ if (sceneDepthTarget == null || sceneDepthTarget.width != w || sceneDepthTarget.height != h) {
+        //$$     if (sceneDepthTarget != null) sceneDepthTarget.destroyBuffers();
+        //$$     sceneDepthTarget = new TextureTarget(w, h, true);
+        //$$ }
+        //$$ sceneDepthTarget.copyDepthFrom(mainTarget);
+        //$$ for (GlowCaptureState state : activeStates) {
+        //$$     if (state.maskTarget != null) state.maskTarget.copyDepthFrom(mainTarget);
+        //$$ }
+        //$$ sceneDepthCaptured = true;
+        //$$ // RenderTarget.copyDepthFrom() ends with `_glBindFramebuffer(GL_FRAMEBUFFER, 0)`,
+        //$$ // leaving the default framebuffer bound. The vanilla code path that triggered our
+        //$$ // capture (RenderSystem.clear(256) inside renderLevel before renderItemInHand)
+        //$$ // assumes mainTarget is still bound — without this re-bind, clear(256) wipes the
+        //$$ // default framebuffer's depth instead of mainTarget's, leaving stale world depth
+        //$$ // in mainTarget. Hand items then fail LEQUAL against world depth and disappear
+        //$$ // behind world geometry. Restore mainTarget binding so vanilla's downstream draws
+        //$$ // and clears land on the right target.
+        //$$ mainTarget.bindWrite(true);
+        //#endif
     }
 
     public static @Nullable TextureTarget getSceneDepthTarget() {
@@ -130,11 +155,56 @@ public final class GlowCaptureManager {
     }
 
     public static boolean beginItemCapture(ItemStack stack, boolean firstPerson) {
+        //#if MC<1_21_05
+        //$$ if (stack.isEmpty()) return false;
+        //$$ if (!ItemEffectsManager.isActive()) return false;
+        //$$
+        //$$ ItemEffectConfig cfg = ItemEffectsManager.getConfig(stack);
+        //$$ if (cfg == null || cfg.shader().isEmpty()) return false;
+        //$$
+        //$$ // Probe the main target FIRST so a null result doesn't poison the pool slot.
+        //$$ // If we set state.active=true before this check and then returned false, the
+        //$$ // recycled slot would stay marked active without ever being added to
+        //$$ // activeStates — allocateState() would skip it forever and beginFrame()
+        //$$ // (which only iterates activeStates) would never reset it.
+        //$$ Minecraft mc = Minecraft.getInstance();
+        //$$ RenderTarget main = mc.getMainRenderTarget();
+        //$$ if (main == null) return false;
+        //$$
+        //$$ GlowCaptureState state = allocateState();
+        //$$ state.active = true;
+        //$$ state.firstPerson = firstPerson;
+        //$$ state.config = cfg;
+        //$$ if (state.capturedModelViewMatrix == null) state.capturedModelViewMatrix = new Matrix4f();
+        //$$ state.capturedModelViewMatrix.set(RenderSystem.getModelViewMatrix());
+        //$$ state.capturedModelViewMatrixValid = true;
+        //$$ state.capturedProjectionMatrix4f.set(RenderSystem.getProjectionMatrix());
+        //$$ state.capturedProjectionType = RenderSystem.getProjectionType();
+        //$$ state.capturedProjectionMatrix4fValid = true;
+        //$$
+        //$$ if (state.maskTarget == null) {
+        //$$     state.maskTarget = new TextureTarget(main.width, main.height, true);
+        //$$ } else if (state.maskTarget.width != main.width || state.maskTarget.height != main.height) {
+        //$$     state.maskTarget.resize(main.width, main.height);
+        //$$ }
+        //$$ activeStates.add(state);
+        //$$ currentCapture = state;
+        //$$ return true;
+        //#else
         if (stack.isEmpty()) return false;
         if (!ItemEffectsManager.isActive()) return false;
 
         ItemEffectConfig cfg = ItemEffectsManager.getConfig(stack);
         if (cfg == null || cfg.shader().isEmpty()) return false;
+
+        // Probe the main target FIRST so a null result doesn't poison the pool slot.
+        // If we set state.active=true before this check and then returned false, the
+        // recycled slot would stay marked active without ever being added to
+        // activeStates — allocateState() would skip it forever and beginFrame()
+        // (which only iterates activeStates) would never reset it.
+        Minecraft mc = Minecraft.getInstance();
+        RenderTarget main = mc.getMainRenderTarget();
+        if (main == null) return false;
 
         GlowCaptureState state = allocateState();
         state.active = true;
@@ -156,9 +226,6 @@ public final class GlowCaptureManager {
         //$$ state.capturedProjectionMatrix4fValid = true;
         //#endif
 
-        Minecraft mc = Minecraft.getInstance();
-        RenderTarget main = mc.getMainRenderTarget();
-        if (main == null) return false;
         if (state.maskTarget == null) {
             // identityHashCode (not a slot index) gives each state a stable, unique label
             // for the lifetime of the JVM — survives pool shrinks where a recycled slot
@@ -227,6 +294,7 @@ public final class GlowCaptureManager {
         activeStates.add(state);
         currentCapture = state;
         return true;
+        //#endif
     }
 
     public static void endItemCapture() {
@@ -388,7 +456,7 @@ public final class GlowCaptureManager {
         //$$
         //$$ state.lastMaskScale = maskScale;
         //$$ state.capturedThisFrame = true;
-        //#else
+        //#elseif MC>=1_21_05
         //$$ // 1.21.5: no outputColorTextureOverride. DelayingMultiBufferSource.flushToTarget()
         //$$ // manually uploads meshes and opens a RenderPass targeting the mask textures.
         //$$ if (state.captureBuffers == null || state.maskTarget == null) return;
@@ -477,6 +545,77 @@ public final class GlowCaptureManager {
         //$$     RenderSystem.getModelViewStack().popMatrix();
         //$$ }
         //$$
+        //$$ state.lastMaskScale = maskScale;
+        //$$ state.capturedThisFrame = true;
+        //#else
+        //$$ if (state.maskTarget == null) return;
+        //$$ TextureTarget mask = state.maskTarget;
+        //$$ mask.setClearColor(0.0F, 0.0F, 0.0F, 0.0F);
+        //$$ mask.clear();
+        //$$ // Mask depth strategy mirrors the >=1.21.6 branch:
+        //$$ //   firstPerson  → keep depth=1.0 from clear (no occlusion within held item)
+        //$$ //   Iris active  → keep depth=1.0; Iris rewrites mainTarget depth in its deferred
+        //$$ //                  pipeline so the pre-pipeline scene depth can't be LEQUAL-compared
+        //$$ //                  against vanilla item z. Composite shader does occlusion via
+        //$$ //                  SceneDepthSampler (which we wire to sceneDepthTarget on Iris path).
+        //$$ //                  Without this branch the LEQUAL test in flushToTarget bounces in
+        //$$ //                  sub-pixel against an unrelated scene depth → edge jitter every frame.
+        //$$ //   else (vanilla, scene depth captured) → mask depth = pre-clear world depth, so
+        //$$ //                  flushToTarget LEQUAL only writes item pixels that are in front of
+        //$$ //                  world geometry → the silhouette gets occluded by walls correctly.
+        //$$ //   else (fallback when capture didn't run this frame) → copy live mainTarget depth.
+        //$$ if (state.firstPerson || IrisCompat.isShaderActive()) {
+        //$$     // depth already 1.0 from mask.clear()
+        //$$ } else if (sceneDepthCaptured && sceneDepthTarget != null) {
+        //$$     mask.copyDepthFrom(sceneDepthTarget);
+        //$$ } else {
+        //$$     RenderTarget mainTarget = mc.getMainRenderTarget();
+        //$$     mask.copyDepthFrom(mainTarget);
+        //$$ }
+        //$$
+        //$$ float maskScale = 1.0f;
+        //$$ Matrix4f maskProjection = state.capturedProjectionMatrix4f;
+        //$$ if (state.capturedProjectionMatrix4fValid
+        //$$         && IrisCompat.isShaderActive()
+        //$$         && IrisCompat.getShaderInternalScale() < 0.999f) {
+        //$$     float scale = IrisCompat.getShaderInternalScale();
+        //$$     maskProjection = computeScaledProjection(state.capturedProjectionMatrix4f,
+        //$$             scale, SCRATCH_SCALED_PROJECTION);
+        //$$     maskScale = scale;
+        //$$ }
+        //$$ boolean shouldRestoreProj = state.capturedProjectionMatrix4fValid
+        //$$         && state.capturedProjectionType != null;
+        //$$ boolean shouldPushModelView = state.capturedModelViewMatrixValid
+        //$$         && state.capturedModelViewMatrix != null;
+        //$$
+        //$$ // Track which side-effects actually fired so the finally block only undoes
+        //$$ // what succeeded — if setProjectionMatrix throws after backupProjectionMatrix,
+        //$$ // we still want to restoreProjectionMatrix; if pushMatrix succeeds but
+        //$$ // setProjectionMatrix throws, we still want to popMatrix. Keeping push and
+        //$$ // backup inside the try ensures their popMatrix/restore counterparts run on
+        //$$ // every unwind path.
+        //$$ boolean pushedModelView = false;
+        //$$ boolean backedUpProj = false;
+        //$$ var irisSnapshot = IrisCompat.setBypass(true);
+        //$$ try {
+        //$$     if (shouldPushModelView) {
+        //$$         RenderSystem.getModelViewStack().pushMatrix();
+        //$$         pushedModelView = true;
+        //$$         RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
+        //$$     }
+        //$$     if (shouldRestoreProj) {
+        //$$         RenderSystem.backupProjectionMatrix();
+        //$$         backedUpProj = true;
+        //$$         RenderSystem.setProjectionMatrix(maskProjection, state.capturedProjectionType);
+        //$$     }
+        //$$     if (state.customBufferSource != null) {
+        //$$         state.customBufferSource.flushToTarget(mask);
+        //$$     }
+        //$$ } finally {
+        //$$     IrisCompat.restoreBypass(irisSnapshot);
+        //$$     if (backedUpProj) RenderSystem.restoreProjectionMatrix();
+        //$$     if (pushedModelView) RenderSystem.getModelViewStack().popMatrix();
+        //$$ }
         //$$ state.lastMaskScale = maskScale;
         //$$ state.capturedThisFrame = true;
         //#endif

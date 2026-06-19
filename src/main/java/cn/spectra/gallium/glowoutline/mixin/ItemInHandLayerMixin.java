@@ -71,7 +71,7 @@ public class ItemInHandLayerMixin {
     //$$ }
     //#endif
 }
-//#else
+//#elseif MC>=1_21_05
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 //$$ import cn.spectra.gallium.glowoutline.capture.ArmedEntityRenderStateAccessor;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
@@ -103,6 +103,58 @@ public class ItemInHandLayerMixin {
 //$$                 ? GlowOutlineConfig.Toggle.THIRD_PERSON
 //$$                 : GlowOutlineConfig.Toggle.OTHER_ENTITIES;
 //$$         ItemStack itemStack = ((ArmedEntityRenderStateAccessor) (Object) state).gallium$getHandStack(arm);
+//$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(itemStack, bufferSource, flag);
+//$$         try {
+//$$             original.call(renderState, poseStack, wrapped, light, overlay);
+//$$         } finally {
+//$$             CaptureSites.end();
+//$$         }
+//$$     }
+//$$ }
+//#else
+//$$ // 1.21.4: same renderArmWithItem flow as 1.21.5/1.21.8, but EntityRenderState lacks the
+//$$ // `entityType` field (added in 1.21.5). Use `instanceof PlayerRenderState` to distinguish
+//$$ // player-vs-other-mob third-person held item rendering.
+//$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
+//$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+//$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+//$$ import com.mojang.blaze3d.vertex.PoseStack;
+//$$ import net.minecraft.client.renderer.MultiBufferSource;
+//$$ import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
+//$$ import net.minecraft.client.renderer.entity.state.ArmedEntityRenderState;
+//$$ import net.minecraft.client.renderer.entity.state.PlayerRenderState;
+//$$ import net.minecraft.client.renderer.item.ItemStackRenderState;
+//$$ import net.minecraft.world.entity.HumanoidArm;
+//$$ import net.minecraft.world.item.ItemStack;
+//$$ import org.spongepowered.asm.mixin.Mixin;
+//$$ import org.spongepowered.asm.mixin.injection.At;
+//$$
+//$$ @Mixin(ItemInHandLayer.class)
+//$$ public class ItemInHandLayerMixin {
+//$$
+//$$     @WrapOperation(method = "renderArmWithItem", at = @At(value = "INVOKE",
+//$$             target = "Lnet/minecraft/client/renderer/item/ItemStackRenderState;render(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;II)V"))
+//$$     private void galliumWrapItemRender(ItemStackRenderState renderState, PoseStack poseStack,
+//$$                                        MultiBufferSource bufferSource, int light, int overlay,
+//$$                                        Operation<Void> original,
+//$$                                        ArmedEntityRenderState state, ItemStackRenderState item,
+//$$                                        HumanoidArm arm, PoseStack ps, MultiBufferSource bs, int i) {
+//$$         boolean isPlayer = state instanceof PlayerRenderState;
+//$$         GlowOutlineConfig.Toggle flag = isPlayer
+//$$                 ? GlowOutlineConfig.Toggle.THIRD_PERSON
+//$$                 : GlowOutlineConfig.Toggle.OTHER_ENTITIES;
+//$$         // Recover the matching ItemStack: ArmedEntityRenderState carries rightHandItem and
+//$$         // leftHandItem ItemStackRenderStates but no raw ItemStacks. Compare identity to
+//$$         // figure out which arm we're rendering, then read the live entity's stack via the
+//$$         // accessor populated by ArmedEntityRenderStateMixin (which is gated <1_21_11 — and
+//$$         // therefore active on 1.21.4 too, since the stub-strip list keeps it real).
+//$$         ItemStack itemStack;
+//$$         if (state instanceof cn.spectra.gallium.glowoutline.capture.ArmedEntityRenderStateAccessor accessor) {
+//$$             itemStack = accessor.gallium$getHandStack(arm);
+//$$         } else {
+//$$             itemStack = ItemStack.EMPTY;
+//$$         }
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(itemStack, bufferSource, flag);
 //$$         try {
 //$$             original.call(renderState, poseStack, wrapped, light, overlay);
