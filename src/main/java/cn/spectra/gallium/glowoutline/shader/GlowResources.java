@@ -45,6 +45,9 @@ public final class GlowResources {
             cn.spectra.gallium.glowoutline.shader.GlowPipeline.class,
             cn.spectra.gallium.glowoutline.shader.GuiGlowElementPipeline.class,
             cn.spectra.gallium.glowoutline.shader.GuiGlowRenderer.class,
+            cn.spectra.gallium.glowoutline.shader.GuiImmediateGlowComposite.class,
+            cn.spectra.gallium.glowoutline.shader.GuiImmediateGlowPipeline.class,
+            cn.spectra.gallium.glowoutline.shader.GuiImmediateGlowTile.class,
             cn.spectra.gallium.glowoutline.capture.GlowCaptureManager.class,
         };
         for (Class<?> c : classes) {

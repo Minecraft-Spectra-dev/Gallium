@@ -45,10 +45,28 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$
 //$$     // 4 vertices × 24 bytes (POSITION_TEX_COLOR) = 96 bytes plus alignment slack —
 //$$     // 1 KiB is generous and amortizes the malloc across all GUI glow draws this run.
-//$$     // Reused per call: bb.build() returns a MeshData whose close() rewinds this buffer.
-//$$     private static final ByteBufferBuilder QUAD_BUF = new ByteBufferBuilder(1024);
+//$$     // Allocated lazily on first use; freed by disposeQuadBuf() on resource reload.
+//$$     private static ByteBufferBuilder QUAD_BUF;
+//$$
+//$$     static {
+//$$         GlowResources.register(GuiImmediateGlowComposite::disposeQuadBuf);
+//$$     }
 //$$
 //$$     private GuiImmediateGlowComposite() {}
+//$$
+//$$     private static ByteBufferBuilder quadBuf() {
+//$$         if (QUAD_BUF == null) {
+//$$             QUAD_BUF = new ByteBufferBuilder(1024);
+//$$         }
+//$$         return QUAD_BUF;
+//$$     }
+//$$
+//$$     private static void disposeQuadBuf() {
+//$$         if (QUAD_BUF != null) {
+//$$             QUAD_BUF.close();
+//$$             QUAD_BUF = null;
+//$$         }
+//$$     }
 //$$
 //$$     /**
 //$$      * Compose one item's glow. Caller must pass ABSOLUTE GUI-px coordinates of the slot's
@@ -96,7 +114,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$
 //$$         // QUADS top-left → bottom-left winding for POSITION_TEX_COLOR. UVs play back the
 //$$         // tile upright on screen — tile entry ortho rendered with bottom-left at uv (0,0).
-//$$         BufferBuilder bb = new BufferBuilder(QUAD_BUF, VertexFormat.Mode.QUADS,
+//$$         BufferBuilder bb = new BufferBuilder(quadBuf(), VertexFormat.Mode.QUADS,
 //$$                 DefaultVertexFormat.POSITION_TEX_COLOR);
 //$$         bb.addVertex(x0, y0, z).setUv(0f, 1f).setColor(0xFFFFFFFF);
 //$$         bb.addVertex(x0, y1, z).setUv(0f, 0f).setColor(0xFFFFFFFF);

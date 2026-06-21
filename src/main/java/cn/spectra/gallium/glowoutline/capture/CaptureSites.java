@@ -518,13 +518,14 @@ public final class CaptureSites {
 //$$         return renderType -> teeVertexConsumer(original, captureSource, renderType);
 //$$     }
 //$$
-//$$     // Substring match (rather than the exact-name Set used on 1.21.5+/1.21.6+) because
-//$$     // 1.21.4's RenderType.toString includes a "renderType[<name>]" wrapper or appended
-//$$     // modifier in some cases — exact equality on the bare layer name misses those, so
-//$$     // glint geometry would slip into the capture buffer and produce a brightly-shaded
-//$$     // outline. Substring is broader (matches anything containing "glint") which is the
-//$$     // intended behaviour: any layer ultimately drawing glint vertices should not feed
-//$$     // the mask, regardless of how its toString is formatted.
+//$$     // Substring match (rather than the exact-name Set used on 1.21.5+) because
+//$$     // pre-1.21.5 RenderType.toString includes a "renderType[<name>]" wrapper or
+//$$     // appended modifier in some cases — exact equality on the bare layer name
+//$$     // misses those, so glint geometry would slip into the capture buffer and
+//$$     // produce a brightly-shaded outline. Substring is broader (matches anything
+//$$     // containing "glint") which is the intended behaviour: any layer ultimately
+//$$     // drawing glint vertices should not feed the mask, regardless of how its
+//$$     // toString is formatted.
 //$$     private static VertexConsumer teeVertexConsumer(MultiBufferSource original,
 //$$                                                     DelayingMultiBufferSource capture,
 //$$                                                     RenderType renderType) {
@@ -600,7 +601,7 @@ public final class CaptureSites {
 //$$                     }
 //$$                 } catch (Exception e) {
 //$$                     cn.spectra.gallium.Gallium.LOGGER.error(
-//$$                             "Error flushing 1.21.4 mesh for layer {}: {}", l.type, e.toString(), e);
+//$$                             "Error flushing pre-1.21.5 mesh for layer {}: {}", l.type, e.toString(), e);
 //$$                 } finally {
 //$$                     l.builder = null;
 //$$                 }
@@ -614,7 +615,7 @@ public final class CaptureSites {
 //$$                 try (var ignored = l.builder.build()) {
 //$$                 } catch (Exception e) {
 //$$                     cn.spectra.gallium.Gallium.LOGGER.warn(
-//$$                             "endFrame: discard build failed for 1.21.4 layer {}: {}", l.type, e.toString());
+//$$                             "endFrame: discard build failed for pre-1.21.5 layer {}: {}", l.type, e.toString());
 //$$                 }
 //$$                 l.builder = null;
 //$$             }

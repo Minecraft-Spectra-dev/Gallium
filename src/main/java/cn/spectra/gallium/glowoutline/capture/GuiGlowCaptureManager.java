@@ -30,7 +30,12 @@ public final class GuiGlowCaptureManager {
     }
 
     public static List<GuiGlowCapture> getActive() {
-        return activeCount == 0 ? Collections.emptyList() : pool.subList(0, activeCount);
+        // Defensive copy: subList is a live view backed by pool — if a nested emitGlow
+        // call appends to pool via acquire(), ConcurrentModificationException would fire
+        // during iteration of the outer getActive(). Copy is bounded by
+        // POOL_HIGH_WATER_MARK (256) so the allocation is negligible.
+        return activeCount == 0 ? Collections.emptyList()
+                : List.copyOf(pool.subList(0, activeCount));
     }
 
     public static void clear() {

@@ -83,7 +83,8 @@ public class ItemEntityRendererMixin {
 //$$     @Inject(method = "extractRenderState(Lnet/minecraft/world/entity/item/ItemEntity;Lnet/minecraft/client/renderer/entity/state/ItemEntityRenderState;F)V",
 //$$             at = @At("HEAD"))
 //$$     private void galliumCaptureItemStack(net.minecraft.world.entity.item.ItemEntity entity, ItemEntityRenderState state, float partialTicks, CallbackInfo ci) {
-//$$         ((ItemEntityRenderStateAccessor) state).gallium$setItemStack(entity.getItem());
+//$$         ItemStack picked = entity.getItem();
+//$$         ((ItemEntityRenderStateAccessor) state).gallium$setItemStack(picked.isEmpty() ? ItemStack.EMPTY : picked.copy());
 //$$     }
 //$$
 //$$     @WrapOperation(method = "render(Lnet/minecraft/client/renderer/entity/state/ItemEntityRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At(value = "INVOKE",
@@ -130,7 +131,8 @@ public class ItemEntityRendererMixin {
 //$$     @Inject(method = "extractRenderState(Lnet/minecraft/world/entity/item/ItemEntity;Lnet/minecraft/client/renderer/entity/state/ItemEntityRenderState;F)V",
 //$$             at = @At("HEAD"))
 //$$     private void galliumCaptureItemStack(net.minecraft.world.entity.item.ItemEntity entity, ItemEntityRenderState state, float partialTicks, CallbackInfo ci) {
-//$$         ((ItemEntityRenderStateAccessor) state).gallium$setItemStack(entity.getItem());
+//$$         ItemStack picked = entity.getItem();
+//$$         ((ItemEntityRenderStateAccessor) state).gallium$setItemStack(picked.isEmpty() ? ItemStack.EMPTY : picked.copy());
 //$$     }
 //$$
 //$$     @WrapOperation(method = "render(Lnet/minecraft/client/renderer/entity/state/ItemEntityRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At(value = "INVOKE",

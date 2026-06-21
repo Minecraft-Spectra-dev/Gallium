@@ -2,8 +2,10 @@ package cn.spectra.gallium.glowoutline;
 
 import net.minecraft.core.component.DataComponentType;
 //#if MC>=1_21_09
+import net.minecraft.IdentifierException;
 import net.minecraft.resources.Identifier;
 //#else
+//$$ import net.minecraft.ResourceLocationException;
 //$$ import net.minecraft.resources.ResourceLocation;
 //#endif
 import net.minecraft.world.item.ItemStack;
@@ -87,9 +89,19 @@ public sealed interface ItemCondition permits
                     if (val == null) yield false;
                     if (val instanceof ItemEnchantments enchants) {
                         //#if MC>=1_21_09
-                        var id = Identifier.parse(value);
+                        Identifier id;
+                        try {
+                            id = Identifier.parse(value);
+                        } catch (IdentifierException e) {
+                            yield false;
+                        }
                         //#else
-                        //$$ var id = ResourceLocation.parse(value);
+                        //$$ ResourceLocation id;
+                        //$$ try {
+                        //$$     id = ResourceLocation.parse(value);
+                        //$$ } catch (ResourceLocationException e) {
+                        //$$     yield false;
+                        //$$ }
                         //#endif
                         boolean found = false;
                         for (var holder : enchants.keySet()) {
@@ -117,11 +129,14 @@ public sealed interface ItemCondition permits
                     if (val == null) yield value.equals("null");
                     if (val instanceof Number n) {
                         // Number.toString format varies (1 vs 1.0 vs 1.0E0). Try numeric compare
-                        // with epsilon so {"equals": "1"} matches stored 1.0f; fall back to
-                        // string compare when value isn't numeric.
+                        // with relative epsilon so small fractions match correctly and large
+                        // integers aren't false-negative from rounding error.
                         try {
                             float target = java.lang.Float.parseFloat(value);
-                            yield Math.abs(n.floatValue() - target) <= 1.0e-6f;
+                            float abs = Math.abs(n.floatValue() - target);
+                            float rel = 1.0e-6f * Math.max(Math.abs(n.floatValue()), Math.abs(target));
+                            float eps = Math.max(1.0e-6f, rel);
+                            yield abs <= eps;
                         } catch (NumberFormatException ignored) {
                             yield val.toString().equals(value);
                         }

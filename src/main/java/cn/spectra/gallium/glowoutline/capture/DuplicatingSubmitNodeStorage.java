@@ -88,7 +88,7 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
     //$$ @Override public void submitBlock(PoseStack p, BlockState bs, int i, int j, int k) { delegate.submitBlock(p, bs, i, j, k); }
     //#endif
     @Override public void submitParticleGroup(ParticleGroupRenderer r) { delegate.submitParticleGroup(r); }
-    @Override public void clear() { delegate.clear(); }
+    @Override public void clear() { delegate.clear(); collectionsByOrder.clear(); }
     @Override public void endFrame() { delegate.endFrame(); }
     @Override public Int2ObjectAVLTreeMap<SubmitNodeCollection> getSubmitsPerOrder() { return delegate.getSubmitsPerOrder(); }
 

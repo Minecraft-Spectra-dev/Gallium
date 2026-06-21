@@ -94,6 +94,9 @@ public class Gallium implements ClientModInitializer {
 			if (previous != null && client.screen == null) {
 				client.setScreen(previous);
 			}
-		}, client);
+		}, client).exceptionally(e -> {
+			LOGGER.error("Failed to reload resource packs", e);
+			return null;
+		});
 	}
 }

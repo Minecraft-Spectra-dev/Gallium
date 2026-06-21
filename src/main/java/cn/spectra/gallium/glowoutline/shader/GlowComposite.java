@@ -144,15 +144,21 @@ public final class GlowComposite {
         int w = mainTarget.width;
         int h = mainTarget.height;
         float maskScale = state.lastMaskScale;
-        uniformBuffer.update(GlowTime.worldSecondsFloat(), w, h,
-                maskScale, maskScale, state.config);
 
         com.mojang.blaze3d.textures.GpuTextureView sceneDepthView = selectSceneDepthView(state, mask, mainTarget);
         FilterMode maskFilter = maskScale < 1.0f ? FilterMode.LINEAR : FilterMode.NEAREST;
 
-        try (RenderPass pass = RenderSystem.getDevice()
-                .createCommandEncoder()
-                .createRenderPass(() -> "Glow", mainTarget.getColorTextureView(), OptionalInt.empty())) {
+        // Use ONE CommandEncoder for both the UBO write and the RenderPass so the
+        // write is guaranteed to complete before the shader reads GlowUniforms,
+        // even on deferred-backend drivers that reorder independent encoders.
+        // Without this, the next drawGlow iteration can overwrite the UBO before
+        // the current RenderPass reads it — two items with different effects whose
+        // outlines overlap in screen space would each sample the other item's params.
+        var encoder = RenderSystem.getDevice().createCommandEncoder();
+        uniformBuffer.writeToEncoder(encoder, GlowTime.worldSecondsFloat(), w, h,
+                maskScale, maskScale, state.config);
+
+        try (RenderPass pass = encoder.createRenderPass(() -> "Glow", mainTarget.getColorTextureView(), OptionalInt.empty())) {
             pass.setPipeline(pipeline);
             pass.setUniform("GlowUniforms", uniformBuffer.getSlice());
             SamplerHelper.bindClampToEdge(pass, "DiffuseSampler",

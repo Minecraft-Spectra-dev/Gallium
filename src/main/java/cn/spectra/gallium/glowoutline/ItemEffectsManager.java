@@ -3,6 +3,9 @@ package cn.spectra.gallium.glowoutline;
 import cn.spectra.gallium.Gallium;
 import cn.spectra.gallium.glowoutline.shader.GlowResources;
 import cn.spectra.gallium.glowoutline.shader.GuiGlowElementPipeline;
+//#if MC<1_21_06
+import cn.spectra.gallium.glowoutline.shader.GuiImmediateGlowPipeline;
+//#endif
 import cn.spectra.gallium.glowoutline.shader.GlowPipeline;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -76,6 +79,7 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
             GlowPipeline.retainOnly(java.util.Set.of());
             //#if MC<1_21_06
             //$$ GlowPipeline.retainOnlyConfigs(java.util.Set.of());
+            //$$ GuiImmediateGlowPipeline.retainOnly(java.util.Set.of());
             //#endif
             GuiGlowElementPipeline.retainOnly(java.util.Set.of());
             Gallium.LOGGER.info("No item_effects.json found, glow outline inactive.");
@@ -94,6 +98,7 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
             GlowPipeline.retainOnly(java.util.Set.of());
             //#if MC<1_21_06
             //$$ GlowPipeline.retainOnlyConfigs(java.util.Set.of());
+            //$$ GuiImmediateGlowPipeline.retainOnly(java.util.Set.of());
             //#endif
             GuiGlowElementPipeline.retainOnly(java.util.Set.of());
         }
@@ -145,6 +150,7 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
         //$$ // reload but whose shader name stayed the same would leave its stale,
         //$$ // wrong-uniforms pipeline cached forever.
         //$$ GlowPipeline.retainOnlyConfigs(liveConfigs);
+        //$$ GuiImmediateGlowPipeline.retainOnly(liveConfigs);
         //#endif
         GuiGlowElementPipeline.retainOnly(liveConfigs);
 
@@ -346,7 +352,10 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
             for (var entry : paramsObj.entrySet()) {
                 ShaderParam param = parseParam(entry.getKey(), entry.getValue());
                 if (param == null) {
-                    Gallium.LOGGER.warn("item_effects rule[{}]: failed to parse param '{}'", ruleIndex, entry.getKey());
+                    Gallium.LOGGER.warn("item_effects rule[{}]: failed to parse param '{}' (type={}, value={})",
+                            ruleIndex, entry.getKey(),
+                            entry.getValue() == null ? "null" : entry.getValue().getClass().getSimpleName(),
+                            entry.getValue());
                 } else {
                     params.add(param);
                 }

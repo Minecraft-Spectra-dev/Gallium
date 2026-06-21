@@ -26,6 +26,8 @@ public final class GalliumConfigIO {
     private static final String CONFIG_VERSION_KEY = "config_version";
     private static final String RENDER_TARGETS_KEY = "render_targets";
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
+    /** Set true when load() failed — save() will refuse to overwrite the unreadable file. */
+    private static boolean loadFailed;
 
     private GalliumConfigIO() {}
 
@@ -42,13 +44,37 @@ public final class GalliumConfigIO {
         try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
             applyToRuntime(root);
+            loadFailed = false;
         } catch (Exception e) {
+            loadFailed = true;
             Gallium.LOGGER.warn("Failed to load {}, using defaults: {}", FILE_NAME, e.toString());
         }
     }
 
     public static void save() {
         Path path = configPath();
+        // If the config file exists but is unreadable, refuse to overwrite — saving
+        // defaults would silently destroy user data. Back the corrupted file up instead
+        // so the user (or a future recovery tool) can inspect it.
+        if (loadFailed && Files.exists(path)) {
+            Path backup = path.resolveSibling(FILE_NAME + ".corrupted");
+            try {
+                // ATOMIC_MOVE is the best option when available, but fall back to copy
+                // (not move) to avoid leaving the destination empty on crash.
+                try {
+                    Files.move(path, backup, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException atomicFail) {
+                    Files.copy(path, backup, StandardCopyOption.REPLACE_EXISTING);
+                }
+                loadFailed = false;
+                Gallium.LOGGER.warn("Backed up corrupted {} to {}, saving fresh defaults",
+                        FILE_NAME, backup.getFileName());
+            } catch (IOException backupFail) {
+                Gallium.LOGGER.warn("Could not backup corrupted {} ({}), refusing to overwrite",
+                        FILE_NAME, backupFail.toString());
+                return;
+            }
+        }
         Path tmp = path.resolveSibling(FILE_NAME + ".tmp");
         try {
             Files.createDirectories(path.getParent());
@@ -59,8 +85,12 @@ public final class GalliumConfigIO {
             try {
                 Files.move(tmp, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException atomicFail) {
-                Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING);
+                // Non-atomic fallback: copy-then-delete is crash-safe (tmp survives until
+                // we delete it, and the copy is an atomic replacement on most filesystems).
+                Files.copy(tmp, path, StandardCopyOption.REPLACE_EXISTING);
+                Files.delete(tmp);
             }
+            loadFailed = false;
         } catch (Exception e) {
             Gallium.LOGGER.warn("Failed to save {}: {}", FILE_NAME, e.toString());
             try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}

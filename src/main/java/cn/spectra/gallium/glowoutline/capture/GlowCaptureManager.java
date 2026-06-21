@@ -57,6 +57,19 @@ public final class GlowCaptureManager {
     private static @Nullable GpuBuffer scaledProjectionBuffer;
     private static @Nullable GpuBufferSlice scaledProjectionSlice;
     //#endif
+    //#if MC>=1_21_09
+    /** Single shared {@link RenderBuffers} used by every capture state's
+     *  {@link net.minecraft.client.renderer.feature.FeatureRenderDispatcher}. Per-state
+     *  {@code new RenderBuffers(1)} would leak the native {@link java.nio.ByteBuffer}
+     *  allocations in its internal {@link com.mojang.blaze3d.vertex.ByteBufferBuilder}s
+     *  (RenderBuffers has no {@code close()} API and no Cleaner/finalizer — vanilla
+     *  creates one instance for the session and never discards it). Sharing one instance
+     *  across captures follows vanilla's single-instance model: {@code endBatch()} /
+     *  {@code endOutlineBatch()} rewinds the builders after each state's mask render,
+     *  so sequential replay is safe. Disposed on resource reload via reflection in
+     *  {@link #releaseSharedBuffers()}. */
+    private static @Nullable RenderBuffers sharedCaptureBuffers;
+    //#endif
     /** Reused holder for the scaled projection. Render thread is single-threaded, so a static
      *  scratch matrix avoids two {@code Matrix4f} allocations per mask render. */
     private static final Matrix4f SCRATCH_SCALED_PROJECTION = new Matrix4f();
@@ -268,11 +281,11 @@ public final class GlowCaptureManager {
             //#endif
         }
 
-        if (state.captureBuffers == null) {
-            state.captureBuffers = new RenderBuffers(1);
+        //#if MC>=1_21_09
+        if (sharedCaptureBuffers == null) {
+            sharedCaptureBuffers = new RenderBuffers(1);
         }
 
-        //#if MC>=1_21_09
         if (state.captureDispatcher == null) {
             FeatureRenderDispatcher mainDispatcher = mc.gameRenderer.getFeatureRenderDispatcher();
             var accessor = (FeatureRenderDispatcherAccessor) mainDispatcher;
@@ -281,10 +294,10 @@ public final class GlowCaptureManager {
             state.captureDispatcher = new FeatureRenderDispatcher(
                     new SubmitNodeStorage(),
                     mc.getModelManager(),
-                    state.captureBuffers.bufferSource(),
+                    sharedCaptureBuffers.bufferSource(),
                     accessor.gallium$getAtlasManager(),
-                    state.captureBuffers.outlineBufferSource(),
-                    state.captureBuffers.crumblingBufferSource(),
+                    sharedCaptureBuffers.outlineBufferSource(),
+                    sharedCaptureBuffers.crumblingBufferSource(),
                     mc.font,
                     gameAccessor.gallium$getGameRenderState()
             );
@@ -292,10 +305,10 @@ public final class GlowCaptureManager {
             //$$ state.captureDispatcher = new FeatureRenderDispatcher(
             //$$         new SubmitNodeStorage(),
             //$$         mc.getBlockRenderer(),
-            //$$         state.captureBuffers.bufferSource(),
+            //$$         sharedCaptureBuffers.bufferSource(),
             //$$         accessor.gallium$getAtlasManager(),
-            //$$         state.captureBuffers.outlineBufferSource(),
-            //$$         state.captureBuffers.crumblingBufferSource(),
+            //$$         sharedCaptureBuffers.outlineBufferSource(),
+            //$$         sharedCaptureBuffers.crumblingBufferSource(),
             //$$         mc.font
             //$$ );
             //#endif
@@ -329,7 +342,7 @@ public final class GlowCaptureManager {
 
     public static void renderCapturedNodes(GlowCaptureState state, Minecraft mc) {
         //#if MC>=1_21_09
-        if (state.captureDispatcher == null || state.captureBuffers == null || state.maskTarget == null) return;
+        if (state.captureDispatcher == null || sharedCaptureBuffers == null || state.maskTarget == null) return;
 
         var encoder = RenderSystem.getDevice().createCommandEncoder();
         encoder.clearColorTexture(state.maskTarget.getColorTexture(), 0);
@@ -384,8 +397,8 @@ public final class GlowCaptureManager {
         var irisSnapshot = IrisCompat.setBypass(true);
         try {
             state.captureDispatcher.renderAllFeatures();
-            state.captureBuffers.bufferSource().endBatch();
-            state.captureBuffers.outlineBufferSource().endOutlineBatch();
+            sharedCaptureBuffers.bufferSource().endBatch();
+            sharedCaptureBuffers.outlineBufferSource().endOutlineBatch();
         } finally {
             IrisCompat.restoreBypass(irisSnapshot);
             if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
@@ -684,6 +697,7 @@ public final class GlowCaptureManager {
         }
         //#if MC>=1_21_09
         state.captureDispatcher = null;
+        // Shared RenderBuffers lives across all states — don't null it out or allocate per-state.
         //#else
         //$$ // Release the retained off-heap capture buffers (pooled across frames on 1.21.8).
         //$$ if (state.customBufferSource != null) {
@@ -691,7 +705,11 @@ public final class GlowCaptureManager {
         //$$     state.customBufferSource = null;
         //$$ }
         //#endif
-        state.captureBuffers = null;
+        // captureBuffers is a per-state allocation only on the pre-1.21.9 immediate-mode paths;
+        // on 1.21.9+ the shared CaptureBuffers lives in GlowCaptureManager.
+        //#if MC<1_21_09
+        //$$ state.captureBuffers = null;
+        //#endif
     }
 
     public static void clearAll() {
@@ -709,8 +727,46 @@ public final class GlowCaptureManager {
             scaledProjectionSlice = null;
         }
         //#endif
+        //#if MC>=1_21_09
+        releaseSharedBuffers();
+        //#endif
         sceneDepthCaptured = false;
         activeStates.clear();
         currentCapture = null;
     }
+
+    //#if MC>=1_21_09
+    /** Iterate RenderBuffers' declared fields and close any {@link ByteBufferBuilder}
+     *  instances found — RenderBuffers has no {@code close()} API and vanilla never
+     *  discards one, but we recreate it on resource reload so the old builders must be
+     *  freed.  Reflection is safe here because this runs only on reload/teardown,
+     *  not per-frame. */
+    private static void releaseSharedBuffers() {
+        if (sharedCaptureBuffers == null) return;
+        RenderBuffers rb = sharedCaptureBuffers;
+        sharedCaptureBuffers = null;
+        try {
+            for (java.lang.reflect.Field field : RenderBuffers.class.getDeclaredFields()) {
+                field.setAccessible(true);
+                Object value;
+                try {
+                    value = field.get(rb);
+                } catch (IllegalAccessException e) {
+                    continue;
+                }
+                if (value instanceof com.mojang.blaze3d.vertex.ByteBufferBuilder bb) {
+                    bb.close();
+                } else if (value instanceof java.util.Map<?, ?> map) {
+                    for (Object v : map.values()) {
+                        if (v instanceof com.mojang.blaze3d.vertex.ByteBufferBuilder bbb) {
+                            bbb.close();
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            cn.spectra.gallium.Gallium.LOGGER.warn("Failed to close shared capture buffers: {}", e.toString());
+        }
+    }
+    //#endif
 }

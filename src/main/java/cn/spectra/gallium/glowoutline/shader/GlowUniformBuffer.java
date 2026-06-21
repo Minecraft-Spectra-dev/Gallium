@@ -7,6 +7,7 @@ import cn.spectra.gallium.glowoutline.ShaderParam;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
+import com.mojang.blaze3d.systems.CommandEncoder;
 //#endif
 import com.mojang.blaze3d.systems.RenderSystem;
 import java.nio.BufferOverflowException;
@@ -33,6 +34,10 @@ public class GlowUniformBuffer implements AutoCloseable {
         this.buffer = RenderSystem.getDevice().createBuffer(labelSupplier, BUFFER_USAGE_FLAGS, BUFFER_CAPACITY);
     }
     //#else
+    //$$ // UBO-backed uniform buffers are only supported on 1.21.6+. On pre-1.21.6,
+    //$$ // per-config uniforms are baked into individual pipeline uniform declarations
+    //$$ // (see GlowPipeline.getOrCreate(cfg) on 1.21.5). No call site constructs a
+    //$$ // GlowUniformBuffer on these versions, so the constructor is a no-op.
     //$$ public GlowUniformBuffer(String label) {}
     //#endif
 
@@ -44,6 +49,25 @@ public class GlowUniformBuffer implements AutoCloseable {
     public void update(float frameTimeCounter, int screenWidth, int screenHeight,
                        float maskUvFactor, float sceneUvFactor,
                        ItemEffectConfig cfg) {
+        // Bare encoder: used when the caller doesn't own a CommandEncoder (GUI glow path).
+        // World glow MUST use writeToEncoder(CommandEncoder, ...) so the UBO write and the
+        // subsequent RenderPass share one encoder — without that, another drawGlow iteration
+        // may overwrite the UBO before the previous iteration's RenderPass has read it, so
+        // outlines at overlapping screen positions appear with the wrong item's parameters.
+        writeToEncoder(RenderSystem.getDevice().createCommandEncoder(),
+                frameTimeCounter, screenWidth, screenHeight, maskUvFactor, sceneUvFactor, cfg);
+    }
+
+    /**
+     * Writes the UBO data onto {@code encoder}. The caller MUST create the subsequent
+     * {@link RenderPass} from the same encoder so the buffer write is guaranteed to
+     * complete before the shader reads it — even on deferred-backend drivers that
+     * execute different encoders' commands in an unspecified order.
+     */
+    public void writeToEncoder(CommandEncoder encoder,
+                               float frameTimeCounter, int screenWidth, int screenHeight,
+                               float maskUvFactor, float sceneUvFactor,
+                               ItemEffectConfig cfg) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             Std140Builder builder = Std140Builder.onStack(stack, BUFFER_CAPACITY);
             ByteBuffer data;
@@ -77,7 +101,7 @@ public class GlowUniformBuffer implements AutoCloseable {
                 }
                 return;
             }
-            RenderSystem.getDevice().createCommandEncoder().writeToBuffer(this.buffer.slice(), data);
+            encoder.writeToBuffer(this.buffer.slice(), data);
         }
     }
 
@@ -86,6 +110,8 @@ public class GlowUniformBuffer implements AutoCloseable {
     }
     //#endif
 
+    /** Idempotent; safe to call regardless of MC version. On pre-1.21.6 the buffer
+     *  field is absent (constructor is a no-op), so close is a no-op too. */
     @Override
     public void close() {
         //#if MC>=1_21_06

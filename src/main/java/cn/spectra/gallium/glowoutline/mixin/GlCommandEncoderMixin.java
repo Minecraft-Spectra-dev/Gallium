@@ -23,12 +23,19 @@ import org.spongepowered.asm.mixin.injection.At;
  * this mixin must be re-gated (it would otherwise double-offset).
  * <p>
  * {@code GlCommandEncoder} is package-private on 26.1, so it is referenced by {@code targets=}
- * string rather than a class literal; this also keeps one shared source across all versions.
+ * string. On &lt;26.1 it is public, so the class literal avoids a spurious Mixin warning.
  */
+//#if MC>=1_26_00
 @Mixin(targets = "com.mojang.blaze3d.opengl.GlCommandEncoder")
+//#else
+//$$ import com.mojang.blaze3d.opengl.GlCommandEncoder;
+//$$ @Mixin(GlCommandEncoder.class)
+//#endif
 public class GlCommandEncoderMixin {
 
-    @WrapOperation(method = "copyTextureToTexture", at = @At(value = "INVOKE",
+    @WrapOperation(method = "copyTextureToTexture",
+            expect = 1,
+            at = @At(value = "INVOKE",
             // blitFrameBuffers is package-private blaze3d → obfuscated on loom-remap runtimes,
             // must remap. (Public blaze3d members like RenderPass.setPipeline keep their names
             // and can use remap=false.)
