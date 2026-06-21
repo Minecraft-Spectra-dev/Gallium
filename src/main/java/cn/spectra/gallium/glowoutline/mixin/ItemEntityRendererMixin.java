@@ -30,7 +30,14 @@ public class ItemEntityRendererMixin {
     @Inject(method = "extractRenderState(Lnet/minecraft/world/entity/item/ItemEntity;Lnet/minecraft/client/renderer/entity/state/ItemEntityRenderState;F)V",
             at = @At("HEAD"))
     private void galliumCaptureItemStack(net.minecraft.world.entity.item.ItemEntity entity, ItemEntityRenderState state, float partialTicks, CallbackInfo ci) {
-        ((ItemEntityRenderStateAccessor) state).gallium$setItemStack(entity.getItem());
+        // Defensive copy: pickup uses extractEntity() then immediately shrinks the original
+        // ItemStack via ClientboundTakeItemEntityPacket. ItemPickupParticle reuses the snapshot
+        // across its 3-tick lifetime, so a shared reference would go empty before submit() runs
+        // and stack.isEmpty() would skip the capture — the dropped-item glow vanishes the moment
+        // pickup starts (the bug this fix targets). Pre-1.21.9 used a real Entity (with its own
+        // ItemEntity.copy()) and re-extracted every frame, so they were already safe.
+        ItemStack picked = entity.getItem();
+        ((ItemEntityRenderStateAccessor) state).gallium$setItemStack(picked.isEmpty() ? ItemStack.EMPTY : picked.copy());
     }
 
     @WrapOperation(method = "submit", at = @At(value = "INVOKE",
