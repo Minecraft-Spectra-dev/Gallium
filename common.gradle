@@ -176,10 +176,24 @@ List<String> STUB_MIXIN_CLASSES_PRE_1_21_02 = [
         "ShaderUboCompatMixin"
 ]
 
-List<String> ACTIVE_STUB_MIXINS = []
+	// Mixin that targets SodiumOptionsGUI (Sodium 0.6.13 / 0.7.3). On versions
+	// that ship Sodium 0.8.x (1.21.1, 1.21.11+, 26.1) the class no longer exists
+	// — those go through the public ConfigEntryPoint API instead — so the mixin
+	// must be stripped. On 1.21.3–1.21.10 (Sodium 0.6.13 / 0.7.3) it is live.
+	List<String> STUB_MIXIN_CLASSES_LEGACY_SODIUM = [
+	        "SodiumOptionsGUIMixin"
+	]
+
+	List<String> ACTIVE_STUB_MIXINS = []
 ACTIVE_STUB_MIXINS += unobfuscated ? STUB_MIXIN_CLASSES_FROM_1_26 : STUB_MIXIN_CLASSES_PRE_1_26
 if (mcVersion >= 1_21_11) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_FROM_1_21_11
+}
+// SodiumOptionsGUIMixin targets SodiumOptionsGUI which only exists in Sodium
+// 0.6.13 / 0.7.3 (1.21.3–1.21.10). Sodium 0.8.x dropped that class in favor
+// of the public ConfigEntryPoint API, so strip the stub on those versions.
+if (mcVersion == 1_21_01 || mcVersion >= 1_21_11) {
+    ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_LEGACY_SODIUM
 }
 if (mcVersion < 1_21_06) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_PRE_1_21_06
@@ -220,11 +234,13 @@ processResources {
     inputs.property "stubMixins", ACTIVE_STUB_MIXINS
 
     // The Sodium config_api_user entrypoint targets net.caffeinemc.mods.sodium.api.config,
-    // which only exists in Sodium 0.8.x (shipped alongside MC 1.21.11+). On older Sodium
-    // the class loader would crash trying to resolve the entrypoint at startup, so omit
-    // the whole entry on those versions. Emitting "" (empty string) keeps fabric.mod.json
-    // valid; the leading comma + interpolation lives in the template.
-    final String sodiumConfigEntrypoint = mcVersion >= 1_21_11 ? ''',
+    // which is the Sodium 0.8.x configuration API. Sodium 0.6.13 / 0.7.3 (used on
+    // 1.21.3–1.21.10) don't ship it — on those versions the GUI is bolted on through
+    // a mixin against SodiumOptionsGUI (see SodiumOptionsGUIMixin). 1.21.1 is an oddity:
+    // it uses Sodium 0.8.12-beta.1, so the new API is available there too. Emit "" on
+    // versions without the 0.8 API to keep fabric.mod.json valid; the leading comma +
+    // interpolation lives in the template.
+    final String sodiumConfigEntrypoint = (mcVersion >= 1_21_11 || mcVersion == 1_21_01) ? ''',
 		"sodium:config_api_user": [
 			"cn.spectra.gallium.compat.sodium.GalliumSodiumConfig"
 		]''' : ''
