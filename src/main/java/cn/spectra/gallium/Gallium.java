@@ -82,6 +82,58 @@ public class Gallium implements ClientModInitializer {
 			}
 		});
 
+		//#if MC<1_21_11
+		// --- Sodium config: 0.8 path (ConfigEntryPoint, 1.21.1 only) ---
+		// On 1.21.1 the compile classpath has Sodium 0.8 but runtime may be 0.6;
+		// on 1.21.3–1.21.10 only Sodium 0.6/0.7 is present. The reflective 0.8
+		// attempt is harmless on 1.21.3+ (ClassNotFoundException → fallback).
+		boolean sodium06Fallback = true;
+		try {
+			Class<?> cfgMgr = Class.forName(
+					"net.caffeinemc.mods.sodium.client.config.ConfigManager");
+			java.lang.reflect.Method register = cfgMgr.getMethod(
+					"registerConfigEntryPoint", String.class, String.class);
+			register.invoke(null,
+					"cn.spectra.gallium.compat.sodium.GalliumSodiumConfig",
+					"gallium");
+			LOGGER.debug("Gallium registered Sodium 0.8 config via reflective ConfigManager call");
+			sodium06Fallback = false;
+		} catch (ClassNotFoundException ignored) {
+			LOGGER.debug("Sodium 0.8 ConfigManager not found, using legacy ScreenEvents path");
+		} catch (ReflectiveOperationException e) {
+			LOGGER.warn("Gallium Sodium 0.8 config registration failed, falling back to legacy path", e);
+		}
+
+		// --- Sodium config: legacy path (ScreenEvents + GalliumSodiumLegacyPage) ---
+		// Used on all versions without the Sodium 0.8 public config API (1.21.1–1.21.10).
+		// Replaces the former SodiumOptionsGUIMixin; avoids Mixin target-class conflicts
+		// with Iris on 1.21.1 and keeps injection logic in one place.
+		if (sodium06Fallback) {
+			net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.BEFORE_INIT.register(
+					(client, screen, scaledWidth, scaledHeight) -> {
+				if (!screen.getClass().getName().equals(
+						"net.caffeinemc.mods.sodium.client.gui.SodiumOptionsGUI")) {
+					return;
+				}
+				try {
+					java.lang.reflect.Field pagesField = screen.getClass()
+							.getDeclaredField("pages");
+					pagesField.setAccessible(true);
+					@SuppressWarnings("unchecked")
+					java.util.List<Object> pages =
+							(java.util.List<Object>) pagesField.get(screen);
+					java.util.List<Object> ourPages = cn.spectra.gallium.compat.sodium
+							.GalliumSodiumLegacyPage.buildReflective();
+					pages.addAll(ourPages);
+					LOGGER.debug("Gallium injected {} option pages into SodiumOptionsGUI (legacy path)",
+							ourPages.size());
+				} catch (Exception e) {
+					LOGGER.warn("Gallium failed to inject legacy Sodium option pages", e);
+				}
+			});
+		}
+		//#endif
+
 		LOGGER.info("Gallium initialized.");
 	}
 

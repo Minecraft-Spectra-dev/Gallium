@@ -2,7 +2,7 @@
 // preprocess block. Format: <major:1><minor:2><patch:2>, always 5 digits.
 // Mojang dropped the leading "1." at MC 26, but we keep the implicit "1."
 // in our encoding so all integers stay 5 digits and comparisons stay
-// monotonic — e.g. MC "26.1" is encoded as 1_26_01 (= 12601), NOT 26_01_00.
+// monotonic 鈥?e.g. MC "26.1" is encoded as 1_26_01 (= 12601), NOT 26_01_00.
 final int mcVersion = project.mcVersion
 final boolean unobfuscated = mcVersion >= 1_26_00
 
@@ -14,7 +14,7 @@ configurations {
     // On <1_26_00 (loom-remap mode) CFM-style remap pulls fabric-loader as a transitive
     // mod dep, which then double-loads at runtime. Excluding it from modRuntimeOnly
     // keeps the dev runtime clean. On 26.1+ Loom never transitively pulls a second
-    // copy, so no exclude is needed — and excluding from runtimeClasspath would strip
+    // copy, so no exclude is needed 鈥?and excluding from runtimeClasspath would strip
     // KnotClient from :runClient's launch classpath.
     if (!unobfuscated) {
         modRuntimeOnly.exclude group: 'net.fabricmc', module: 'fabric-loader'
@@ -104,7 +104,7 @@ List<String> STUB_MIXIN_CLASSES_FROM_1_26 = [
         "accessor.GuiRendererAccessor"
 ]
 
-// Mixins whose target API only matches its <1_21_11 shape — collapse to empty
+// Mixins whose target API only matches its <1_21_11 shape 鈥?collapse to empty
 // stubs on 1.21.11+. Strip on 1.21.11 AND 26.1.
 List<String> STUB_MIXIN_CLASSES_FROM_1_21_11 = [
         "ArmedEntityRenderStateMixin"
@@ -113,7 +113,7 @@ List<String> STUB_MIXIN_CLASSES_FROM_1_21_11 = [
 // Mixins/accessors built on the 1.21.9 entity submit-node rendering system
 // (SubmitNodeCollector/Storage, FeatureRenderDispatcher) or on 1.21.9-only
 // content (shelves). They are real on 1_21_09+ and collapse to empty stubs on
-// 1.21.6–1.21.8, so the Mixin loader would reject them there. Strip on <1_21_09.
+// 1.21.6鈥?.21.8, so the Mixin loader would reject them there. Strip on <1_21_09.
 List<String> STUB_MIXIN_CLASSES_PRE_1_21_09 = [
         "ShelfRendererMixin",
         "ShelfRenderStateMixin",
@@ -144,7 +144,7 @@ List<String> STUB_MIXIN_CLASSES_PRE_1_21_06 = [
 ]
 
 // Mixins that are real on 1.21.5 and collapse to stubs from 1.21.6 onwards.
-// Used for UBO compatibility shims; MC ≥1.21.6 supports UBOs natively.
+// Used for UBO compatibility shims; MC 鈮?.21.6 supports UBOs natively.
 List<String> STUB_MIXIN_CLASSES_FROM_1_21_06 = [
         "ShaderUboCompatMixin"
 ]
@@ -176,24 +176,10 @@ List<String> STUB_MIXIN_CLASSES_PRE_1_21_02 = [
         "ShaderUboCompatMixin"
 ]
 
-	// Mixin that targets SodiumOptionsGUI (Sodium 0.6.13 / 0.7.3). On versions
-	// that ship Sodium 0.8.x (1.21.1, 1.21.11+, 26.1) the class no longer exists
-	// — those go through the public ConfigEntryPoint API instead — so the mixin
-	// must be stripped. On 1.21.3–1.21.10 (Sodium 0.6.13 / 0.7.3) it is live.
-	List<String> STUB_MIXIN_CLASSES_LEGACY_SODIUM = [
-	        "SodiumOptionsGUIMixin"
-	]
-
 	List<String> ACTIVE_STUB_MIXINS = []
 ACTIVE_STUB_MIXINS += unobfuscated ? STUB_MIXIN_CLASSES_FROM_1_26 : STUB_MIXIN_CLASSES_PRE_1_26
 if (mcVersion >= 1_21_11) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_FROM_1_21_11
-}
-// SodiumOptionsGUIMixin targets SodiumOptionsGUI which only exists in Sodium
-// 0.6.13 / 0.7.3 (1.21.3–1.21.10). Sodium 0.8.x dropped that class in favor
-// of the public ConfigEntryPoint API, so strip the stub on those versions.
-if (mcVersion == 1_21_01 || mcVersion >= 1_21_11) {
-    ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_LEGACY_SODIUM
 }
 if (mcVersion < 1_21_06) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_PRE_1_21_06
@@ -235,12 +221,14 @@ processResources {
 
     // The Sodium config_api_user entrypoint targets net.caffeinemc.mods.sodium.api.config,
     // which is the Sodium 0.8.x configuration API. Sodium 0.6.13 / 0.7.3 (used on
-    // 1.21.3–1.21.10) don't ship it — on those versions the GUI is bolted on through
-    // a mixin against SodiumOptionsGUI (see SodiumOptionsGUIMixin). 1.21.1 is an oddity:
-    // it uses Sodium 0.8.12-beta.1, so the new API is available there too. Emit "" on
-    // versions without the 0.8 API to keep fabric.mod.json valid; the leading comma +
-    // interpolation lives in the template.
-    final String sodiumConfigEntrypoint = (mcVersion >= 1_21_11 || mcVersion == 1_21_01) ? ''',
+    // 1.21.3-1.21.10) don't ship it. On 1.21.1 the entrypoint is NOT emitted even
+    // though GalliumSodiumConfig is compiled (we have both 0.6 and 0.8 on the compile
+    // classpath); instead Gallium.onInitializeClient reflectively calls
+    // ConfigManager.registerConfigEntryPoint() when Sodium 0.8 is detected at runtime.
+    // This prevents NoClassDefFoundError on Sodium 0.6 (ConfigEntryPoint interface absent).
+    // Strip on versions without the 0.8 API to keep fabric.mod.json valid; the
+    // leading comma + interpolation lives in the template.
+    final String sodiumConfigEntrypoint = (mcVersion >= 1_21_11) ? ''',
 		"sodium:config_api_user": [
 			"cn.spectra.gallium.compat.sodium.GalliumSodiumConfig"
 		]''' : ''
@@ -278,7 +266,7 @@ processResources {
 
 // Sanity check: every stub we expect to strip should actually appear in the mixin config
 // pre-strip. If a name in the STUB list is missing, it's almost certainly a typo or a
-// rename that drifted between common.gradle and mixins.json — surface that at build time
+// rename that drifted between common.gradle and mixins.json 鈥?surface that at build time
 // instead of leaving the next reviewer to chase a runtime "unable to find @Mixin" crash.
 def validateStubsListed(File destinationDir, List<String> mixinConfigPaths, List<String> stubs) {
     if (stubs.isEmpty()) return
@@ -310,7 +298,7 @@ def validateStubsListed(File destinationDir, List<String> mixinConfigPaths, List
 def stripStubMixins(File destinationDir, List<String> mixinConfigPaths, List<String> stubs) {
     // Parse the file as JSON and rewrite the "client"/"mixins"/"server" lists with stubs
     // removed. Previously this was a line-oriented regex pass, which only worked because
-    // Loom currently emits one entry per line — any future change to the JSON formatting
+    // Loom currently emits one entry per line 鈥?any future change to the JSON formatting
     // would silently leave stubs in place and crash the Mixin loader at startup.
     def slurper = new groovy.json.JsonSlurper()
     def stubSet = stubs as Set

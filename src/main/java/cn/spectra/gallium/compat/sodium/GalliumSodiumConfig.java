@@ -1,6 +1,14 @@
 package cn.spectra.gallium.compat.sodium;
 
 //#if MC>=1_21_11 || MC==1_21_01
+// On 1.21.1 this class is compiled against Sodium 0.8.12-beta.1 but NOT declared as a
+// fabric.mod.json entrypoint (see common.gradle). Instead, Gallium.onInitializeClient()
+// reflectively calls ConfigManager.registerConfigEntryPoint() with this class name.
+// This keeps the 0.8 config path working while avoiding NoClassDefFoundError when
+// Sodium 0.6 is at runtime (ConfigEntryPoint absent). The trade-off: the compiled .class
+// references Sodium 0.8 API types — if any third-party classpath scanner loads this class
+// on a Sodium 0.6 runtime, it will throw NoClassDefFoundError. This is acceptable because
+// the only runtime reference path is the reflective call guarded by Class.forName("ConfigManager").
 import cn.spectra.gallium.config.GalliumConfigIO;
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig.Group;
@@ -15,8 +23,6 @@ import net.minecraft.network.chat.Component;
 //#if MC>=1_21_09
 import net.minecraft.resources.Identifier;
 //#else
-//$$ // Sodium 0.8.12-beta.1 (used on 1.21.1) predates the Identifier rename — its
-//$$ // ConfigBuilder/ModOptionsBuilder still takes ResourceLocation.
 //$$ import net.minecraft.resources.ResourceLocation;
 //#endif
 
