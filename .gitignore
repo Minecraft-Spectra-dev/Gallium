@@ -42,3 +42,4 @@ replay_*.log
 
 # Agent
 .claude/
+CLAUDE.md
