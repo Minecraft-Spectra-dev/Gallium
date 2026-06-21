@@ -19,6 +19,12 @@ jobs:
         with:
           java-version: '25'
           distribution: 'microsoft'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
       - name: build
