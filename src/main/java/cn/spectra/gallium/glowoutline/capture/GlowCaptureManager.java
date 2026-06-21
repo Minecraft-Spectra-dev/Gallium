@@ -7,8 +7,8 @@ import cn.spectra.gallium.glowoutline.ItemEffectsManager;
 import cn.spectra.gallium.glowoutline.mixin.accessor.FeatureRenderDispatcherAccessor;
 import cn.spectra.gallium.glowoutline.mixin.accessor.GameRendererAccessor;
 //#endif
-import com.mojang.blaze3d.buffers.GpuBuffer;
 //#if MC>=1_21_06
+import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 //#endif
@@ -50,9 +50,11 @@ public final class GlowCaptureManager {
     private static @Nullable TextureTarget sceneDepthTarget;
     /** UBO holding our downscale-adjusted projection matrix when an Iris pack with internal
      *  scaling is active. Reused across captures within a frame; rewritten before each
-     *  mask render. {@code null} until first use; disposed via the GlowResources hook. */
-    private static @Nullable GpuBuffer scaledProjectionBuffer;
+     *  mask render. {@code null} until first use; disposed via the GlowResources hook.
+     *  Only allocated on 1.21.6+ (GpuBuffer absent before 1.21.2; unused on 1.21.2–1.21.5,
+     *  which set the scaled Matrix4f directly). */
     //#if MC>=1_21_06
+    private static @Nullable GpuBuffer scaledProjectionBuffer;
     private static @Nullable GpuBufferSlice scaledProjectionSlice;
     //#endif
     /** Reused holder for the scaled projection. Render thread is single-threaded, so a static
@@ -122,7 +124,11 @@ public final class GlowCaptureManager {
         //$$ int w = mainTarget.width, h = mainTarget.height;
         //$$ if (sceneDepthTarget == null || sceneDepthTarget.width != w || sceneDepthTarget.height != h) {
         //$$     if (sceneDepthTarget != null) sceneDepthTarget.destroyBuffers();
+        //#if MC>=1_21_02
         //$$     sceneDepthTarget = new TextureTarget(w, h, true);
+        //#else
+        //$$     sceneDepthTarget = new TextureTarget(w, h, true, net.minecraft.client.Minecraft.ON_OSX);
+        //#endif
         //$$ }
         //$$ sceneDepthTarget.copyDepthFrom(mainTarget);
         //$$ for (GlowCaptureState state : activeStates) {
@@ -174,13 +180,25 @@ public final class GlowCaptureManager {
         //$$ state.capturedModelViewMatrix.set(RenderSystem.getModelViewMatrix());
         //$$ state.capturedModelViewMatrixValid = true;
         //$$ state.capturedProjectionMatrix4f.set(RenderSystem.getProjectionMatrix());
+        //#if MC>=1_21_02
         //$$ state.capturedProjectionType = RenderSystem.getProjectionType();
+        //#else
+        //$$ state.capturedProjectionType = RenderSystem.getVertexSorting();
+        //#endif
         //$$ state.capturedProjectionMatrix4fValid = true;
         //$$
         //$$ if (state.maskTarget == null) {
+        //#if MC>=1_21_02
         //$$     state.maskTarget = new TextureTarget(main.width, main.height, true);
+        //#else
+        //$$     state.maskTarget = new TextureTarget(main.width, main.height, true, net.minecraft.client.Minecraft.ON_OSX);
+        //#endif
         //$$ } else if (state.maskTarget.width != main.width || state.maskTarget.height != main.height) {
+        //#if MC>=1_21_02
         //$$     state.maskTarget.resize(main.width, main.height);
+        //#else
+        //$$     state.maskTarget.resize(main.width, main.height, net.minecraft.client.Minecraft.ON_OSX);
+        //#endif
         //$$ }
         //$$ activeStates.add(state);
         //$$ currentCapture = state;
@@ -529,7 +547,11 @@ public final class GlowCaptureManager {
         //$$ if (state.maskTarget == null) return;
         //$$ TextureTarget mask = state.maskTarget;
         //$$ mask.setClearColor(0.0F, 0.0F, 0.0F, 0.0F);
+        //#if MC>=1_21_02
         //$$ mask.clear();
+        //#else
+        //$$ mask.clear(net.minecraft.client.Minecraft.ON_OSX);
+        //#endif
         //$$ // Mask depth strategy mirrors the >=1_21_06 branch above; see comments there.
         //$$ // Local difference: 1.21.4 uses RenderTarget.copyDepthFrom(sceneDepthTarget) instead
         //$$ // of CommandEncoder.copyTextureToTexture (no GpuTexture API on this version).
@@ -571,6 +593,14 @@ public final class GlowCaptureManager {
         //$$         RenderSystem.getModelViewStack().pushMatrix();
         //$$         pushedModelView = true;
         //$$         RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
+        //$$         // 1.21.1 (and possibly other pre-1.21.5 versions): RenderSystem's
+        //$$         // modelViewMatrix is a SEPARATE cached field that is only synced from
+        //$$         // the PoseStack during shader.apply(). flushToTarget ->
+        //$$         // BufferUploader.drawWithShader reads getModelViewMatrix() directly,
+        //$$         // so we must sync it manually after manipulating the stack. Without
+        //$$         // this, the mask renders with a stale (entity-transform-free) modelview
+        //$$         // and the glow outline shifts off the item as the camera rotates.
+        //$$         RenderSystem.getModelViewMatrix().set(state.capturedModelViewMatrix);
         //$$     }
         //$$     if (shouldRestoreProj) {
         //$$         RenderSystem.backupProjectionMatrix();
@@ -672,13 +702,13 @@ public final class GlowCaptureManager {
             sceneDepthTarget.destroyBuffers();
             sceneDepthTarget = null;
         }
+        //#if MC>=1_21_06
         if (scaledProjectionBuffer != null) {
             scaledProjectionBuffer.close();
             scaledProjectionBuffer = null;
-            //#if MC>=1_21_06
             scaledProjectionSlice = null;
-            //#endif
         }
+        //#endif
         sceneDepthCaptured = false;
         activeStates.clear();
         currentCapture = null;

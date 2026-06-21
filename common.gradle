@@ -163,6 +163,19 @@ List<String> STUB_MIXIN_CLASSES_PRE_1_21_04 = [
         "ArmedEntityRenderStateMixin"
 ]
 
+// Mixins whose target class was introduced in 1.21.2's rendering rework and is
+// absent on 1.21.1. ItemEntityRenderState/ItemFrameRenderState are the entity
+// render-state side-channels (1.21.1 renders entities directly, no render state),
+// and ShaderManager is the 1.21.2 shader loader (1.21.1 uses ShaderInstance and
+// the direct-compile path runs UboRewriter itself). All collapse to empty stubs
+// on 1.21.1 and must be stripped from mixins.json.
+List<String> STUB_MIXIN_CLASSES_PRE_1_21_02 = [
+        "ItemEntityRenderStateMixin",
+        "ItemFrameRenderStateMixin",
+        "ItemInHandLayerMixin",
+        "ShaderUboCompatMixin"
+]
+
 List<String> ACTIVE_STUB_MIXINS = []
 ACTIVE_STUB_MIXINS += unobfuscated ? STUB_MIXIN_CLASSES_FROM_1_26 : STUB_MIXIN_CLASSES_PRE_1_26
 if (mcVersion >= 1_21_11) {
@@ -176,6 +189,9 @@ if (mcVersion < 1_21_05) {
 }
 if (mcVersion < 1_21_04) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_PRE_1_21_04
+}
+if (mcVersion < 1_21_02) {
+    ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_PRE_1_21_02
 }
 if (mcVersion >= 1_21_06) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_FROM_1_21_06

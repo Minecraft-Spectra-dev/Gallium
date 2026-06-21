@@ -1,6 +1,6 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
-//#if MC<1_21_06
+//#if MC>=1_21_02 && MC<1_21_06
 import cn.spectra.gallium.glowoutline.shader.UboRewriter;
 import com.mojang.blaze3d.preprocessor.GlslPreprocessor;
 import java.util.List;
@@ -47,6 +47,8 @@ public class ShaderUboCompatMixin {
     }
 }
 //#else
-//$$ // Stub: MC>=1_21_06 handles UBO natively.
+//$$ // Stub: MC>=1_21_06 handles UBO natively; MC<1_21_02 (1.21.1) has no ShaderManager
+//$$ // (the direct-compile ShaderInstance path runs UboRewriter itself instead).
+//$$ // Stripped from mixins.json via STUB_MIXIN_CLASSES_FROM_1_21_06 / _PRE_1_21_02.
 //$$ public abstract class ShaderUboCompatMixin {}
 //#endif

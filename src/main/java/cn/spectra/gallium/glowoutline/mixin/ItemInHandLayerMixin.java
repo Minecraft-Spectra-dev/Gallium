@@ -163,7 +163,7 @@ public class ItemInHandLayerMixin {
 //$$         }
 //$$     }
 //$$ }
-//#else
+//#elseif MC>=1_21_02
 //$$ // 1.21.3: hand items live on LivingEntityRenderState directly as raw ItemStack +
 //$$ // @Nullable BakedModel — there's no ArmedEntityRenderState class, no ItemStackRenderState,
 //$$ // and renderArmWithItem already takes the ItemStack as a parameter. We hook the inner
@@ -207,5 +207,13 @@ public class ItemInHandLayerMixin {
 //$$             CaptureSites.end();
 //$$         }
 //$$     }
+//$$ }
+//#else
+//$$ // 1.21.1 (pre-1.21.2): ItemInHandLayer.renderArmWithItem funnels through
+//$$ // ItemInHandRenderer.renderItem, which ItemInHandRendererMixin already wraps for both
+//$$ // first- and third-person (toggle chosen by ItemDisplayContext). So this layer hook is
+//$$ // redundant here — empty stub, stripped from mixins.json via STUB_MIXIN_CLASSES_PRE_1_21_02.
+//$$ public final class ItemInHandLayerMixin {
+//$$     private ItemInHandLayerMixin() {}
 //$$ }
 //#endif

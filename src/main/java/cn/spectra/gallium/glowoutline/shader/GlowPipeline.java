@@ -181,7 +181,7 @@ public final class GlowPipeline {
 
     public static void init() {}
 }
-//#else
+//#elseif MC>=1_21_02
 //$$ import cn.spectra.gallium.Gallium;
 //$$ import cn.spectra.gallium.glowoutline.ItemEffectConfig;
 //$$ import cn.spectra.gallium.glowoutline.ShaderParam;
@@ -320,5 +320,66 @@ public final class GlowPipeline {
 //$$     private static ShaderProgramConfig.Uniform uniform(String name, int count) {
 //$$         return new ShaderProgramConfig.Uniform(name, "float", count, List.of(0.0F));
 //$$     }
+//$$ }
+//#else
+//$$ // 1.21.1: pre-1.21.2 rendering. No CompiledShaderProgram — use ShaderInstance, built by
+//$$ // GlowShaderInstances (synthesized JSON + gallium GLSL via a ResourceProvider wrapper).
+//$$ import cn.spectra.gallium.glowoutline.ItemEffectConfig;
+//$$ import java.util.HashMap;
+//$$ import java.util.Map;
+//$$ import java.util.Set;
+//$$ import net.minecraft.client.renderer.ShaderInstance;
+//$$
+//$$ public final class GlowPipeline {
+//$$     private static final Map<ItemEffectConfig, ShaderInstance> BY_CONFIG = new HashMap<>();
+//$$     // Negative cache: configs whose ShaderInstance build threw or returned null. Without this,
+//$$     // computeIfAbsent retries every frame (Map.computeIfAbsent doesn't store nulls) — the
+//$$     // counter climbs, the same compile error logs at ~60 Hz, and each failed
+//$$     // Program.compileShader allocates a GL shader id BEFORE detecting compile failure
+//$$     // (glCreateShader precedes glGetShaderiv), leaking a shader per frame.
+//$$     private static final java.util.Set<ItemEffectConfig> FAILED = new java.util.HashSet<>();
+//$$
+//$$     static { GlowResources.registerPipeline(GlowPipeline::clearAll); }
+//$$
+//$$     private GlowPipeline() {}
+//$$
+//$$     public static void clearAll() {
+//$$         for (ShaderInstance si : BY_CONFIG.values()) GlowShaderInstances.dispose(si);
+//$$         BY_CONFIG.clear();
+//$$         FAILED.clear();
+//$$     }
+//$$     public static void retainOnly(Set<String> liveShaders) {
+//$$         BY_CONFIG.entrySet().removeIf(e -> {
+//$$             boolean remove = !liveShaders.contains(e.getKey().shader());
+//$$             if (remove) GlowShaderInstances.dispose(e.getValue());
+//$$             return remove;
+//$$         });
+//$$         FAILED.removeIf(cfg -> !liveShaders.contains(cfg.shader()));
+//$$     }
+//$$     public static void retainOnlyConfigs(Set<ItemEffectConfig> liveConfigs) {
+//$$         BY_CONFIG.entrySet().removeIf(e -> {
+//$$             boolean remove = !liveConfigs.contains(e.getKey());
+//$$             if (remove) GlowShaderInstances.dispose(e.getValue());
+//$$             return remove;
+//$$         });
+//$$         FAILED.retainAll(liveConfigs);
+//$$     }
+//$$     public static ShaderInstance getOrCreate(ItemEffectConfig cfg) {
+//$$         if (cfg == null || cfg.shader().isEmpty()) return null;
+//$$         if (FAILED.contains(cfg)) return null;
+//$$         ShaderInstance si = BY_CONFIG.get(cfg);
+//$$         if (si != null) return si;
+//$$         si = GlowShaderInstances.createWorld(cfg);
+//$$         if (si == null) {
+//$$             FAILED.add(cfg);
+//$$             return null;
+//$$         }
+//$$         BY_CONFIG.put(cfg, si);
+//$$         return si;
+//$$     }
+//$$     public static ShaderInstance getOrCreate(String shaderName) { return null; }
+//$$     public static ShaderInstance get(String shaderName) { return null; }
+//$$     public static ShaderInstance get(ItemEffectConfig cfg) { return BY_CONFIG.get(cfg); }
+//$$     public static void init() {}
 //$$ }
 //#endif

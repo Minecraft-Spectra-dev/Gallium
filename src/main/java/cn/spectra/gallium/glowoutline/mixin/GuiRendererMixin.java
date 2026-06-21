@@ -9,8 +9,8 @@ import cn.spectra.gallium.glowoutline.shader.GlowUniformBuffer;
 import cn.spectra.gallium.glowoutline.shader.GuiGlowDispatcher;
 import cn.spectra.gallium.glowoutline.shader.GuiGlowElementPipeline;
 import com.llamalad7.mixinextras.sugar.Local;
-import com.mojang.blaze3d.buffers.GpuBuffer;
 //#if MC>=1_21_06
+import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 //#endif
 //#if MC>=1_21_06

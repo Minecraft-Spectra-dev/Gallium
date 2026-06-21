@@ -110,7 +110,7 @@ public final class GuiImmediateGlowPipeline {
     private GuiImmediateGlowPipeline() {}
 }
 //#endif
-//#else
+//#elseif MC>=1_21_02
 //$$ import cn.spectra.gallium.Gallium;
 //$$ import cn.spectra.gallium.glowoutline.ItemEffectConfig;
 //$$ import cn.spectra.gallium.glowoutline.ShaderParam;
@@ -241,6 +241,50 @@ public final class GuiImmediateGlowPipeline {
 //$$     // count=1 with type "float" would register them as scalar floats and silently fail.
 //$$     private static ShaderProgramConfig.Uniform matrixUniform(String name) {
 //$$         return new ShaderProgramConfig.Uniform(name, "matrix4x4", 16, List.of(0.0F));
+//$$     }
+//$$ }
+//#else
+//$$ // 1.21.1: ShaderInstance-backed GUI pipeline cache (built by GlowShaderInstances.createGui).
+//$$ import cn.spectra.gallium.glowoutline.ItemEffectConfig;
+//$$ import java.util.HashMap;
+//$$ import java.util.Map;
+//$$ import java.util.Set;
+//$$ import net.minecraft.client.renderer.ShaderInstance;
+//$$
+//$$ public final class GuiImmediateGlowPipeline {
+//$$     private static final Map<ItemEffectConfig, ShaderInstance> pipelinesByConfig = new HashMap<>();
+//$$     // Negative cache: see GlowPipeline (1.21.1 branch). Without this, computeIfAbsent
+//$$     // re-runs createGui every frame for permanently-failing configs.
+//$$     private static final java.util.Set<ItemEffectConfig> FAILED = new java.util.HashSet<>();
+//$$
+//$$     private GuiImmediateGlowPipeline() {}
+//$$     static { GlowResources.registerPipeline(GuiImmediateGlowPipeline::clear); }
+//$$
+//$$     public static ShaderInstance getOrCreate(ItemEffectConfig cfg) {
+//$$         if (cfg == null || cfg.shader().isEmpty()) return null;
+//$$         if (FAILED.contains(cfg)) return null;
+//$$         ShaderInstance si = pipelinesByConfig.get(cfg);
+//$$         if (si != null) return si;
+//$$         si = GlowShaderInstances.createGui(cfg);
+//$$         if (si == null) {
+//$$             FAILED.add(cfg);
+//$$             return null;
+//$$         }
+//$$         pipelinesByConfig.put(cfg, si);
+//$$         return si;
+//$$     }
+//$$     public static void retainOnly(Set<ItemEffectConfig> liveConfigs) {
+//$$         pipelinesByConfig.entrySet().removeIf(e -> {
+//$$             boolean remove = !liveConfigs.contains(e.getKey());
+//$$             if (remove) GlowShaderInstances.dispose(e.getValue());
+//$$             return remove;
+//$$         });
+//$$         FAILED.retainAll(liveConfigs);
+//$$     }
+//$$     public static void clear() {
+//$$         for (ShaderInstance p : pipelinesByConfig.values()) GlowShaderInstances.dispose(p);
+//$$         pipelinesByConfig.clear();
+//$$         FAILED.clear();
 //$$     }
 //$$ }
 //#endif

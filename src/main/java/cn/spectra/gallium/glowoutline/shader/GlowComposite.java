@@ -18,7 +18,12 @@ import com.mojang.blaze3d.systems.RenderSystem;
 //$$ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 //$$ import com.mojang.blaze3d.vertex.Tesselator;
 //$$ import com.mojang.blaze3d.vertex.VertexFormat;
+//#if MC>=1_21_02
 //$$ import net.minecraft.client.renderer.CompiledShaderProgram;
+//#else
+//$$ import com.mojang.blaze3d.vertex.VertexSorting;
+//$$ import net.minecraft.client.renderer.ShaderInstance;
+//#endif
 //#endif
 //#if MC>=1_21_05
 import com.mojang.blaze3d.textures.AddressMode;
@@ -96,7 +101,11 @@ public final class GlowComposite {
         //$$ int h = mainTarget.height;
         //$$ if (tempColorTarget == null || tempColorTarget.width != w || tempColorTarget.height != h) {
         //$$     if (tempColorTarget != null) tempColorTarget.destroyBuffers();
+//#if MC>=1_21_02
         //$$     tempColorTarget = new TextureTarget(w, h, false);
+//#else
+        //$$     tempColorTarget = new TextureTarget(w, h, false, net.minecraft.client.Minecraft.ON_OSX);
+//#endif
         //$$ }
         //$$ com.mojang.blaze3d.platform.GlStateManager._glBindFramebuffer(36008, mainTarget.frameBufferId);
         //$$ com.mojang.blaze3d.platform.GlStateManager._glBindFramebuffer(36009, tempColorTarget.frameBufferId);
@@ -239,11 +248,20 @@ public final class GlowComposite {
     //$$     }
     //$$ }
     //#else
+    //$$ // Pre-1.21.5 legacy GL composite. Covers 1.21.2–1.21.4 (CompiledShaderProgram path) and
+    //$$ // 1.21.1 (ShaderInstance path) — the two diverge only at the program type, the sampler
+    //$$ // bind method name, the setShader overload, and the projection-type enum. Each difference
+    //$$ // is a small nested //#if MC>=1_21_02 gate; the surrounding GL state setup, texture filter
+    //$$ // params, sampler routing, and screen-quad geometry are identical across the two.
     //$$ private static void drawGlow(GlowCaptureState state, Minecraft minecraft, RenderTarget mainTarget) {
     //$$     if (!state.capturedThisFrame || state.config == null || state.maskTarget == null) return;
     //$$     GlowCaptureManager.renderCapturedNodes(state, minecraft);
     //$$     TextureTarget mask = state.maskTarget;
+    //#if MC>=1_21_02
     //$$     CompiledShaderProgram program = GlowPipeline.getOrCreate(state.config);
+    //#else
+    //$$     ShaderInstance program = GlowPipeline.getOrCreate(state.config);
+    //#endif
     //$$     if (program == null || tempColorTarget == null) return;
     //$$
     //$$     int w = mainTarget.width;
@@ -273,10 +291,17 @@ public final class GlowComposite {
     //$$     setTextureNearest(mask.getDepthTextureId());
     //$$     setTextureNearest(sceneDepth);
     //$$
+    //#if MC>=1_21_02
     //$$     program.bindSampler("DiffuseSampler", tempColorTarget.getColorTextureId());
     //$$     program.bindSampler("MaskSampler", mask.getColorTextureId());
     //$$     program.bindSampler("MaskDepthSampler", mask.getDepthTextureId());
     //$$     program.bindSampler("SceneDepthSampler", sceneDepth);
+    //#else
+    //$$     program.setSampler("DiffuseSampler", tempColorTarget.getColorTextureId());
+    //$$     program.setSampler("MaskSampler", mask.getColorTextureId());
+    //$$     program.setSampler("MaskDepthSampler", mask.getDepthTextureId());
+    //$$     program.setSampler("SceneDepthSampler", sceneDepth);
+    //#endif
     //$$     program.safeGetUniform("FrameTimeCounter").set(GlowTime.worldSecondsFloat());
     //$$     program.safeGetUniform("ScreenSize").set((float) w, (float) h);
     //$$     float maskScale = state.lastMaskScale;
@@ -296,12 +321,21 @@ public final class GlowComposite {
     //$$     RenderSystem.disableCull();
     //$$     RenderSystem.enableBlend();
     //$$     RenderSystem.blendFuncSeparate(1, 1, 1, 0);
+    //#if MC>=1_21_02
     //$$     RenderSystem.setShader(program);
+    //#else
+    //$$     final ShaderInstance shaderRef = program;
+    //$$     RenderSystem.setShader(() -> shaderRef);
+    //#endif
     //$$     RenderSystem.backupProjectionMatrix();
     //$$     // Wide ortho z range so z=500 is comfortably inside the clip volume regardless of
     //$$     // JOML setOrtho convention quirks. Near=-1000, far=3000 gives view-z range that
     //$$     // straddles 0; vertex z=500 maps to roughly NDC.z=-0.75, well inside [-1, 1].
+    //#if MC>=1_21_02
     //$$     RenderSystem.setProjectionMatrix(new org.joml.Matrix4f().setOrtho(0.0f, (float) w, (float) h, 0.0f, -1000.0f, 3000.0f), com.mojang.blaze3d.ProjectionType.ORTHOGRAPHIC);
+    //#else
+    //$$     RenderSystem.setProjectionMatrix(new org.joml.Matrix4f().setOrtho(0.0f, (float) w, (float) h, 0.0f, -1000.0f, 3000.0f), VertexSorting.ORTHOGRAPHIC_Z);
+    //#endif
     //$$     RenderSystem.getModelViewStack().pushMatrix();
     //$$     RenderSystem.getModelViewStack().identity();
     //$$     try {

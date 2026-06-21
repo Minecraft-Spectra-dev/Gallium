@@ -259,6 +259,9 @@ package cn.spectra.gallium.glowoutline.mixin;
 //$$     // #minecraft:bundles items take a different vanilla path: ItemRenderer.renderBundleItem(...).
 //$$     // The wrapped buffer propagates through every inner draw (open back/front model + selected
 //$$     // item), so the tee captures the whole composited bundle.
+//$$     // (renderBundleItem doesn't exist pre-1.21.2; on 1.21.1 bundles render through the normal
+//$$     // ItemRenderer.render(...) path above, so this wrap is omitted there.)
+//#if MC>=1_21_02
 //$$     @WrapOperation(method = "renderItem(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/item/ItemStack;IIII)V",
 //$$             at = @At(value = "INVOKE",
 //$$                     target = "Lnet/minecraft/client/renderer/entity/ItemRenderer;renderBundleItem(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemDisplayContext;ZLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;IILnet/minecraft/client/resources/model/BakedModel;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/LivingEntity;I)V"))
@@ -280,6 +283,7 @@ package cn.spectra.gallium.glowoutline.mixin;
 //$$             gallium$endGlow(cfg, stack, pose);
 //$$         }
 //$$     }
+//#endif
 //$$
 //$$     // Returns the effect config to glow with, or null if this item shouldn't glow. Lazily
 //$$     // allocates the shared capture buffer as a side effect whenever it returns non-null.

@@ -126,7 +126,11 @@ public final class GuiImmediateGlowTile {
 //#else
 //$$ import cn.spectra.gallium.glowoutline.IrisCompat;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//#if MC>=1_21_02
 //$$ import com.mojang.blaze3d.ProjectionType;
+//#else
+//$$ import com.mojang.blaze3d.vertex.VertexSorting;
+//#endif
 //$$ import com.mojang.blaze3d.pipeline.TextureTarget;
 //$$ import com.mojang.blaze3d.systems.RenderSystem;
 //$$ import org.joml.Matrix4f;
@@ -145,7 +149,11 @@ public final class GuiImmediateGlowTile {
 //$$         int sizeFb = Math.max(1, TILE_GUI_PX * Math.max(1, guiScale));
 //$$         if (tile == null || tile.width != sizeFb || tile.height != sizeFb) {
 //$$             if (tile != null) tile.destroyBuffers();
+//#if MC>=1_21_02
 //$$             tile = new TextureTarget(sizeFb, sizeFb, true);
+//#else
+//$$             tile = new TextureTarget(sizeFb, sizeFb, true, net.minecraft.client.Minecraft.ON_OSX);
+//#endif
 //$$         }
 //$$         return tile;
 //$$     }
@@ -154,7 +162,11 @@ public final class GuiImmediateGlowTile {
 //$$                                          int itemX, int itemY) {
 //$$         if (buf == null || tile == null) return;
 //$$         tile.setClearColor(0.0F, 0.0F, 0.0F, 0.0F);
+//#if MC>=1_21_02
 //$$         tile.clear();
+//#else
+//$$         tile.clear(net.minecraft.client.Minecraft.ON_OSX);
+//#endif
 //$$         int margin = MASK_QUAD_MARGIN_GUI_PX;
 //$$         int slot = ITEM_SLOT_GUI_PX;
 //$$         Matrix4f proj = SCRATCH_PROJ.identity().setOrtho(
@@ -162,7 +174,11 @@ public final class GuiImmediateGlowTile {
 //$$                 itemY + slot + margin, itemY - margin,
 //$$                 1000.0f, 21000.0f);
 //$$         RenderSystem.backupProjectionMatrix();
+//#if MC>=1_21_02
 //$$         RenderSystem.setProjectionMatrix(proj, ProjectionType.ORTHOGRAPHIC);
+//#else
+//$$         RenderSystem.setProjectionMatrix(proj, VertexSorting.ORTHOGRAPHIC_Z);
+//#endif
 //$$         var irisSnap = IrisCompat.setBypass(true);
 //$$         try {
 //$$             buf.flushToTarget(tile);

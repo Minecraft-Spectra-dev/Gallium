@@ -205,12 +205,23 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
                 String id = el.getAsString();
                 var itemId = tryParseId(id, ruleIndex, "item");
                 if (itemId == null) continue;
+                //#if MC>=1_21_02
                 var ref = BuiltInRegistries.ITEM.get(itemId);
                 if (ref.isPresent()) {
                     items.add(ref.get().value());
                 } else {
                     Gallium.LOGGER.warn("item_effects rule[{}]: unknown item id '{}'", ruleIndex, id);
                 }
+                //#else
+                //$$ // 1.21.1: Registry.get(ResourceLocation) returns the value directly (@Nullable),
+                //$$ // not Optional<Holder.Reference<T>> (that shape arrived in 1.21.2).
+                //$$ Item item = BuiltInRegistries.ITEM.get(itemId);
+                //$$ if (item != null) {
+                //$$     items.add(item);
+                //$$ } else {
+                //$$     Gallium.LOGGER.warn("item_effects rule[{}]: unknown item id '{}'", ruleIndex, id);
+                //$$ }
+                //#endif
             }
             if (!items.isEmpty()) conditions.add(new ItemCondition.Items(Set.copyOf(items)));
         }
@@ -289,7 +300,11 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
         String compId = pathValue.substring("components.".length());
         var componentId = tryParseId(compId, ruleIndex, "component");
         if (componentId == null) return null;
+        //#if MC>=1_21_02
         DataComponentType<?> compType = BuiltInRegistries.DATA_COMPONENT_TYPE.getValue(componentId);
+        //#else
+        //$$ DataComponentType<?> compType = BuiltInRegistries.DATA_COMPONENT_TYPE.get(componentId);
+        //#endif
         if (compType == null) {
             Gallium.LOGGER.warn("item_effects rule[{}] {}: unknown data component '{}'", ruleIndex, path, compId);
             return null;

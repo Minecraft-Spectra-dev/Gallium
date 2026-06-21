@@ -1,7 +1,11 @@
 package cn.spectra.gallium.glowoutline.capture;
 
 import cn.spectra.gallium.glowoutline.ItemEffectConfig;
+//#if MC>=1_21_02
 import com.mojang.blaze3d.ProjectionType;
+//#else
+//$$ import com.mojang.blaze3d.vertex.VertexSorting;
+//#endif
 //#if MC>=1_21_06
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 //#endif
@@ -36,7 +40,13 @@ public final class GlowCaptureState {
     //#if MC>=1_21_06
     public @Nullable GpuBufferSlice capturedProjectionMatrix;
     //#endif
+    //#if MC>=1_21_02
     public @Nullable ProjectionType capturedProjectionType;
+    //#else
+    //$$ // 1.21.1 has no ProjectionType; the (Matrix4f, VertexSorting) projection overload
+    //$$ // carries the equivalent. backup/restoreProjectionMatrix preserves vertexSorting too.
+    //$$ public @Nullable VertexSorting capturedProjectionType;
+    //#endif
     /** Plain Matrix4f form of {@link #capturedProjectionMatrix} when available. We need it
      *  to apply VertexDownscaling for shader-pack scale alignment on the mask render; when
      *  {@link #capturedProjectionMatrix4fValid} is {@code false} the mask render falls back

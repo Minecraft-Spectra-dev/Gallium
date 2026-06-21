@@ -56,7 +56,11 @@ public class GameRendererMixin {
     }
     //#else
     //$$ @Inject(method = "renderLevel", at = @At(value = "INVOKE",
+    //#if MC>=1_21_02
     //$$         target = "Lcom/mojang/blaze3d/systems/RenderSystem;clear(I)V",
+    //#else
+    //$$         target = "Lcom/mojang/blaze3d/systems/RenderSystem;clear(IZ)V",
+    //#endif
     //$$         ordinal = 0,
     //$$         shift = At.Shift.BEFORE,
     //$$         remap = false))
@@ -138,7 +142,11 @@ public class GameRendererMixin {
     //#else
     //$$ @Inject(method = "render(Lnet/minecraft/client/DeltaTracker;Z)V",
     //$$         at = @At(value = "INVOKE",
+    //#if MC>=1_21_02
     //$$                 target = "Lcom/mojang/blaze3d/systems/RenderSystem;clear(I)V",
+    //#else
+    //$$                 target = "Lcom/mojang/blaze3d/systems/RenderSystem;clear(IZ)V",
+    //#endif
     //$$                 ordinal = 0,
     //$$                 shift = At.Shift.BEFORE,
     //$$                 remap = false),

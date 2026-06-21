@@ -89,7 +89,7 @@ public class ItemFrameRendererMixin {
 //$$         }
 //$$     }
 //$$ }
-//#else
+//#elseif MC>=1_21_02
 //$$ // 1.21.3: ItemFrameRenderState.itemStack is a raw ItemStack; the render path calls
 //$$ // ItemRenderer.render(itemStack, FIXED, false, poseStack, multiBufferSource, l,
 //$$ // NO_OVERLAY, itemFrameRenderState.itemModel) directly. We wrap that call and read
@@ -122,6 +122,44 @@ public class ItemFrameRendererMixin {
 //$$                 itemStack, bufferSource, GlowOutlineConfig.Toggle.OTHER_ENTITIES);
 //$$         try {
 //$$             original.call(renderer, itemStack, ctx, leftHand, poseStack, wrapped, light, overlay, bakedModel);
+//$$         } finally {
+//$$             CaptureSites.end();
+//$$         }
+//$$     }
+//$$ }
+//#else
+//$$ // 1.21.1 (pre-1.21.2): ItemFrameRenderer.render takes the ItemFrame entity directly; non-map
+//$$ // framed items draw via ItemRenderer.renderStatic(...). We wrap that call, read the ItemStack
+//$$ // from its first arg, and tee the MultiBufferSource. (Map items go through MapRenderer — not
+//$$ // an item draw — so they're correctly excluded.)
+//$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
+//$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+//$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+//$$ import com.mojang.blaze3d.vertex.PoseStack;
+//$$ import net.minecraft.client.renderer.MultiBufferSource;
+//$$ import net.minecraft.client.renderer.entity.ItemFrameRenderer;
+//$$ import net.minecraft.client.renderer.entity.ItemRenderer;
+//$$ import net.minecraft.world.entity.decoration.ItemFrame;
+//$$ import net.minecraft.world.item.ItemDisplayContext;
+//$$ import net.minecraft.world.item.ItemStack;
+//$$ import net.minecraft.world.level.Level;
+//$$ import org.spongepowered.asm.mixin.Mixin;
+//$$ import org.spongepowered.asm.mixin.injection.At;
+//$$
+//$$ @Mixin(ItemFrameRenderer.class)
+//$$ public class ItemFrameRendererMixin {
+//$$
+//$$     @WrapOperation(method = "render(Lnet/minecraft/world/entity/decoration/ItemFrame;FFLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At(value = "INVOKE",
+//$$             target = "Lnet/minecraft/client/renderer/entity/ItemRenderer;renderStatic(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemDisplayContext;IILcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/world/level/Level;I)V"))
+//$$     private void galliumWrapItemRender(ItemRenderer renderer, ItemStack itemStack, ItemDisplayContext ctx, int light, int overlay,
+//$$                                        PoseStack poseStack, MultiBufferSource bufferSource, Level level, int id,
+//$$                                        Operation<Void> original,
+//$$                                        ItemFrame entity, float f, float g, PoseStack ps, MultiBufferSource bs, int i) {
+//$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
+//$$                 itemStack, bufferSource, GlowOutlineConfig.Toggle.OTHER_ENTITIES);
+//$$         try {
+//$$             original.call(renderer, itemStack, ctx, light, overlay, poseStack, wrapped, level, id);
 //$$         } finally {
 //$$             CaptureSites.end();
 //$$         }

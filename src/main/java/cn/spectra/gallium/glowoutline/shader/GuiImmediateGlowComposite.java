@@ -188,7 +188,11 @@ public final class GuiImmediateGlowComposite {
 //$$ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 //$$ import com.mojang.blaze3d.vertex.VertexFormat;
 //$$ import net.minecraft.client.Minecraft;
+//#if MC>=1_21_02
 //$$ import net.minecraft.client.renderer.CompiledShaderProgram;
+//#else
+//$$ import net.minecraft.client.renderer.ShaderInstance;
+//#endif
 //$$
 //$$ public final class GuiImmediateGlowComposite {
 //$$     // Reused native buffer; held statically to avoid per-frame malloc. Registered with
@@ -244,7 +248,11 @@ public final class GuiImmediateGlowComposite {
 //$$     private static void drawGlowQuad(ItemEffectConfig cfg, TextureTarget tile,
 //$$                                       int itemX, int itemY, RenderTarget mainTarget,
 //$$                                       Minecraft mc) {
+//#if MC>=1_21_02
 //$$         CompiledShaderProgram program = GuiImmediateGlowPipeline.getOrCreate(cfg);
+//#else
+//$$         ShaderInstance program = GuiImmediateGlowPipeline.getOrCreate(cfg);
+//#endif
 //$$         if (program == null) return;
 //$$         int margin = GuiImmediateGlowTile.MASK_QUAD_MARGIN_GUI_PX;
 //$$         int slot = GuiImmediateGlowTile.ITEM_SLOT_GUI_PX;
@@ -286,7 +294,12 @@ public final class GuiImmediateGlowComposite {
 //$$         RenderSystem.disableCull();
 //$$         RenderSystem.enableBlend();
 //$$         RenderSystem.blendFuncSeparate(1, 1, 1, 0);
+//#if MC>=1_21_02
 //$$         RenderSystem.setShader(program);
+//#else
+//$$         final ShaderInstance shaderRef = program;
+//$$         RenderSystem.setShader(() -> shaderRef);
+//#endif
 //$$         try (var mesh = buildQuad(x0, y0, x1, y1)) {
 //$$             BufferUploader.drawWithShader(mesh);
 //$$         } finally {

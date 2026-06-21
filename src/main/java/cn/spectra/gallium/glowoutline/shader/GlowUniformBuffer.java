@@ -3,8 +3,8 @@ package cn.spectra.gallium.glowoutline.shader;
 import cn.spectra.gallium.Gallium;
 import cn.spectra.gallium.glowoutline.ItemEffectConfig;
 import cn.spectra.gallium.glowoutline.ShaderParam;
-import com.mojang.blaze3d.buffers.GpuBuffer;
 //#if MC>=1_21_06
+import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 //#endif

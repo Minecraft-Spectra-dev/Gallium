@@ -145,6 +145,7 @@ public class ItemInHandRendererMixin {
 //$$     @WrapOperation(method = "renderItem", at = @At(value = "INVOKE",
 //$$             target = "Lnet/minecraft/client/renderer/entity/ItemRenderer;renderStatic(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemDisplayContext;ZLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/world/level/Level;III)V"))
 //$$     private void galliumWrapItemSubmit(ItemRenderer renderer, LivingEntity livingEntity, ItemStack itemStack, ItemDisplayContext itemDisplayContext, boolean leftHand, PoseStack poseStack, MultiBufferSource multiBufferSource, net.minecraft.world.level.Level level, int light, int overlay, int seed, Operation<Void> original, LivingEntity le, ItemStack stack, ItemDisplayContext ctx, boolean lh, PoseStack ps, MultiBufferSource mbs, int i) {
+//#if MC>=1_21_02
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
 //$$                 itemStack, multiBufferSource, GlowOutlineConfig.Toggle.FIRST_PERSON, true);
 //$$         try {
@@ -152,6 +153,34 @@ public class ItemInHandRendererMixin {
 //$$         } finally {
 //$$             CaptureSites.end();
 //$$         }
+//#else
+//$$         // 1.21.1: renderItem is the single funnel for BOTH first- and third-person held items
+//$$         // (ItemInHandLayer.renderArmWithItem calls it too on this version — ItemInHandLayerMixin
+//$$         // is stubbed here), so pick the toggle from the display context / entity type. Other
+//$$         // contexts (GUI/GROUND/...) don't reach this renderer; pass them through uncaptured.
+//$$         boolean firstPersonCtx = itemDisplayContext == ItemDisplayContext.FIRST_PERSON_LEFT_HAND
+//$$                 || itemDisplayContext == ItemDisplayContext.FIRST_PERSON_RIGHT_HAND;
+//$$         boolean thirdPersonCtx = itemDisplayContext == ItemDisplayContext.THIRD_PERSON_LEFT_HAND
+//$$                 || itemDisplayContext == ItemDisplayContext.THIRD_PERSON_RIGHT_HAND;
+//$$         GlowOutlineConfig.Toggle flag = null;
+//$$         if (firstPersonCtx) {
+//$$             flag = GlowOutlineConfig.Toggle.FIRST_PERSON;
+//$$         } else if (thirdPersonCtx) {
+//$$             flag = livingEntity instanceof net.minecraft.world.entity.player.Player
+//$$                     ? GlowOutlineConfig.Toggle.THIRD_PERSON
+//$$                     : GlowOutlineConfig.Toggle.OTHER_ENTITIES;
+//$$         }
+//$$         if (flag == null) {
+//$$             original.call(renderer, livingEntity, itemStack, itemDisplayContext, leftHand, poseStack, multiBufferSource, level, light, overlay, seed);
+//$$             return;
+//$$         }
+//$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(itemStack, multiBufferSource, flag, firstPersonCtx);
+//$$         try {
+//$$             original.call(renderer, livingEntity, itemStack, itemDisplayContext, leftHand, poseStack, wrapped, level, light, overlay, seed);
+//$$         } finally {
+//$$             CaptureSites.end();
+//$$         }
+//#endif
 //$$     }
 //$$
 //$$     @WrapMethod(method = "renderPlayerArm")
