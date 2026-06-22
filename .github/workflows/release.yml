@@ -1,0 +1,71 @@
+# Manually-triggered release: builds every supported Minecraft version via
+# `buildAndGather` and publishes the gathered jars as a GitHub Release.
+#
+# Trigger from the Actions tab ("Run workflow"). Provide the release tag
+# (e.g. 0.1.2); the workflow builds, then creates (or updates) a release
+# for that tag with all jars from build/libs/ attached.
+
+name: release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag, e.g. 0.1.2'
+        required: true
+        type: string
+      name:
+        description: 'Release title (defaults to the tag)'
+        required: false
+        type: string
+      prerelease:
+        description: 'Mark as a pre-release'
+        required: false
+        default: false
+        type: boolean
+      generate_notes:
+        description: 'Auto-generate release notes from commits'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  release:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v4
+
+      - name: validate gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: setup jdk
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: build and gather jars
+        run: ./gradlew buildAndGather
+
+      - name: capture build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Release-Artifacts
+          path: build/libs/
+
+      - name: create github release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.name || inputs.tag }}
+          prerelease: ${{ inputs.prerelease }}
+          generate_release_notes: ${{ inputs.generate_notes }}
+          files: build/libs/*

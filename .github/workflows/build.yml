@@ -2,13 +2,22 @@
 # and submitted pull request. This can help catch issues that only occur on
 # certain platforms or Java versions, and provides a first line of defence
 # against bad commits.
+#
+# Skipping a build
+# ----------------
+# A push whose commit message contains the token `[ci skip]` is skipped entirely
+# (GitHub's built-in behaviour, applies to the `push` event only; pull requests
+# always build).
 
 name: build
-on: [pull_request, push]
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: checkout repository
         uses: actions/checkout@v4
