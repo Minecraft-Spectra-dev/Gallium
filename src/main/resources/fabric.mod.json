@@ -24,10 +24,10 @@
 		"gallium-glowoutline.mixins.json"
 	],
 	"depends": {
-		"fabricloader": ">=0.19.2",
 		"minecraft": "${minecraft_dependency}",
-		"java": ">=${java_version}",
-		"fabric-api": "*",
+		"fabric-api": "*"
+	},
+	"suggests": {
 		"sodium": "*"
 	}
 }
