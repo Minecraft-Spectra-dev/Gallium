@@ -160,14 +160,26 @@ public final class GlowComposite {
         FilterMode maskFilter = maskScale < 1.0f ? FilterMode.LINEAR : FilterMode.NEAREST;
 
         //#if MC>=1_26_02
-        //$$ // 26.2 reverse-Z compensation: pack shaders read depth as forward-Z (0=near, 1=far),
-        //$$ // but 26.2's renderer writes reverse-Z (1=near, 0=far). DepthFlipPipeline writes
-        //$$ // (1 - depth) into an R32F color attachment we own, then we bind THAT view (color,
-        //$$ // not depth) as MaskDepthSampler / SceneDepthSampler. The flips must complete before
-        //$$ // we open the composite RenderPass — each flip uses its own CommandEncoder.
+        //$$ // Pack-author shaders consume forward-Z (0=near, 1=far). Native 26.2 renders in
+        //$$ // reverse-Z and therefore needs DepthFlipPipeline. Iris 1.11.x, however, installs
+        //$$ // UndoReverseZ mixins on the OpenGL backend while a shader pack is active: it
+        //$$ // restores a forward-Z projection, reverses compare ops, and transforms clear
+        //$$ // values. Those mixins key
+        //$$ // off Iris.isPackInUseQuick(), not ImmediateState.bypass, so the capture replay is
+        //$$ // forward-Z too. Iris depth must be bound raw; applying 1-depth again is the bug.
         //$$ com.mojang.blaze3d.textures.GpuTextureView sceneDepthViewToBind;
         //$$ com.mojang.blaze3d.textures.GpuTextureView maskDepthViewToBind;
-        //$$ if (cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.isReady()) {
+        //$$ boolean irisForwardDepth = IrisCompat.usesForwardDepthCompatibility();
+        //$$ if (irisForwardDepth) {
+        //$$     // MAX-pooling exists only to make the replay depth test stable. Feeding the pooled
+        //$$     // values to the pack shader's isOtherItem() test would suppress valid outlines, so
+        //$$     // expose the unpooled scene view for both comparisons. The replayed mask color has
+        //$$     // already applied LEQUAL and remains the source of occlusion truth.
+        //$$     maskDepthViewToBind = state.maskDepthPooled
+        //$$             ? sceneDepthView
+        //$$             : mask.getDepthTextureView();
+        //$$     sceneDepthViewToBind = state.firstPerson ? maskDepthViewToBind : sceneDepthView;
+        //$$ } else if (cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.isReady()) {
         //$$     // 1) Mask depth: flip the captured mask depth into a per-state forward-Z target.
         //$$     state.maskDepthForwardZTarget = cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline
         //$$             .ensureForwardZTarget(state.maskDepthForwardZTarget,
@@ -177,31 +189,20 @@ public final class GlowComposite {
         //$$             mask.getDepthTextureView(), state.maskDepthForwardZTarget);
         //$$     maskDepthViewToBind = state.maskDepthForwardZTarget.getColorTextureView();
         //$$
-        //$$     // 2) Scene depth: flip the same source selectSceneDepthView picks. This matches
-        //$$     // 26.1 semantics exactly:
+        //$$     // 2) Native reverse-Z: flip the source selected above.
         //$$     //   - first-person  → mask.depth (already flipped above; reuse view)
-        //$$     //   - Iris active   → pre-hand sceneDepthTarget mirror (captured before Iris
-        //$$     //                     overwrites mainTarget.depth in finalize)
-        //$$     //   - no-Iris world → mainTarget.depth at composite time (includes the held
-        //$$     //                     item, so world-glow items behind the player's hand are
-        //$$     //                     correctly occluded). The pre-hand sceneDepthTarget would
-        //$$     //                     LOSE that occlusion and is wrong here.
+        //$$     //   - Iris/Vulkan   → the pre-hand sceneDepthTarget snapshot
+        //$$     //   - no-Iris world → mainTarget.depth at composite time, including held items
         //$$     if (state.firstPerson) {
         //$$         sceneDepthViewToBind = maskDepthViewToBind;
-        //$$     } else if (IrisCompat.isShaderActive()) {
-        //$$         TextureTarget flippedScene = cn.spectra.gallium.glowoutline.capture
-        //$$                 .GlowCaptureManager.getSceneDepthForwardZTarget();
-        //$$         sceneDepthViewToBind = (flippedScene != null && flippedScene.getColorTextureView() != null)
-        //$$                 ? flippedScene.getColorTextureView()
-        //$$                 : maskDepthViewToBind;
         //$$     } else {
-        //$$         // Flip mainTarget.depth on the fly into a shared lazy forward-Z target.
+        //$$         // Normalize the selected world-depth source into a shared lazy target.
         //$$         TextureTarget liveScene = cn.spectra.gallium.glowoutline.capture
         //$$                 .GlowCaptureManager.ensureLiveSceneDepthForwardZTarget(
         //$$                         mainTarget.width, mainTarget.height);
-        //$$         if (liveScene != null && mainTarget.getDepthTextureView() != null) {
+        //$$         if (liveScene != null && sceneDepthView != null) {
         //$$             cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.flip(
-        //$$                     mainTarget.getDepthTextureView(), liveScene);
+        //$$                     sceneDepthView, liveScene);
         //$$             sceneDepthViewToBind = liveScene.getColorTextureView();
         //$$         } else {
         //$$             sceneDepthViewToBind = maskDepthViewToBind;
@@ -239,16 +240,26 @@ public final class GlowComposite {
             SamplerHelper.bindClampToEdge(pass, "MaskSampler",
                     mask.getColorTextureView(), maskFilter);
             //#if MC>=1_26_02
-            //$$ // 26.2: bind the forward-Z color views computed above as the depth samplers.
-            //$$ // From the GLSL side these are still `sampler2D` and read via `.r` — no shader
-            //$$ // change needed; the values are just forward-Z now instead of reverse-Z.
+            //$$ // Both branches above expose forward-Z: raw depth under Iris, normalized R32F
+            //$$ // color views under native 26.2. From GLSL both remain sampler2D `.r` reads.
             //$$ SamplerHelper.bindClampToEdge(pass, "MaskDepthSampler",
             //$$         maskDepthViewToBind, FilterMode.NEAREST);
             //$$ SamplerHelper.bindClampToEdge(pass, "SceneDepthSampler",
             //$$         sceneDepthViewToBind, FilterMode.NEAREST);
             //#else
+            // When the mask depth was pooled (Iris world path), mask.depth holds 3x3 farthest-
+            // neighbour values; feeding those to isOtherItem() (step(sceneDepth+e, maskDepth))
+            // would suppress every outline whose 3x3 neighbourhood reaches a farther pixel (ground
+            // perspective, walls) - leaving glow only against flat sky ("horizon only"). Bind
+            // MaskDepthSampler to the SAME plain scene-depth view as SceneDepthSampler so isOtherItem
+            // is constant 0; occlusion is then handled solely by the replay's LEQUAL (the mask color
+            // silhouette). isItem's itemDepth becomes the scene depth (its depth check trivially
+            // passes), which is fine because the silhouette is already occlusion-correct.
+            com.mojang.blaze3d.textures.GpuTextureView maskDepthView = state.maskDepthPooled
+                    ? sceneDepthView
+                    : mask.getDepthTextureView();
             SamplerHelper.bindClampToEdge(pass, "MaskDepthSampler",
-                    mask.getDepthTextureView(), FilterMode.NEAREST);
+                    maskDepthView, FilterMode.NEAREST);
             SamplerHelper.bindClampToEdge(pass, "SceneDepthSampler",
                     sceneDepthView, FilterMode.NEAREST);
             //#endif

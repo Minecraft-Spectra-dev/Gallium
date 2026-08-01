@@ -86,4 +86,25 @@ class ScaledProjectionTest {
         // reuse depends on this contract.
         assertSame(dest, result);
     }
+
+    @Test
+    void zBiasShiftsNdcZOnly() {
+        // scale = 1 (so t = 0) isolates the z-bias: only NDC.z moves, by exactly -zBias;
+        // xy and w pass through unchanged. Positive zBias pulls geometry toward the camera
+        // in forward-Z (smaller NDC.z = closer), which keeps the replayed mask depth on the
+        // near side of sceneDepth so LEQUAL tolerates TAA jitter without a wall-occluding break.
+        Matrix4f base = new Matrix4f().perspective((float) Math.toRadians(70), 16f / 9f, 0.05f, 1000f);
+        float zBias = 0.001f;
+        Matrix4f biased = GlowCaptureManager.computeScaledProjection(base, 1.0f, zBias, new Matrix4f());
+
+        Vector4f baseClip = project(base, 0.3f, -0.5f, -10f);
+        Vector4f biasedClip = project(biased, 0.3f, -0.5f, -10f);
+
+        // scale = 1 -> t = 0, so xy and w are untouched.
+        assertEquals(ndcX(baseClip), ndcX(biasedClip), 1e-5f);
+        assertEquals(ndcY(baseClip), ndcY(biasedClip), 1e-5f);
+        assertEquals(baseClip.w, biasedClip.w, 1e-5f);
+        // NDC.z shifts by exactly -zBias.
+        assertEquals(baseClip.z / baseClip.w - zBias, biasedClip.z / biasedClip.w, 1e-5f);
+    }
 }

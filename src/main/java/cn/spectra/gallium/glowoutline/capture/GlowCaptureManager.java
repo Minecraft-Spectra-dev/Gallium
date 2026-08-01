@@ -52,12 +52,6 @@ public final class GlowCaptureManager {
     private static boolean sceneDepthCaptured;
     private static @Nullable TextureTarget sceneDepthTarget;
     //#if MC>=1_26_02
-    //$$ /** Forward-Z R32F mirror of {@link #sceneDepthTarget}'s reverse-Z depth, built each
-    //$$  *  frame by {@link cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline} after
-    //$$  *  scene-depth capture. Bound as {@code SceneDepthSampler} on the Iris path so pack
-    //$$  *  shaders see forward-Z values (pre-hand snapshot — Iris finalize would otherwise
-    //$$  *  overwrite mainTarget.depth before composite). */
-    //$$ private static @Nullable TextureTarget sceneDepthForwardZTarget;
     //$$ /** Forward-Z R32F mirror of vanilla {@code mainTarget.depth} as it stands AT composite
     //$$  *  time. Used on the no-Iris world path so held-item depth (written by
     //$$  *  {@code renderItemInHand}) is part of the sceneDepth sampled by the glow shader —
@@ -91,6 +85,11 @@ public final class GlowCaptureManager {
     /** Reused holder for the scaled projection. Render thread is single-threaded, so a static
      *  scratch matrix avoids two {@code Matrix4f} allocations per mask render. */
     private static final Matrix4f SCRATCH_SCALED_PROJECTION = new Matrix4f();
+
+    /** Small forward-Z clip-space bias used by shader-pack replay on versions where the
+     *  farthest-neighbour depth pool is unavailable. It absorbs sub-pixel projection jitter
+     *  while keeping the 26.x paths unbiased. */
+    private static final float IRIS_TAA_Z_BIAS = 0.001f;
 
     static {
         cn.spectra.gallium.glowoutline.shader.GlowResources.register(GlowCaptureManager::clearAll);
@@ -146,26 +145,89 @@ public final class GlowCaptureManager {
         var encoder = RenderSystem.getDevice().createCommandEncoder();
         encoder.copyTextureToTexture(srcDepth, sceneDepthTarget.getDepthTexture(), 0, 0, 0, 0, 0, w, h);
 
-        if (!IrisCompat.isShaderActive()) {
-            for (GlowCaptureState state : activeStates) {
-                if (state.maskTarget != null) {
-                    encoder.copyTextureToTexture(srcDepth, state.maskTarget.getDepthTexture(), 0, 0, 0, 0, 0, w, h);
+        // Pre-fill every active state's mask depth with world depth. Non-item pixels keep this
+        // world depth so the glow shader's isOtherItem() (maskDepth vs sceneDepth) returns 0 at
+        // outline pixels; the replay then writes item depth on top at item pixels.
+        //#if MC>=1_26_02
+        //$$ // Native 26.2 stores reverse-Z and needs a plain copy. Iris 1.11.x restores forward-Z
+        //$$ // on OpenGL, but its pack projection may jitter scene depth while the bypass replay is
+        //$$ // un-jittered. MAX-pool the forward-Z scene depth so the replay's LEQUAL remains stable
+        //$$ // at silhouettes. Vulkan retains native reverse-Z and therefore skips this MAX pool.
+        //$$ boolean useDepthPool = IrisCompat.usesForwardDepthCompatibility()
+        //$$         && cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.isReady();
+        //$$ GpuTexture pooledDepth = null;
+        //$$ for (GlowCaptureState state : activeStates) {
+        //$$     if (state.maskTarget != null && !state.firstPerson) {
+        //$$         if (useDepthPool) {
+        //$$             if (pooledDepth == null) {
+        //$$                 if (cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.pool(
+        //$$                         encoder,
+        //$$                         sceneDepthTarget.getDepthTextureView(),
+        //$$                         state.maskTarget.getColorTextureView(),
+        //$$                         state.maskTarget.getDepthTextureView())) {
+        //$$                     pooledDepth = state.maskTarget.getDepthTexture();
+        //$$                     state.maskDepthPooled = true;
+        //$$                     continue;
+        //$$                 }
+        //$$                 useDepthPool = false;
+        //$$             } else {
+        //$$                 encoder.copyTextureToTexture(pooledDepth, state.maskTarget.getDepthTexture(),
+        //$$                         0, 0, 0, 0, 0, w, h);
+        //$$                 state.maskDepthPooled = true;
+        //$$                 continue;
+        //$$             }
+        //$$         }
+        //$$         encoder.copyTextureToTexture(srcDepth, state.maskTarget.getDepthTexture(),
+        //$$                 0, 0, 0, 0, 0, w, h);
+        //$$     }
+        //$$ }
+        //#elseif MC>=1_26_00
+        // 26.1: when Iris shaders are active, route the pre-fill through DepthMinPoolPipeline so
+        // the mask depth carries the 3x3 farthest-neighbour (MAX) of the (TAA-jittered) scene
+        // depth instead of the raw jittered depth. The composite-time replay runs under bypass
+        // (vanilla vsh, un-jittered), so without this pool LEQUAL fails inconsistently at
+        // silhouette boundary pixels and the mask color shimmers ("outline waves like water").
+        // The pool reads sceneDepthTarget (already a copy of srcDepth above) to avoid a
+        // read-from-and-write-to mask.depth hazard. Falls back to a plain copy when the pool
+        // pipeline failed to compile or no shaders are active (no jitter to compensate).
+        boolean useDepthPool = IrisCompat.isShaderActive()
+                && cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.isReady();
+        GpuTexture pooledDepth = null;
+        for (GlowCaptureState state : activeStates) {
+            if (state.maskTarget != null && !state.firstPerson) {
+                if (useDepthPool) {
+                    if (pooledDepth == null) {
+                        if (cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.pool(
+                                encoder,
+                                sceneDepthTarget.getDepthTextureView(),
+                                state.maskTarget.getColorTextureView(),
+                                state.maskTarget.getDepthTextureView())) {
+                            pooledDepth = state.maskTarget.getDepthTexture();
+                            state.maskDepthPooled = true;
+                            continue;
+                        }
+                        useDepthPool = false;
+                    } else {
+                        encoder.copyTextureToTexture(pooledDepth, state.maskTarget.getDepthTexture(),
+                                0, 0, 0, 0, 0, w, h);
+                        state.maskDepthPooled = true;
+                        continue;
+                    }
                 }
+                encoder.copyTextureToTexture(srcDepth, state.maskTarget.getDepthTexture(),
+                        0, 0, 0, 0, 0, w, h);
             }
         }
-        sceneDepthCaptured = true;
-        //#if MC>=1_26_02
-        //$$ // 26.2 reverse-Z: flip the just-captured sceneDepth into a Gallium-owned R32F
-        //$$ // color target so the pack-author glow shader's SceneDepthSampler reads forward-Z
-        //$$ // values. We pre-allocate (or resize) the target here so renderCapturedNodes can
-        //$$ // skip allocation on the hot path; the flip writes (1 - reverseZdepth) per pixel.
-        //$$ sceneDepthForwardZTarget = cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline
-        //$$         .ensureForwardZTarget(sceneDepthForwardZTarget, "GlowSceneDepthForwardZ", w, h);
-        //$$ if (sceneDepthTarget.getDepthTextureView() != null) {
-        //$$     cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.flip(
-        //$$             sceneDepthTarget.getDepthTextureView(), sceneDepthForwardZTarget);
+        //#else
+        //$$ // 1.21.x: no DepthMinPoolPipeline (DepthTestFunction lacks ALWAYS); plain copy, with
+        //$$ // the z-bias backstop in renderCapturedNodes handling TAA jitter (less perfectly).
+        //$$ for (GlowCaptureState state : activeStates) {
+        //$$     if (state.maskTarget != null) {
+        //$$         encoder.copyTextureToTexture(srcDepth, state.maskTarget.getDepthTexture(), 0, 0, 0, 0, 0, w, h);
+        //$$     }
         //$$ }
         //#endif
+        sceneDepthCaptured = true;
         //#else
         //$$ if (sceneDepthCaptured) return;
         //$$ int w = mainTarget.width, h = mainTarget.height;
@@ -199,12 +261,6 @@ public final class GlowCaptureManager {
     }
 
     //#if MC>=1_26_02
-    //$$ /** Forward-Z color target derived from {@link #sceneDepthTarget}. Bound as
-    //$$  *  {@code SceneDepthSampler} on 26.2 so pack shaders read forward-Z values. */
-    //$$ public static @Nullable TextureTarget getSceneDepthForwardZTarget() {
-    //$$     return sceneDepthForwardZTarget;
-    //$$ }
-    //$$
     //$$ /** Lazily allocates or resizes the live-mainTarget forward-Z mirror. Caller is
     //$$  *  responsible for invoking {@link cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline#flip}
     //$$  *  to fill it each frame — this method only manages the texture's allocation. */
@@ -459,33 +515,39 @@ public final class GlowCaptureManager {
             encoder.copyTextureToTexture(
                     mainTarget.getDepthTexture(), state.maskTarget.getDepthTexture(),
                     0, 0, 0, 0, 0, mainTarget.width, mainTarget.height);
-        } else if (IrisCompat.isShaderActive()) {
-            //#if MC>=1_26_02
-            //$$ encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 0.0);
-            //#else
-            encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 1.0);
-            //#endif
         }
+        // else: captureSceneDepth has already copied real world depth into the mask depth
+        // (for both no-Iris and Iris paths). Items will write their own depth into the mask
+        // during the render pass below; non-item pixels keep world depth so the glow shader's
+        // isOtherItem() test correctly distinguishes "behind world geometry".
 
         var oldColor = RenderSystem.outputColorTextureOverride;
         var oldDepth = RenderSystem.outputDepthTextureOverride;
         RenderSystem.outputColorTextureOverride = state.maskTarget.getColorTextureView();
         RenderSystem.outputDepthTextureOverride = state.maskTarget.getDepthTextureView();
 
-        // Decide what projection to use for the mask render. When an Iris pack with internal
-        // scaling is active and we have the original Matrix4f, pre-multiply by the equivalent
-        // of VertexDownscaling so the mask is rasterized into the same [0, scale]² subrect of
-        // the depth buffer that the shader pack writes its world+entity output into. Without
-        // that alignment, sceneDepth max-pool sampling on the body silhouette flips per
-        // sub-pixel jitter and produces visible outline-edge wobble. With alignment our mask
-        // and sceneDepth are pixel-coincident, so a 3x3 max-pool absorbs noise.
+        // Decide what projection to use for the mask render.
+        //   1. VertexDownscaling alignment when an Iris pack uses internal-resolution scaling
+        //      (Kappa ResolutionScale, iterationRP FSR2_SCALE, etc.) — pre-multiplies xy by
+        //      `scale` so the mask rasterizes into the same [0, scale]² subrect that the pack
+        //      writes its world output into.
+        //   2. On 1.21.x versions where DepthMinPoolPipeline isn't active, a small clip-space
+        //      z-bias pulls replayed geometry toward the camera so LEQUAL tolerates sub-pixel
+        //      shader-pack jitter. Both 26.1 and 26.2's Iris/OpenGL path use the pool instead.
         GpuBufferSlice maskProjectionSlice = state.capturedProjectionMatrix;
         float maskScale = 1.0f;
-        if (state.capturedProjectionMatrix4fValid
-                && IrisCompat.isShaderActive()
-                && IrisCompat.getShaderInternalScale() < 0.999f) {
-            float scale = IrisCompat.getShaderInternalScale();
-            GpuBufferSlice scaled = uploadScaledProjection(state.capturedProjectionMatrix4f, scale);
+        boolean shadersActive = IrisCompat.isShaderActive();
+        boolean needScale = shadersActive && IrisCompat.getShaderInternalScale() < 0.999f;
+        //#if MC>=1_26_00
+        // 26.1 and 26.2's Iris/OpenGL forward-Z path use the depth pool; keep both unbiased.
+        float zBias = 0.0f;
+        //#else
+        //$$ // 1.21.6-1.21.11: DepthMinPoolPipeline is a stub; retain the small bias backstop.
+        //$$ float zBias = shadersActive ? IRIS_TAA_Z_BIAS : 0.0f;
+        //#endif
+        if (state.capturedProjectionMatrix4fValid && (needScale || zBias != 0.0f)) {
+            float scale = needScale ? IrisCompat.getShaderInternalScale() : 1.0f;
+            GpuBufferSlice scaled = uploadScaledProjection(state.capturedProjectionMatrix4f, scale, zBias);
             if (scaled != null) {
                 maskProjectionSlice = scaled;
                 maskScale = scale;
@@ -542,9 +604,9 @@ public final class GlowCaptureManager {
         //$$     encoder.copyTextureToTexture(
         //$$             mainTarget.getDepthTexture(), state.maskTarget.getDepthTexture(),
         //$$             0, 0, 0, 0, 0, mainTarget.width, mainTarget.height);
-        //$$ } else if (IrisCompat.isShaderActive()) {
-        //$$     encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 1.0);
         //$$ }
+        //$$ // else: captureSceneDepth already populated mask depth with real world depth
+        //$$ // (for both no-Iris and Iris paths); see the >=1_21_09 branch above for the rationale.
         //$$
         //$$ var oldColor = RenderSystem.outputColorTextureOverride;
         //$$ var oldDepth = RenderSystem.outputDepthTextureOverride;
@@ -553,11 +615,12 @@ public final class GlowCaptureManager {
         //$$
         //$$ GpuBufferSlice maskProjectionSlice = state.capturedProjectionMatrix;
         //$$ float maskScale = 1.0f;
-        //$$ if (state.capturedProjectionMatrix4fValid
-        //$$         && IrisCompat.isShaderActive()
-        //$$         && IrisCompat.getShaderInternalScale() < 0.999f) {
-        //$$     float scale = IrisCompat.getShaderInternalScale();
-        //$$     GpuBufferSlice scaled = uploadScaledProjection(state.capturedProjectionMatrix4f, scale);
+        //$$ boolean shadersActive = IrisCompat.isShaderActive();
+        //$$ boolean needScale = shadersActive && IrisCompat.getShaderInternalScale() < 0.999f;
+        //$$ if (state.capturedProjectionMatrix4fValid && (needScale || shadersActive)) {
+        //$$     float scale = needScale ? IrisCompat.getShaderInternalScale() : 1.0f;
+        //$$     float zBias = shadersActive ? IRIS_TAA_Z_BIAS : 0.0f;
+        //$$     GpuBufferSlice scaled = uploadScaledProjection(state.capturedProjectionMatrix4f, scale, zBias);
         //$$     if (scaled != null) {
         //$$         maskProjectionSlice = scaled;
         //$$         maskScale = scale;
@@ -619,10 +682,11 @@ public final class GlowCaptureManager {
         //$$     encoder.copyTextureToTexture(
         //$$             mainTarget.getDepthTexture(), state.maskTarget.getDepthTexture(),
         //$$             0, 0, 0, 0, 0, mainTarget.width, mainTarget.height);
-        //$$ } else if (IrisCompat.isShaderActive()) {
-        //$$     encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 1.0);
         //$$ }
-        //$$ // else: captureSceneDepth already populated mask depth with the pre-clear world depth.
+        //$$ // else: captureSceneDepth already populated mask depth with the pre-clear world depth
+        //$$ // (for both no-Iris and Iris paths). With Iris, the cleared-to-far approach used to
+        //$$ // suppress every outline because the glow shader's isOtherItem() test compares
+        //$$ // mask depth against scene depth — see the >=1_21_09 branch above for full rationale.
         //$$
         //$$ if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
         //$$     RenderSystem.getModelViewStack().pushMatrix();
@@ -635,12 +699,13 @@ public final class GlowCaptureManager {
         //$$ // overload of setProjectionMatrix.
         //$$ float maskScale = 1.0f;
         //$$ Matrix4f maskProjection = state.capturedProjectionMatrix4f;
-        //$$ if (state.capturedProjectionMatrix4fValid
-        //$$         && IrisCompat.isShaderActive()
-        //$$         && IrisCompat.getShaderInternalScale() < 0.999f) {
-        //$$     float scale = IrisCompat.getShaderInternalScale();
+        //$$ boolean shadersActive = IrisCompat.isShaderActive();
+        //$$ boolean needScale = shadersActive && IrisCompat.getShaderInternalScale() < 0.999f;
+        //$$ if (state.capturedProjectionMatrix4fValid && (needScale || shadersActive)) {
+        //$$     float scale = needScale ? IrisCompat.getShaderInternalScale() : 1.0f;
+        //$$     float zBias = shadersActive ? IRIS_TAA_Z_BIAS : 0.0f;
         //$$     maskProjection = computeScaledProjection(state.capturedProjectionMatrix4f,
-        //$$             scale, SCRATCH_SCALED_PROJECTION);
+        //$$             scale, zBias, SCRATCH_SCALED_PROJECTION);
         //$$     maskScale = scale;
         //$$ }
         //$$ boolean restoreProj = state.capturedProjectionMatrix4fValid
@@ -684,9 +749,12 @@ public final class GlowCaptureManager {
         //$$ // Mask depth strategy mirrors the >=1_21_06 branch above; see comments there.
         //$$ // Local difference: 1.21.4 uses RenderTarget.copyDepthFrom(sceneDepthTarget) instead
         //$$ // of CommandEncoder.copyTextureToTexture (no GpuTexture API on this version).
-        //$$ if (state.firstPerson || IrisCompat.isShaderActive()) {
-        //$$     // depth already 1.0 from mask.clear()
+        //$$ if (state.firstPerson) {
+        //$$     // depth already 1.0 from mask.clear() — first-person uses mask self-compare,
+        //$$     // never gets occluded by world geometry.
         //$$ } else if (sceneDepthCaptured && sceneDepthTarget != null) {
+        //$$     // Real world depth captured before the renderItemInHand pass; works for both
+        //$$     // no-Iris and Iris paths (Iris's finalPass binds only color, leaving depth alone).
         //$$     mask.copyDepthFrom(sceneDepthTarget);
         //$$ } else {
         //$$     RenderTarget mainTarget = mc.getMainRenderTarget();
@@ -695,12 +763,13 @@ public final class GlowCaptureManager {
         //$$
         //$$ float maskScale = 1.0f;
         //$$ Matrix4f maskProjection = state.capturedProjectionMatrix4f;
-        //$$ if (state.capturedProjectionMatrix4fValid
-        //$$         && IrisCompat.isShaderActive()
-        //$$         && IrisCompat.getShaderInternalScale() < 0.999f) {
-        //$$     float scale = IrisCompat.getShaderInternalScale();
+        //$$ boolean shadersActive = IrisCompat.isShaderActive();
+        //$$ boolean needScale = shadersActive && IrisCompat.getShaderInternalScale() < 0.999f;
+        //$$ if (state.capturedProjectionMatrix4fValid && (needScale || shadersActive)) {
+        //$$     float scale = needScale ? IrisCompat.getShaderInternalScale() : 1.0f;
+        //$$     float zBias = shadersActive ? IRIS_TAA_Z_BIAS : 0.0f;
         //$$     maskProjection = computeScaledProjection(state.capturedProjectionMatrix4f,
-        //$$             scale, SCRATCH_SCALED_PROJECTION);
+        //$$             scale, zBias, SCRATCH_SCALED_PROJECTION);
         //$$     maskScale = scale;
         //$$ }
         //$$ boolean shouldRestoreProj = state.capturedProjectionMatrix4fValid
@@ -755,7 +824,7 @@ public final class GlowCaptureManager {
      * Returns a slice into a reused buffer; the contents are valid until the next call.
      */
     //#if MC>=1_21_06
-    private static @Nullable GpuBufferSlice uploadScaledProjection(Matrix4f baseProjection, float scale) {
+    private static @Nullable GpuBufferSlice uploadScaledProjection(Matrix4f baseProjection, float scale, float zBias) {
         if (scaledProjectionBuffer == null) {
             scaledProjectionBuffer = RenderSystem.getDevice().createBuffer(
                     () -> "Glow Scaled Projection",
@@ -765,7 +834,7 @@ public final class GlowCaptureManager {
             // Passing `0` (a literal int) is accepted by both signatures via implicit widening.
             scaledProjectionSlice = scaledProjectionBuffer.slice(0, RenderSystem.PROJECTION_MATRIX_UBO_SIZE);
         }
-        Matrix4f result = computeScaledProjection(baseProjection, scale, SCRATCH_SCALED_PROJECTION);
+        Matrix4f result = computeScaledProjection(baseProjection, scale, zBias, SCRATCH_SCALED_PROJECTION);
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
             ByteBuffer data = Std140Builder.onStack(stack, RenderSystem.PROJECTION_MATRIX_UBO_SIZE)
@@ -777,23 +846,32 @@ public final class GlowCaptureManager {
     //#endif
 
     /**
-     * Writes {@code S * baseProjection} into {@code dest} and returns it, where {@code S} is the
-     * matrix equivalent of shader-pack {@code VertexDownscaling}. After the perspective divide
-     * this maps NDC -> NDC * scale - (1 - scale), the same {@code [0, scale]²} subrect Iris
-     * produces in the pack vsh. Using the full 4x4 form keeps us robust against non-standard
-     * projection matrices (cubemaps, certain mods). Exposed package-private for tests.
+     * Writes {@code S * baseProjection} into {@code dest}, where {@code S} combines:
+     * <ul>
+     *   <li>{@code VertexDownscaling}: {@code xy *= scale; xy += t * w} (with {@code t = -(1 - scale)}),
+     *       producing the {@code [0, scale]²} subrect Iris packs paint into.</li>
+     *   <li>Clip-space z-bias: {@code z -= zBias * w} (after divide: NDC.z shifts by -zBias).
+     *       Positive {@code zBias} pulls geometry toward camera in forward-Z.</li>
+     * </ul>
+     * Using the full 4x4 form keeps us robust against non-standard projection matrices.
+     * Exposed package-private for tests.
      */
-    static Matrix4f computeScaledProjection(Matrix4f baseProjection, float scale, Matrix4f dest) {
+    static Matrix4f computeScaledProjection(Matrix4f baseProjection, float scale, float zBias, Matrix4f dest) {
         float t = -(1.0f - scale);
         // S * baseProjection. JOML stores column-major, so the constructor below lists columns.
-        // Layout reads as a transform with diag(scale, scale, 1, 1) and translation (t, t, 0)
-        // applied after the perspective basis — equivalent to xy *= scale; xy += t * w.
+        // Layout reads as a transform with diag(scale, scale, 1, 1), translation (t, t, -zBias)
+        // applied after the perspective basis — equivalent to xy *= scale; xy += t * w; z -= zBias * w.
         dest.set(
-                scale, 0,     0, 0,
-                0,     scale, 0, 0,
-                0,     0,     1, 0,
-                t,     t,     0, 1);
+                scale, 0,     0,      0,
+                0,     scale, 0,      0,
+                0,     0,     1,      0,
+                t,     t,     -zBias, 1);
         return dest.mul(baseProjection);
+    }
+
+    /** Backwards-compatible overload used by existing tests; defaults zBias = 0. */
+    static Matrix4f computeScaledProjection(Matrix4f baseProjection, float scale, Matrix4f dest) {
+        return computeScaledProjection(baseProjection, scale, 0.0f, dest);
     }
 
     private static GlowCaptureState allocateState() {
@@ -843,10 +921,6 @@ public final class GlowCaptureManager {
             sceneDepthTarget = null;
         }
         //#if MC>=1_26_02
-        //$$ if (sceneDepthForwardZTarget != null) {
-        //$$     sceneDepthForwardZTarget.destroyBuffers();
-        //$$     sceneDepthForwardZTarget = null;
-        //$$ }
         //$$ if (liveSceneDepthForwardZTarget != null) {
         //$$     liveSceneDepthForwardZTarget.destroyBuffers();
         //$$     liveSceneDepthForwardZTarget = null;

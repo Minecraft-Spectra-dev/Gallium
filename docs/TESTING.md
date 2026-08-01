@@ -89,9 +89,10 @@
 
 ### D-6 Iris shader 路径下的遮挡
 
-- [ ] 启用 shader pack 后，世界空间遮挡仍然成立（`GlowCaptureManager.captureSceneDepth` 在 shader 写入深度前提前捕获）。
+- [ ] 启用 shader pack 后，世界空间遮挡仍然成立（`GlowCaptureManager.captureSceneDepth` 在主深度被 clearDepthTexture 清掉前提前抓取；同一时刻把这份世界深度也复制到所有 active 状态的 mask depth，避免 `isOtherItem` 比较时把整张描边压成 0）。
 - [ ] Iris 阴影 pass 期间**不出现**任何发光（`IrisCompat.isShadowPass()` 应令所有 mixin 短路）。
 - [ ] 切换不同 shader pack 后遮挡仍正确，不出现穿墙描边。
+- [ ] 物品发光放在地面（开启光影），描边应正常出现而非整体消失（这一旧 bug 由“Iris 路径下 mask depth 被清成 far → `step(scene, far) = 1` → `isOtherItem` 全屏命中”引起，已修复为始终复制世界深度到 mask depth）。
 
 ---
 
