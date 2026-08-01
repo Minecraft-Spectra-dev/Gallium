@@ -77,19 +77,31 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
     }
 
     @Override public void submitShadow(PoseStack p, float r, List<EntityRenderState.ShadowPiece> pieces) { delegate.submitShadow(p, r, pieces); }
+    //#if MC>=1_26_02
+    //$$ @Override public void submitNameTag(PoseStack p, @Nullable Vec3 a, int o, Component n, boolean s, int l, CameraRenderState c) { delegate.submitNameTag(p, a, o, n, s, l, c); }
+    //#else
     @Override public void submitNameTag(PoseStack p, @Nullable Vec3 a, int o, Component n, boolean s, int l, double d, CameraRenderState c) { delegate.submitNameTag(p, a, o, n, s, l, d, c); }
+    //#endif
     @Override public void submitText(PoseStack p, float x, float y, FormattedCharSequence str, boolean ds, Font.DisplayMode dm, int l, int col, int bg, int oc) { delegate.submitText(p, x, y, str, ds, dm, l, col, bg, oc); }
     @Override public void submitFlame(PoseStack p, EntityRenderState rs, Quaternionf q) { delegate.submitFlame(p, rs, q); }
     @Override public void submitLeash(PoseStack p, EntityRenderState.LeashState ls) { delegate.submitLeash(p, ls); }
+    //#if MC>=1_26_02
+    //$$ @Override public void submitMovingBlock(PoseStack p, MovingBlockRenderState mb, int oc) { delegate.submitMovingBlock(p, mb, oc); }
+    //#else
     @Override public void submitMovingBlock(PoseStack p, MovingBlockRenderState mb) { delegate.submitMovingBlock(p, mb); }
-    //#if MC>=1_26_00
+    //#endif
+    //#if MC>=1_26_02
+    //$$ @Override public void submitBreakingBlockModel(PoseStack p, List<BlockStateModelPart> parts, int prog) { delegate.submitBreakingBlockModel(p, parts, prog); }
+    //#elseif MC>=1_26_00
     @Override public void submitBreakingBlockModel(PoseStack p, BlockStateModel m, long seed, int prog) { delegate.submitBreakingBlockModel(p, m, seed, prog); }
     //#else
     //$$ @Override public void submitBlock(PoseStack p, BlockState bs, int i, int j, int k) { delegate.submitBlock(p, bs, i, j, k); }
     //#endif
+    //#if MC<1_26_02
     @Override public void submitParticleGroup(ParticleGroupRenderer r) { delegate.submitParticleGroup(r); }
     @Override public void clear() { delegate.clear(); collectionsByOrder.clear(); }
     @Override public void endFrame() { delegate.endFrame(); }
+    //#endif
     @Override public Int2ObjectAVLTreeMap<SubmitNodeCollection> getSubmitsPerOrder() { return delegate.getSubmitsPerOrder(); }
 
     @Override
@@ -98,11 +110,13 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
         duplicate(0, c -> c.submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr));
     }
 
+    //#if MC<1_26_02
     @Override
     public void submitModelPart(ModelPart mp, PoseStack p, RenderType rt, int l, int ov, @Nullable TextureAtlasSprite sp, boolean sh, boolean hf, int tc, ModelFeatureRenderer.@Nullable CrumblingOverlay cr, int oc) {
         delegate.submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc);
         duplicate(0, c -> c.submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc));
     }
+    //#endif
 
     //#if MC>=1_26_00
     @Override
@@ -150,23 +164,40 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
         private final int order;
 
         DuplicatingSubmitNodeCollection(SubmitNodeCollection delegate, int order) {
+            //#if MC>=1_26_02
+            //$$ // 26.2: SubmitNodeCollection no longer takes a SubmitNodeStorage — implicit no-arg ctor.
+            //$$ super();
+            //#else
             super(SENTINEL);
+            //#endif
             this.delegate = delegate;
             this.order = order;
         }
 
         @Override public void submitShadow(PoseStack p, float r, List<EntityRenderState.ShadowPiece> pieces) { delegate.submitShadow(p, r, pieces); }
+        //#if MC>=1_26_02
+        //$$ @Override public void submitNameTag(PoseStack p, @Nullable Vec3 a, int o, Component n, boolean s, int l, CameraRenderState c) { delegate.submitNameTag(p, a, o, n, s, l, c); }
+        //#else
         @Override public void submitNameTag(PoseStack p, @Nullable Vec3 a, int o, Component n, boolean s, int l, double d, CameraRenderState c) { delegate.submitNameTag(p, a, o, n, s, l, d, c); }
+        //#endif
         @Override public void submitText(PoseStack p, float x, float y, FormattedCharSequence str, boolean ds, Font.DisplayMode dm, int l, int col, int bg, int oc) { delegate.submitText(p, x, y, str, ds, dm, l, col, bg, oc); }
         @Override public void submitFlame(PoseStack p, EntityRenderState rs, Quaternionf q) { delegate.submitFlame(p, rs, q); }
         @Override public void submitLeash(PoseStack p, EntityRenderState.LeashState ls) { delegate.submitLeash(p, ls); }
+        //#if MC>=1_26_02
+        //$$ @Override public void submitMovingBlock(PoseStack p, MovingBlockRenderState mb, int oc) { delegate.submitMovingBlock(p, mb, oc); }
+        //#else
         @Override public void submitMovingBlock(PoseStack p, MovingBlockRenderState mb) { delegate.submitMovingBlock(p, mb); }
-        //#if MC>=1_26_00
+        //#endif
+        //#if MC>=1_26_02
+        //$$ @Override public void submitBreakingBlockModel(PoseStack p, List<BlockStateModelPart> parts, int prog) { delegate.submitBreakingBlockModel(p, parts, prog); }
+        //#elseif MC>=1_26_00
         @Override public void submitBreakingBlockModel(PoseStack p, BlockStateModel m, long seed, int prog) { delegate.submitBreakingBlockModel(p, m, seed, prog); }
         //#else
         //$$ @Override public void submitBlock(PoseStack p, BlockState bs, int i, int j, int k) { delegate.submitBlock(p, bs, i, j, k); }
         //#endif
+        //#if MC<1_26_02
         @Override public void submitParticleGroup(ParticleGroupRenderer r) { delegate.submitParticleGroup(r); }
+        //#endif
 
         @Override
         public <S> void submitModel(Model<? super S> model, S state, PoseStack p, RenderType rt, int l, int ov, int tc, @Nullable TextureAtlasSprite sp, int oc, ModelFeatureRenderer.@Nullable CrumblingOverlay cr) {
@@ -174,11 +205,13 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
             dup(c -> c.submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr));
         }
 
+        //#if MC<1_26_02
         @Override
         public void submitModelPart(ModelPart mp, PoseStack p, RenderType rt, int l, int ov, @Nullable TextureAtlasSprite sp, boolean sh, boolean hf, int tc, ModelFeatureRenderer.@Nullable CrumblingOverlay cr, int oc) {
             delegate.submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc);
             dup(c -> c.submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc));
         }
+        //#endif
 
         //#if MC>=1_26_00
         @Override

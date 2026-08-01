@@ -82,7 +82,11 @@ public final class GuiGlowDispatcher {
                                  Matrix3x2f pose, int itemX, int itemY, ScreenRectangle scissorArea,
                                  float atlasU0, float atlasV1) {
         Minecraft mc = Minecraft.getInstance();
+        //#if MC>=1_26_02
+        //$$ var mainTarget = mc.gameRenderer.mainRenderTarget();
+        //#else
         var mainTarget = mc.getMainRenderTarget();
+        //#endif
         if (mainTarget == null) return;
 
         int screenW = mainTarget.width;
@@ -155,7 +159,11 @@ public final class GuiGlowDispatcher {
     public static void onPrepareItemElements() {
         if (GuiGlowCaptureManager.getActive().isEmpty()) return;
         Minecraft mc = Minecraft.getInstance();
+        //#if MC>=1_26_02
+        //$$ var mainTarget = mc.gameRenderer.mainRenderTarget();
+        //#else
         var mainTarget = mc.getMainRenderTarget();
+        //#endif
         if (mainTarget == null) return;
 
         int screenW = mainTarget.width;

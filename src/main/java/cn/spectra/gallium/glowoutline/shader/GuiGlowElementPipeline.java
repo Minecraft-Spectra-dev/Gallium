@@ -8,6 +8,9 @@ import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.ColorTargetState;
 //#endif
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+//#if MC>=1_26_02
+//$$ import com.mojang.blaze3d.pipeline.BindGroupLayout;
+//#endif
 import com.mojang.blaze3d.shaders.UniformType;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -63,7 +66,9 @@ public final class GuiGlowElementPipeline {
                 //#else
                 //$$ .withBlend(BlendFunction.ADDITIVE)
                 //#endif
-                //#if MC>=1_21_06
+                //#if MC>=1_26_02
+                //$$ .withBindGroupLayout(BindGroupLayout.builder().withUniform("GalliumGuiGlow", UniformType.UNIFORM_BUFFER).build())
+                //#elseif MC>=1_21_06
                 .withUniform("GalliumGuiGlow", UniformType.UNIFORM_BUFFER)
                 //#endif
                 .build();

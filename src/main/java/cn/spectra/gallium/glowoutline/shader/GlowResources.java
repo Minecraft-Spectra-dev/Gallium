@@ -49,6 +49,7 @@ public final class GlowResources {
             cn.spectra.gallium.glowoutline.shader.GuiImmediateGlowPipeline.class,
             cn.spectra.gallium.glowoutline.shader.GuiImmediateGlowTile.class,
             cn.spectra.gallium.glowoutline.capture.GlowCaptureManager.class,
+            cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.class,
         };
         for (Class<?> c : classes) {
             try { Class.forName(c.getName(), true, c.getClassLoader()); }

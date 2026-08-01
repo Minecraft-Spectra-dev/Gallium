@@ -142,13 +142,22 @@ public class Gallium implements ClientModInitializer {
 	}
 
 	private void reloadResourcePack(Minecraft client) {
+		//#if MC>=1_26_02
+		//$$ 	Screen previous = client.gui.screen();
+		//#else
 		Screen previous = client.screen;
+		//#endif
 		client.reloadResourcePacks().thenAcceptAsync(aVoid -> {
 			LOGGER.info("Resource pack reloaded.");
 			// Reopen the prior screen only if reload itself dismissed it. If the user navigated
 			// elsewhere meanwhile, leave their current screen alone.
+			//#if MC>=1_26_02
+			//$$ 		if (previous != null && client.gui.screen() == null) {
+			//$$ 			client.gui.setScreen(previous);
+			//#else
 			if (previous != null && client.screen == null) {
 				client.setScreen(previous);
+			//#endif
 			}
 		}, client).exceptionally(e -> {
 			LOGGER.error("Failed to reload resource packs", e);

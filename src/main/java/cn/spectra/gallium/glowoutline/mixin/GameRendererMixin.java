@@ -49,7 +49,11 @@ public class GameRendererMixin {
         if (IrisCompat.isShadowPass()) return;
         if (!ItemEffectsManager.isActive()) return;
 
+        //#if MC>=1_26_02
+        //$$ RenderTarget mainTarget = minecraft.gameRenderer.mainRenderTarget();
+        //#else
         RenderTarget mainTarget = minecraft.getMainRenderTarget();
+        //#endif
         if (mainTarget == null || mainTarget.getDepthTexture() == null) return;
 
         GlowCaptureManager.captureSceneDepth(mainTarget);
@@ -83,7 +87,11 @@ public class GameRendererMixin {
         if (!GlowOutlineConfig.isEnabled()) return;
         if (IrisCompat.isShadowPass()) return;
 
+        //#if MC>=1_26_02
+        //$$ RenderTarget mainTarget = minecraft.gameRenderer.mainRenderTarget();
+        //#else
         RenderTarget mainTarget = minecraft.getMainRenderTarget();
+        //#endif
         if (mainTarget == null || mainTarget.getColorTexture() == null) return;
         if (!GlowComposite.hasAnyValidCapture()) return;
 

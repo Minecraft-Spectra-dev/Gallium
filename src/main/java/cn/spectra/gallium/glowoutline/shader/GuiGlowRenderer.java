@@ -4,6 +4,9 @@ package cn.spectra.gallium.glowoutline.shader;
 import cn.spectra.gallium.glowoutline.capture.GuiGlowCapture;
 import cn.spectra.gallium.glowoutline.capture.GuiGlowCaptureManager;
 import com.mojang.blaze3d.pipeline.TextureTarget;
+//#if MC>=1_26_02
+//$$ import com.mojang.blaze3d.GpuFormat;
+//#endif
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 
@@ -29,7 +32,11 @@ public final class GuiGlowRenderer {
     public static TextureTarget ensureMaskTarget(int screenW, int screenH) {
         if (maskTarget == null || maskTarget.width != screenW || maskTarget.height != screenH) {
             if (maskTarget != null) maskTarget.destroyBuffers();
-            maskTarget = new TextureTarget("GuiGlowMask", screenW, screenH, false);
+            maskTarget = new TextureTarget("GuiGlowMask", screenW, screenH, false
+                    //#if MC>=1_26_02
+                    //$$ , GpuFormat.RGBA8_UNORM
+                    //#endif
+            );
         }
         return maskTarget;
     }
@@ -39,7 +46,11 @@ public final class GuiGlowRenderer {
         ensureMaskTarget(screenW, screenH);
 
         var encoder = RenderSystem.getDevice().createCommandEncoder();
+        //#if MC>=1_26_02
+        //$$ encoder.clearColorTexture(maskTarget.getColorTexture(), new org.joml.Vector4f(0.0F));
+        //#else
         encoder.clearColorTexture(maskTarget.getColorTexture(), 0);
+        //#endif
 
         GpuTexture maskTex = maskTarget.getColorTexture();
         int actualMaskW = maskTex.getWidth(0);

@@ -6,6 +6,9 @@ import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.function.BooleanSupplier;
+//#if MC>=1_26_02
+//$$ import com.mojang.blaze3d.systems.RenderSystem;
+//#endif
 import net.fabricmc.loader.api.FabricLoader;
 
 /**
@@ -133,6 +136,23 @@ public final class IrisCompat {
 
     public static boolean isShaderActive() {
         return IS_SHADER_ACTIVE.getAsBoolean();
+    }
+
+    /**
+     * Whether Iris has replaced Minecraft 26.2's native reverse-Z convention with its OpenGL
+     * forward-Z compatibility convention for the active shader pack.
+     *
+     * <p>Iris's UndoReverseZ mixins are disabled by its Vulkan plugin, so shader-pack activity
+     * alone is not sufficient. {@code isZZeroToOne()} distinguishes that backend from the OpenGL
+     * path where Iris restores the projection, comparison operators, and clear values together.
+     */
+    public static boolean usesForwardDepthCompatibility() {
+        //#if MC>=1_26_02
+        //$$ return isShaderActive()
+        //$$         && !RenderSystem.getDevice().getDeviceInfo().isZZeroToOne();
+        //#else
+        return false;
+        //#endif
     }
 
     public static boolean isShadowPass() {

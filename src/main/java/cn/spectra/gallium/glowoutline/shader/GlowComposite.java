@@ -8,6 +8,9 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 //#endif
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
+//#if MC>=1_26_02
+//$$ import com.mojang.blaze3d.GpuFormat;
+//#endif
 //#if MC>=1_21_05
 import com.mojang.blaze3d.systems.RenderPass;
 //#endif
@@ -30,7 +33,11 @@ import com.mojang.blaze3d.textures.AddressMode;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
 //#endif
+//#if MC>=1_26_02
+//$$ import java.util.Optional;
+//#else
 import java.util.OptionalInt;
+//#endif
 import net.minecraft.client.Minecraft;
 import org.jspecify.annotations.Nullable;
 
@@ -63,7 +70,11 @@ public final class GlowComposite {
 
         if (tempColorTarget == null || tempColorTarget.width != w || tempColorTarget.height != h) {
             if (tempColorTarget != null) tempColorTarget.destroyBuffers();
-            tempColorTarget = new TextureTarget("GlowColor", w, h, false);
+            tempColorTarget = new TextureTarget("GlowColor", w, h, false
+                    //#if MC>=1_26_02
+                    //$$ , GpuFormat.RGBA8_UNORM
+                    //#endif
+            );
             //#if MC<1_21_11
             //$$ // See GlowCaptureManager: 1.21.10 sampler completeness needs useMipmaps=false on
             //$$ // single-mip render targets. 1.21.11+ moved this off GpuTexture entirely.
@@ -148,6 +159,62 @@ public final class GlowComposite {
         com.mojang.blaze3d.textures.GpuTextureView sceneDepthView = selectSceneDepthView(state, mask, mainTarget);
         FilterMode maskFilter = maskScale < 1.0f ? FilterMode.LINEAR : FilterMode.NEAREST;
 
+        //#if MC>=1_26_02
+        //$$ // 26.2 reverse-Z compensation: pack shaders read depth as forward-Z (0=near, 1=far),
+        //$$ // but 26.2's renderer writes reverse-Z (1=near, 0=far). DepthFlipPipeline writes
+        //$$ // (1 - depth) into an R32F color attachment we own, then we bind THAT view (color,
+        //$$ // not depth) as MaskDepthSampler / SceneDepthSampler. The flips must complete before
+        //$$ // we open the composite RenderPass — each flip uses its own CommandEncoder.
+        //$$ com.mojang.blaze3d.textures.GpuTextureView sceneDepthViewToBind;
+        //$$ com.mojang.blaze3d.textures.GpuTextureView maskDepthViewToBind;
+        //$$ if (cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.isReady()) {
+        //$$     // 1) Mask depth: flip the captured mask depth into a per-state forward-Z target.
+        //$$     state.maskDepthForwardZTarget = cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline
+        //$$             .ensureForwardZTarget(state.maskDepthForwardZTarget,
+        //$$                     "GlowMaskDepthForwardZ_" + Integer.toHexString(System.identityHashCode(state)),
+        //$$                     mask.width, mask.height);
+        //$$     cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.flip(
+        //$$             mask.getDepthTextureView(), state.maskDepthForwardZTarget);
+        //$$     maskDepthViewToBind = state.maskDepthForwardZTarget.getColorTextureView();
+        //$$
+        //$$     // 2) Scene depth: flip the same source selectSceneDepthView picks. This matches
+        //$$     // 26.1 semantics exactly:
+        //$$     //   - first-person  → mask.depth (already flipped above; reuse view)
+        //$$     //   - Iris active   → pre-hand sceneDepthTarget mirror (captured before Iris
+        //$$     //                     overwrites mainTarget.depth in finalize)
+        //$$     //   - no-Iris world → mainTarget.depth at composite time (includes the held
+        //$$     //                     item, so world-glow items behind the player's hand are
+        //$$     //                     correctly occluded). The pre-hand sceneDepthTarget would
+        //$$     //                     LOSE that occlusion and is wrong here.
+        //$$     if (state.firstPerson) {
+        //$$         sceneDepthViewToBind = maskDepthViewToBind;
+        //$$     } else if (IrisCompat.isShaderActive()) {
+        //$$         TextureTarget flippedScene = cn.spectra.gallium.glowoutline.capture
+        //$$                 .GlowCaptureManager.getSceneDepthForwardZTarget();
+        //$$         sceneDepthViewToBind = (flippedScene != null && flippedScene.getColorTextureView() != null)
+        //$$                 ? flippedScene.getColorTextureView()
+        //$$                 : maskDepthViewToBind;
+        //$$     } else {
+        //$$         // Flip mainTarget.depth on the fly into a shared lazy forward-Z target.
+        //$$         TextureTarget liveScene = cn.spectra.gallium.glowoutline.capture
+        //$$                 .GlowCaptureManager.ensureLiveSceneDepthForwardZTarget(
+        //$$                         mainTarget.width, mainTarget.height);
+        //$$         if (liveScene != null && mainTarget.getDepthTextureView() != null) {
+        //$$             cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.flip(
+        //$$                     mainTarget.getDepthTextureView(), liveScene);
+        //$$             sceneDepthViewToBind = liveScene.getColorTextureView();
+        //$$         } else {
+        //$$             sceneDepthViewToBind = maskDepthViewToBind;
+        //$$         }
+        //$$     }
+        //$$ } else {
+        //$$     // Pipeline failed to compile — bind raw views as last resort (broken depth, but
+        //$$     // at least no crash). Diagnostic warning logged once at compile time.
+        //$$     maskDepthViewToBind = mask.getDepthTextureView();
+        //$$     sceneDepthViewToBind = sceneDepthView;
+        //$$ }
+        //#endif
+
         // Use ONE CommandEncoder for both the UBO write and the RenderPass so the
         // write is guaranteed to complete before the shader reads GlowUniforms,
         // even on deferred-backend drivers that reorder independent encoders.
@@ -158,21 +225,41 @@ public final class GlowComposite {
         uniformBuffer.writeToEncoder(encoder, GlowTime.worldSecondsFloat(), w, h,
                 maskScale, maskScale, state.config);
 
-        try (RenderPass pass = encoder.createRenderPass(() -> "Glow", mainTarget.getColorTextureView(), OptionalInt.empty())) {
+        try (RenderPass pass = encoder.createRenderPass(() -> "Glow", mainTarget.getColorTextureView(),
+                //#if MC>=1_26_02
+                //$$ Optional.empty()
+                //#else
+                OptionalInt.empty()
+                //#endif
+        )) {
             pass.setPipeline(pipeline);
             pass.setUniform("GlowUniforms", uniformBuffer.getSlice());
             SamplerHelper.bindClampToEdge(pass, "DiffuseSampler",
                     tempColorTarget.getColorTextureView(), FilterMode.LINEAR);
             SamplerHelper.bindClampToEdge(pass, "MaskSampler",
                     mask.getColorTextureView(), maskFilter);
+            //#if MC>=1_26_02
+            //$$ // 26.2: bind the forward-Z color views computed above as the depth samplers.
+            //$$ // From the GLSL side these are still `sampler2D` and read via `.r` — no shader
+            //$$ // change needed; the values are just forward-Z now instead of reverse-Z.
+            //$$ SamplerHelper.bindClampToEdge(pass, "MaskDepthSampler",
+            //$$         maskDepthViewToBind, FilterMode.NEAREST);
+            //$$ SamplerHelper.bindClampToEdge(pass, "SceneDepthSampler",
+            //$$         sceneDepthViewToBind, FilterMode.NEAREST);
+            //#else
             SamplerHelper.bindClampToEdge(pass, "MaskDepthSampler",
                     mask.getDepthTextureView(), FilterMode.NEAREST);
             SamplerHelper.bindClampToEdge(pass, "SceneDepthSampler",
                     sceneDepthView, FilterMode.NEAREST);
+            //#endif
             //#if MC<1_21_09
             //$$ pass.setVertexBuffer(0, RenderSystem.getQuadVertexBuffer());
             //#endif
+            //#if MC>=1_26_02
+            //$$ pass.draw(3, 1, 0, 0);
+            //#else
             pass.draw(0, 3);
+            //#endif
         }
     }
     //#elseif MC>=1_21_05

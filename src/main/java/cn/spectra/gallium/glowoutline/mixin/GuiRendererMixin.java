@@ -56,8 +56,12 @@ public class GuiRendererMixin {
             remap = false))
     private void galliumBindGlowUbo(@Coerce Object draw,
                                      RenderPass renderPass,
+                                     //#if MC>=1_26_02
+                                     //$$ // 26.2: executeDraw slimmed to (Draw, RenderPass); index buffer/type moved inside via executeInfo.
+                                     //#else
                                      GpuBuffer indexBuffer,
                                      VertexFormat.IndexType indexType,
+                                     //#endif
                                      CallbackInfo ci,
                                      // ordinal=0 pins to the first RenderPipeline local in executeDraw
                                      // (the one just bound on the line above). Future vanilla edits that
@@ -92,7 +96,12 @@ public class GuiRendererMixin {
     }
 
     @Inject(method = "render", at = @At("TAIL"))
+    //#if MC>=1_26_02
+    //$$ // 26.2: GuiRenderer.render() lost its GpuBufferSlice fogBuffer parameter.
+    //$$ private void galliumClear(CallbackInfo ci) {
+    //#else
     private void galliumClear(GpuBufferSlice fogBuffer, CallbackInfo ci) {
+    //#endif
         GuiGlowCaptureManager.clear();
     }
 }

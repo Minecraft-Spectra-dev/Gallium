@@ -13,7 +13,11 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
 import net.minecraft.client.renderer.entity.state.ArmedEntityRenderState;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
+//#if MC>=1_26_02
+//$$ import net.minecraft.world.entity.EntityTypes;
+//#else
 import net.minecraft.world.entity.EntityType;
+//#endif
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
@@ -37,7 +41,11 @@ public class ItemInHandLayerMixin {
                                        ArmedEntityRenderState state, ItemStackRenderState item,
                                        ItemStack itemStack, HumanoidArm arm, PoseStack ps,
                                        SubmitNodeCollector col, int l) {
+        //#if MC>=1_26_02
+        //$$ boolean isPlayer = state.entityType == EntityTypes.PLAYER;
+        //#else
         boolean isPlayer = state.entityType == EntityType.PLAYER;
+        //#endif
         GlowOutlineConfig.Toggle flag = isPlayer
                 ? GlowOutlineConfig.Toggle.THIRD_PERSON
                 : GlowOutlineConfig.Toggle.OTHER_ENTITIES;

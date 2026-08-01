@@ -14,6 +14,9 @@ import com.mojang.blaze3d.buffers.Std140Builder;
 //#endif
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
+//#if MC>=1_26_02
+//$$ import com.mojang.blaze3d.GpuFormat;
+//#endif
 import com.mojang.blaze3d.systems.RenderSystem;
 //#if MC>=1_21_05
 import com.mojang.blaze3d.textures.GpuTexture;
@@ -48,6 +51,21 @@ public final class GlowCaptureManager {
     private static int suppressDepth;
     private static boolean sceneDepthCaptured;
     private static @Nullable TextureTarget sceneDepthTarget;
+    //#if MC>=1_26_02
+    //$$ /** Forward-Z R32F mirror of {@link #sceneDepthTarget}'s reverse-Z depth, built each
+    //$$  *  frame by {@link cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline} after
+    //$$  *  scene-depth capture. Bound as {@code SceneDepthSampler} on the Iris path so pack
+    //$$  *  shaders see forward-Z values (pre-hand snapshot — Iris finalize would otherwise
+    //$$  *  overwrite mainTarget.depth before composite). */
+    //$$ private static @Nullable TextureTarget sceneDepthForwardZTarget;
+    //$$ /** Forward-Z R32F mirror of vanilla {@code mainTarget.depth} as it stands AT composite
+    //$$  *  time. Used on the no-Iris world path so held-item depth (written by
+    //$$  *  {@code renderItemInHand}) is part of the sceneDepth sampled by the glow shader —
+    //$$  *  this is what makes the player's hand correctly occlude glowing world items. Refreshed
+    //$$  *  via {@link #ensureLiveSceneDepthForwardZTarget} + an explicit flip in
+    //$$  *  {@link cn.spectra.gallium.glowoutline.shader.GlowComposite#drawGlow}. */
+    //$$ private static @Nullable TextureTarget liveSceneDepthForwardZTarget;
+    //#endif
     /** UBO holding our downscale-adjusted projection matrix when an Iris pack with internal
      *  scaling is active. Reused across captures within a frame; rewritten before each
      *  mask render. {@code null} until first use; disposed via the GlowResources hook.
@@ -109,7 +127,11 @@ public final class GlowCaptureManager {
         int w = mainTarget.width, h = mainTarget.height;
         if (sceneDepthTarget == null || sceneDepthTarget.width != w || sceneDepthTarget.height != h) {
             if (sceneDepthTarget != null) sceneDepthTarget.destroyBuffers();
-            sceneDepthTarget = new TextureTarget("GlowSceneDepth", w, h, true);
+            sceneDepthTarget = new TextureTarget("GlowSceneDepth", w, h, true
+                    //#if MC>=1_26_02
+                    //$$ , GpuFormat.RGBA8_UNORM
+                    //#endif
+            );
             //#if MC<1_21_11
             //#if MC>=1_21_06
             //$$ // Same sampler-completeness rationale as the mask depth target in
@@ -132,6 +154,18 @@ public final class GlowCaptureManager {
             }
         }
         sceneDepthCaptured = true;
+        //#if MC>=1_26_02
+        //$$ // 26.2 reverse-Z: flip the just-captured sceneDepth into a Gallium-owned R32F
+        //$$ // color target so the pack-author glow shader's SceneDepthSampler reads forward-Z
+        //$$ // values. We pre-allocate (or resize) the target here so renderCapturedNodes can
+        //$$ // skip allocation on the hot path; the flip writes (1 - reverseZdepth) per pixel.
+        //$$ sceneDepthForwardZTarget = cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline
+        //$$         .ensureForwardZTarget(sceneDepthForwardZTarget, "GlowSceneDepthForwardZ", w, h);
+        //$$ if (sceneDepthTarget.getDepthTextureView() != null) {
+        //$$     cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.flip(
+        //$$             sceneDepthTarget.getDepthTextureView(), sceneDepthForwardZTarget);
+        //$$ }
+        //#endif
         //#else
         //$$ if (sceneDepthCaptured) return;
         //$$ int w = mainTarget.width, h = mainTarget.height;
@@ -163,6 +197,24 @@ public final class GlowCaptureManager {
     public static @Nullable TextureTarget getSceneDepthTarget() {
         return sceneDepthTarget;
     }
+
+    //#if MC>=1_26_02
+    //$$ /** Forward-Z color target derived from {@link #sceneDepthTarget}. Bound as
+    //$$  *  {@code SceneDepthSampler} on 26.2 so pack shaders read forward-Z values. */
+    //$$ public static @Nullable TextureTarget getSceneDepthForwardZTarget() {
+    //$$     return sceneDepthForwardZTarget;
+    //$$ }
+    //$$
+    //$$ /** Lazily allocates or resizes the live-mainTarget forward-Z mirror. Caller is
+    //$$  *  responsible for invoking {@link cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline#flip}
+    //$$  *  to fill it each frame — this method only manages the texture's allocation. */
+    //$$ public static @Nullable TextureTarget ensureLiveSceneDepthForwardZTarget(int w, int h) {
+    //$$     liveSceneDepthForwardZTarget = cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline
+    //$$             .ensureForwardZTarget(liveSceneDepthForwardZTarget,
+    //$$                     "GlowLiveSceneDepthForwardZ", w, h);
+    //$$     return liveSceneDepthForwardZTarget;
+    //$$ }
+    //#endif
 
     public static boolean beginItemCapture(ItemStack stack) {
         return beginItemCapture(stack, false);
@@ -229,7 +281,11 @@ public final class GlowCaptureManager {
         // activeStates — allocateState() would skip it forever and beginFrame()
         // (which only iterates activeStates) would never reset it.
         Minecraft mc = Minecraft.getInstance();
+        //#if MC>=1_26_02
+        //$$ RenderTarget main = mc.gameRenderer.mainRenderTarget();
+        //#else
         RenderTarget main = mc.getMainRenderTarget();
+        //#endif
         if (main == null) return false;
 
         GlowCaptureState state = allocateState();
@@ -237,7 +293,11 @@ public final class GlowCaptureManager {
         state.firstPerson = firstPerson;
         state.config = cfg;
         if (state.capturedModelViewMatrix == null) state.capturedModelViewMatrix = new Matrix4f();
+        //#if MC>=1_26_02
+        //$$ state.capturedModelViewMatrix.set(RenderSystem.getModelViewMatrixCopy());
+        //#else
         state.capturedModelViewMatrix.set(RenderSystem.getModelViewMatrix());
+        //#endif
         state.capturedModelViewMatrixValid = true;
         //#if MC>=1_21_06
         // Snapshot via GpuBufferSlice for the deferred render pass (>=1.21.6 API).
@@ -257,7 +317,11 @@ public final class GlowCaptureManager {
             // for the lifetime of the JVM — survives pool shrinks where a recycled slot
             // index would otherwise collide with a freshly allocated state's name.
             state.maskTarget = new TextureTarget("GlowMask_" + Integer.toHexString(System.identityHashCode(state)),
-                    main.width, main.height, true);
+                    main.width, main.height, true
+                    //#if MC>=1_26_02
+                    //$$ , GpuFormat.RGBA8_UNORM
+                    //#endif
+            );
             //#if MC<1_21_11
             //#if MC>=1_21_06
             //$$ // 1.21.10's mask textures are mipLevels=1 but GpuTexture defaults
@@ -286,6 +350,28 @@ public final class GlowCaptureManager {
             sharedCaptureBuffers = new RenderBuffers(1);
         }
 
+        //#if MC>=1_26_02
+        //$$ // 26.2: FeatureRenderDispatcher no longer takes a SubmitNodeStorage/BufferSources —
+        //$$ // its ctor is (RenderBuffers, ModelManager, AtlasManager, Font, GameRenderState) and
+        //$$ // renderAllFeatures(SubmitNodeStorage) receives the storage per call. Each state owns
+        //$$ // its own captureStorage; renderAllFeatures drains it via drainPhases, so a reused
+        //$$ // state's storage is empty after the prior frame's render — re-instantiate defensively
+        //$$ // only in case a capture began but never rendered.
+        //$$ if (state.captureDispatcher == null) {
+        //$$     var accessor = (FeatureRenderDispatcherAccessor) mc.gameRenderer.featureRenderDispatcher();
+        //$$     var gameAccessor = (GameRendererAccessor) mc.gameRenderer;
+        //$$     state.captureDispatcher = new FeatureRenderDispatcher(
+        //$$             sharedCaptureBuffers,
+        //$$             mc.getModelManager(),
+        //$$             accessor.gallium$getAtlasManager(),
+        //$$             mc.font,
+        //$$             gameAccessor.gallium$getGameRenderState()
+        //$$     );
+        //$$     state.captureStorage = new SubmitNodeStorage();
+        //$$ } else {
+        //$$     state.captureStorage = new SubmitNodeStorage();
+        //$$ }
+        //#else
         if (state.captureDispatcher == null) {
             FeatureRenderDispatcher mainDispatcher = mc.gameRenderer.getFeatureRenderDispatcher();
             var accessor = (FeatureRenderDispatcherAccessor) mainDispatcher;
@@ -316,6 +402,7 @@ public final class GlowCaptureManager {
             state.captureDispatcher.getSubmitNodeStorage().clear();
         }
         //#endif
+        //#endif
 
         activeStates.add(state);
         currentCapture = state;
@@ -336,7 +423,11 @@ public final class GlowCaptureManager {
     public static @Nullable SubmitNodeStorage captureStorageForCurrent() {
         if (currentCapture == null || suppressDepth > 0) return null;
         if (currentCapture.captureDispatcher == null) return null;
+        //#if MC>=1_26_02
+        //$$ return currentCapture.captureStorage;
+        //#else
         return currentCapture.captureDispatcher.getSubmitNodeStorage();
+        //#endif
     }
     //#endif
 
@@ -345,17 +436,35 @@ public final class GlowCaptureManager {
         if (state.captureDispatcher == null || sharedCaptureBuffers == null || state.maskTarget == null) return;
 
         var encoder = RenderSystem.getDevice().createCommandEncoder();
+        //#if MC>=1_26_02
+        //$$ encoder.clearColorTexture(state.maskTarget.getColorTexture(), new org.joml.Vector4f(0.0F));
+        //#else
         encoder.clearColorTexture(state.maskTarget.getColorTexture(), 0);
+        //#endif
 
         if (state.firstPerson) {
+            //#if MC>=1_26_02
+            //$$ // 26.2 reverse-Z: 0.0 = far, 1.0 = near. Clear to far so no "implicit world"
+            //$$ // pixels appear closer than the captured item depth.
+            //$$ encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 0.0);
+            //#else
             encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 1.0);
+            //#endif
         } else if (!sceneDepthCaptured) {
+            //#if MC>=1_26_02
+            //$$ RenderTarget mainTarget = mc.gameRenderer.mainRenderTarget();
+            //#else
             RenderTarget mainTarget = mc.getMainRenderTarget();
+            //#endif
             encoder.copyTextureToTexture(
                     mainTarget.getDepthTexture(), state.maskTarget.getDepthTexture(),
                     0, 0, 0, 0, 0, mainTarget.width, mainTarget.height);
         } else if (IrisCompat.isShaderActive()) {
+            //#if MC>=1_26_02
+            //$$ encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 0.0);
+            //#else
             encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 1.0);
+            //#endif
         }
 
         var oldColor = RenderSystem.outputColorTextureOverride;
@@ -396,9 +505,16 @@ public final class GlowCaptureManager {
 
         var irisSnapshot = IrisCompat.setBypass(true);
         try {
+            //#if MC>=1_26_02
+            //$$ // 26.2: renderAllFeatures takes the storage per call and drains it internally
+            //$$ // (prepareFrame → drainPhases). RenderBuffers no longer exposes bufferSource/
+            //$$ // outlineBufferSource — the staged vertex buffer flush happens inside the frame.
+            //$$ state.captureDispatcher.renderAllFeatures(state.captureStorage);
+            //#else
             state.captureDispatcher.renderAllFeatures();
             sharedCaptureBuffers.bufferSource().endBatch();
             sharedCaptureBuffers.outlineBufferSource().endOutlineBatch();
+            //#endif
         } finally {
             IrisCompat.restoreBypass(irisSnapshot);
             if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
@@ -695,6 +811,12 @@ public final class GlowCaptureManager {
             state.maskTarget.destroyBuffers();
             state.maskTarget = null;
         }
+        //#if MC>=1_26_02
+        //$$ if (state.maskDepthForwardZTarget != null) {
+        //$$     state.maskDepthForwardZTarget.destroyBuffers();
+        //$$     state.maskDepthForwardZTarget = null;
+        //$$ }
+        //#endif
         //#if MC>=1_21_09
         state.captureDispatcher = null;
         // Shared RenderBuffers lives across all states — don't null it out or allocate per-state.
@@ -720,6 +842,16 @@ public final class GlowCaptureManager {
             sceneDepthTarget.destroyBuffers();
             sceneDepthTarget = null;
         }
+        //#if MC>=1_26_02
+        //$$ if (sceneDepthForwardZTarget != null) {
+        //$$     sceneDepthForwardZTarget.destroyBuffers();
+        //$$     sceneDepthForwardZTarget = null;
+        //$$ }
+        //$$ if (liveSceneDepthForwardZTarget != null) {
+        //$$     liveSceneDepthForwardZTarget.destroyBuffers();
+        //$$     liveSceneDepthForwardZTarget = null;
+        //$$ }
+        //#endif
         //#if MC>=1_21_06
         if (scaledProjectionBuffer != null) {
             scaledProjectionBuffer.close();

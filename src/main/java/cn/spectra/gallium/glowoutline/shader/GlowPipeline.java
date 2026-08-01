@@ -11,6 +11,10 @@ import com.mojang.blaze3d.pipeline.ColorTargetState;
 //$$ import com.mojang.blaze3d.platform.DepthTestFunction;
 //#endif
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+//#if MC>=1_26_02
+//$$ import com.mojang.blaze3d.pipeline.BindGroupLayout;
+//$$ import com.mojang.blaze3d.PrimitiveTopology;
+//#endif
 import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -126,6 +130,28 @@ public final class GlowPipeline {
     public static RenderPipeline getOrCreate(String shaderName) {
         if (shaderName.isEmpty()) return null;
         return REGISTRY.computeIfAbsent(shaderName, name -> {
+            //#if MC>=1_26_02
+            //$$ // 26.2: samplers/uniforms moved onto a BindGroupLayout attached to the pipeline,
+            //$$ // and VertexFormat.Mode became the top-level PrimitiveTopology enum. An
+            //$$ // attribute-less full-screen triangle pipeline is expressed by omitting
+            //$$ // withVertexBinding entirely (vanilla POST_PROCESSING_SNIPPET does the same).
+            //$$ RenderPipeline pipeline = RenderPipeline.builder()
+            //$$         .withLocation("pipeline/gallium_glow/" + name)
+            //$$         .withVertexShader(Identifier.fromNamespaceAndPath("gallium", "core/" + name))
+            //$$         .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", "core/" + name))
+            //$$         .withBindGroupLayout(BindGroupLayout.builder()
+            //$$                 .withSampler("DiffuseSampler")
+            //$$                 .withSampler("MaskSampler")
+            //$$                 .withSampler("MaskDepthSampler")
+            //$$                 .withSampler("SceneDepthSampler")
+            //$$                 .withUniform("GlowUniforms", UniformType.UNIFORM_BUFFER)
+            //$$                 .build())
+            //$$         .withColorTargetState(new ColorTargetState(BlendFunction.ADDITIVE))
+            //$$         .withCull(false)
+            //$$         .withDepthStencilState(Optional.empty())
+            //$$         .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
+            //$$         .build();
+            //#else
             RenderPipeline pipeline = RenderPipeline.builder()
                     .withLocation("pipeline/gallium_glow/" + name)
                     //#if MC>=1_21_09
@@ -160,6 +186,7 @@ public final class GlowPipeline {
                     //$$ .withVertexFormat(DefaultVertexFormat.BLIT_SCREEN, VertexFormat.Mode.TRIANGLES)
                     //#endif
                     .build();
+            //#endif
             Gallium.LOGGER.info("Created glow pipeline: {}", name);
             return pipeline;
         });

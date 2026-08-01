@@ -14,6 +14,9 @@ import net.minecraft.client.renderer.RenderBuffers;
 //#if MC>=1_21_09
 import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
 //#endif
+//#if MC>=1_26_02
+//$$ import net.minecraft.client.renderer.SubmitNodeStorage;
+//#endif
 import org.joml.Matrix4f;
 import org.jspecify.annotations.Nullable;
 
@@ -24,6 +27,16 @@ public final class GlowCaptureState {
     //#if MC>=1_21_09
     public @Nullable FeatureRenderDispatcher captureDispatcher;
     //#endif
+    //#if MC>=1_26_02
+    //$$ // 26.2: FeatureRenderDispatcher no longer owns a SubmitNodeStorage — renderAllFeatures
+    //$$ // takes it per call. Each capture state holds its own storage that the duplicating
+    //$$ // wrapper mirrors into and that renderAllFeatures drains via drainPhases.
+    //$$ public @Nullable SubmitNodeStorage captureStorage;
+    //$$ /** Forward-Z R32F color target holding {@code 1 - maskDepth} for native 26.2's
+    //$$  *  reverse-Z path. Iris 1.11.x shader packs already restore forward-Z and bind the raw
+    //$$  *  mask depth instead. Lazily allocated per state and resized with {@link #maskTarget}. */
+    //$$ public @Nullable TextureTarget maskDepthForwardZTarget;
+    //#endif
     // Pre-1.21.9 immediate-mode capture buffer. Retained across frames (its native buffers are
     // pooled like captureBuffers) and freed on release; see GlowCaptureManager.releaseState.
     //#if MC<1_21_09
@@ -32,6 +45,13 @@ public final class GlowCaptureState {
     public boolean capturedThisFrame;
     public boolean active;
     public boolean firstPerson;
+    /** True when this state's mask depth was pre-filled by DepthMinPoolPipeline (3x3
+     *  farthest-neighbour pool) in captureSceneDepth - i.e. the Iris world path with the pool
+     *  pipeline ready. The composite then binds MaskDepthSampler to the plain scene-depth view
+     *  (not the pooled mask.depth) so the glow shader's isOtherItem() doesn't see the pooled
+     *  (permissive) values, which would otherwise suppress every outline whose 3x3 neighbourhood
+     *  reaches a farther pixel (ground perspective, walls) - leaving glow only against flat sky. */
+    public boolean maskDepthPooled;
 
     public @Nullable ItemEffectConfig config;
 
@@ -65,6 +85,7 @@ public final class GlowCaptureState {
         capturedThisFrame = false;
         active = false;
         firstPerson = false;
+        maskDepthPooled = false;
         config = null;
         capturedModelViewMatrixValid = false;
         //#if MC>=1_21_06

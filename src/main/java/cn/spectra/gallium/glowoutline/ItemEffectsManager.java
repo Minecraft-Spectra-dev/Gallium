@@ -142,6 +142,17 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
         for (ItemEffectConfig cfg : liveConfigs) {
             GuiGlowElementPipeline.getOrCreate(cfg);
         }
+        //#if MC>=1_26_02
+        //$$ // 26.2: pre-compile the reverse-Z depth-flip pipeline so it's ready before the
+        //$$ // first glow composite. GpuDevice is available here (we're inside a resource
+        //$$ // reload, well after client init). Pack shaders assume forward-Z depth; this
+        //$$ // pipeline lets Gallium feed them forward-Z values without touching pack GLSL.
+        //$$ cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.precompile();
+        //#endif
+        // Pre-compile the TAA-jitter depth-pool pipeline used by captureSceneDepth's mask-depth
+        // pre-fill (active on 26.1 and 26.2's Iris/OpenGL forward-Z path; a no-op stub on older
+        // versions). GpuDevice is available here (resource reload, well after client init).
+        cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.precompile();
         GlowPipeline.retainOnly(shaders);
         //#if MC<1_21_06
         //$$ // 1.21.5 also has a per-config pipeline cache (statically declares per-param
