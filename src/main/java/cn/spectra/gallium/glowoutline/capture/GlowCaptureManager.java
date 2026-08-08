@@ -86,10 +86,20 @@ public final class GlowCaptureManager {
      *  scratch matrix avoids two {@code Matrix4f} allocations per mask render. */
     private static final Matrix4f SCRATCH_SCALED_PROJECTION = new Matrix4f();
 
-    /** Small forward-Z clip-space bias used by shader-pack replay on versions where the
-     *  farthest-neighbour depth pool is unavailable. It absorbs sub-pixel projection jitter
-     *  while keeping the 26.x paths unbiased. */
-    private static final float IRIS_TAA_Z_BIAS = 0.001f;
+    /** Forward-Z clip-space bias used by shader-pack replay on 1.21.5 and older, where the
+     *  farthest-neighbour depth pool cannot use the 1.21.6+ {@code GpuTextureView} API. It absorbs
+     *  sub-pixel projection jitter.
+     *  Applied depth-adaptively (see {@link #computeScaledProjection}): full pull near the
+     *  camera, tapering to (near) zero at the far plane so distance occlusion isn't broken.
+     *
+     *  <p>The magnitude is tuned to the physical jitter: a sub-pixel projection shift maps to an
+     *  NDC-depth error of {@code ~2n·θ/z}, which peaks at {@code ~2θ ≈ 0.003} at the near plane
+     *  (for a 1080p window, θ ≈ half-fov pixel ≈ 0.0013). The taper {@code zBias·(1-NDC.z)} is
+     *  proportional to {@code 1/z}, so a constant of {@code 0.003} keeps the LEQUAL margin above
+     *  the jitter at every distance — while the far-field bias it implies is only {@code ~1e-6}
+     *  (thousands of times below the constant {@code 0.001} that caused the x-ray), so distance
+     *  occlusion stays intact. The 1.21.6+ paths stay unbiased (they use the depth pool instead). */
+    private static final float IRIS_TAA_Z_BIAS = 0.003f;
 
     static {
         cn.spectra.gallium.glowoutline.shader.GlowResources.register(GlowCaptureManager::clearAll);
@@ -183,13 +193,12 @@ public final class GlowCaptureManager {
         //$$ }
         //#elseif MC>=1_26_00
         // 26.1: when Iris shaders are active, route the pre-fill through DepthMinPoolPipeline so
-        // the mask depth carries the 3x3 farthest-neighbour (MAX) of the (TAA-jittered) scene
-        // depth instead of the raw jittered depth. The composite-time replay runs under bypass
-        // (vanilla vsh, un-jittered), so without this pool LEQUAL fails inconsistently at
-        // silhouette boundary pixels and the mask color shimmers ("outline waves like water").
+        // the mask depth carries the 3x3 farthest-neighbour (MAX) of the jittered scene depth.
+        // Shader-pack custom-uniform names and coordinate transforms are not standardized, so
+        // Gallium deliberately does not infer an "exact" jitter transform from variable presence.
         // The pool reads sceneDepthTarget (already a copy of srcDepth above) to avoid a
-        // read-from-and-write-to mask.depth hazard. Falls back to a plain copy when the pool
-        // pipeline failed to compile or no shaders are active (no jitter to compensate).
+        // read-from-and-write-to mask.depth hazard. It falls back to a plain copy when the pool
+        // pipeline failed to compile or no shaders are active.
         boolean useDepthPool = IrisCompat.isShaderActive()
                 && cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.isReady();
         GpuTexture pooledDepth = null;
@@ -219,13 +228,48 @@ public final class GlowCaptureManager {
             }
         }
         //#else
-        //$$ // 1.21.x: no DepthMinPoolPipeline (DepthTestFunction lacks ALWAYS); plain copy, with
-        //$$ // the z-bias backstop in renderCapturedNodes handling TAA jitter (less perfectly).
+        //#if MC>=1_21_06
+        //$$ // 1.21.6-1.21.11 use the same MAX-pool strategy as 26.1. Their pipeline API has
+        //$$ // no ALWAYS depth function, so DepthMinPoolPipeline clears the destination to 1.0
+        //$$ // and writes through LEQUAL instead. The result is equivalent for normalized
+        //$$ // forward-Z depth and removes the need for projection z-bias.
+        //$$ boolean useDepthPool = IrisCompat.isShaderActive()
+        //$$         && cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.isReady();
+        //$$ GpuTexture pooledDepth = null;
         //$$ for (GlowCaptureState state : activeStates) {
-        //$$     if (state.maskTarget != null) {
-        //$$         encoder.copyTextureToTexture(srcDepth, state.maskTarget.getDepthTexture(), 0, 0, 0, 0, 0, w, h);
+        //$$     if (state.maskTarget != null && !state.firstPerson) {
+        //$$         if (useDepthPool) {
+        //$$             if (pooledDepth == null) {
+        //$$                 if (cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.pool(
+        //$$                         encoder,
+        //$$                         sceneDepthTarget.getDepthTextureView(),
+        //$$                         state.maskTarget.getColorTextureView(),
+        //$$                         state.maskTarget.getDepthTextureView())) {
+        //$$                     pooledDepth = state.maskTarget.getDepthTexture();
+        //$$                     state.maskDepthPooled = true;
+        //$$                     continue;
+        //$$                 }
+        //$$                 useDepthPool = false;
+        //$$             } else {
+        //$$                 encoder.copyTextureToTexture(pooledDepth, state.maskTarget.getDepthTexture(),
+        //$$                         0, 0, 0, 0, 0, w, h);
+        //$$                 state.maskDepthPooled = true;
+        //$$                 continue;
+        //$$             }
+        //$$         }
+        //$$         encoder.copyTextureToTexture(srcDepth, state.maskTarget.getDepthTexture(),
+        //$$                 0, 0, 0, 0, 0, w, h);
         //$$     }
         //$$ }
+        //#else
+        //$$ // 1.21.5 has no GpuTextureView-based pool pass; retain its plain-copy fallback.
+        //$$ for (GlowCaptureState state : activeStates) {
+        //$$     if (state.maskTarget != null) {
+        //$$         encoder.copyTextureToTexture(srcDepth, state.maskTarget.getDepthTexture(),
+        //$$                 0, 0, 0, 0, 0, w, h);
+        //$$     }
+        //$$ }
+        //#endif
         //#endif
         sceneDepthCaptured = true;
         //#else
@@ -531,23 +575,20 @@ public final class GlowCaptureManager {
         //      (Kappa ResolutionScale, iterationRP FSR2_SCALE, etc.) — pre-multiplies xy by
         //      `scale` so the mask rasterizes into the same [0, scale]² subrect that the pack
         //      writes its world output into.
-        //   2. On 1.21.x versions where DepthMinPoolPipeline isn't active, a small clip-space
-        //      z-bias pulls replayed geometry toward the camera so LEQUAL tolerates sub-pixel
-        //      shader-pack jitter. Both 26.1 and 26.2's Iris/OpenGL path use the pool instead.
+        //   2. Shader-pack TAA remains outside the replay projection. The bounded scene-depth
+        //      pool compensates for that sub-pixel mismatch without guessing pack-specific
+        //      uniform names or whether jitter happens before/after internal scaling.
         GpuBufferSlice maskProjectionSlice = state.capturedProjectionMatrix;
         float maskScale = 1.0f;
         boolean shadersActive = IrisCompat.isShaderActive();
         boolean needScale = shadersActive && IrisCompat.getShaderInternalScale() < 0.999f;
-        //#if MC>=1_26_00
-        // 26.1 and 26.2's Iris/OpenGL forward-Z path use the depth pool; keep both unbiased.
+        // 1.21.6+ has the depth-pool fallback. Keep it unbiased when the pool cannot be
+        // dispatched: a little shimmer is preferable to reopening the old far-distance x-ray.
         float zBias = 0.0f;
-        //#else
-        //$$ // 1.21.6-1.21.11: DepthMinPoolPipeline is a stub; retain the small bias backstop.
-        //$$ float zBias = shadersActive ? IRIS_TAA_Z_BIAS : 0.0f;
-        //#endif
         if (state.capturedProjectionMatrix4fValid && (needScale || zBias != 0.0f)) {
             float scale = needScale ? IrisCompat.getShaderInternalScale() : 1.0f;
-            GpuBufferSlice scaled = uploadScaledProjection(state.capturedProjectionMatrix4f, scale, zBias);
+            GpuBufferSlice scaled = uploadScaledProjection(
+                    state.capturedProjectionMatrix4f, scale, zBias);
             if (scaled != null) {
                 maskProjectionSlice = scaled;
                 maskScale = scale;
@@ -617,10 +658,13 @@ public final class GlowCaptureManager {
         //$$ float maskScale = 1.0f;
         //$$ boolean shadersActive = IrisCompat.isShaderActive();
         //$$ boolean needScale = shadersActive && IrisCompat.getShaderInternalScale() < 0.999f;
-        //$$ if (state.capturedProjectionMatrix4fValid && (needScale || shadersActive)) {
+        //$$ // 1.21.6+ keeps the replay unbiased when the pool is unavailable; this preserves
+        //$$ // exact wall occlusion and lets the raw-depth fallback degrade only to shimmer.
+        //$$ float zBias = 0.0f;
+        //$$ if (state.capturedProjectionMatrix4fValid && (needScale || zBias != 0.0f)) {
         //$$     float scale = needScale ? IrisCompat.getShaderInternalScale() : 1.0f;
-        //$$     float zBias = shadersActive ? IRIS_TAA_Z_BIAS : 0.0f;
-        //$$     GpuBufferSlice scaled = uploadScaledProjection(state.capturedProjectionMatrix4f, scale, zBias);
+        //$$     GpuBufferSlice scaled = uploadScaledProjection(
+        //$$             state.capturedProjectionMatrix4f, scale, zBias);
         //$$     if (scaled != null) {
         //$$         maskProjectionSlice = scaled;
         //$$         maskScale = scale;
@@ -701,9 +745,10 @@ public final class GlowCaptureManager {
         //$$ Matrix4f maskProjection = state.capturedProjectionMatrix4f;
         //$$ boolean shadersActive = IrisCompat.isShaderActive();
         //$$ boolean needScale = shadersActive && IrisCompat.getShaderInternalScale() < 0.999f;
-        //$$ if (state.capturedProjectionMatrix4fValid && (needScale || shadersActive)) {
-        //$$     float scale = needScale ? IrisCompat.getShaderInternalScale() : 1.0f;
-        //$$     float zBias = shadersActive ? IRIS_TAA_Z_BIAS : 0.0f;
+        //$$ float scale = needScale ? IrisCompat.getShaderInternalScale() : 1.0f;
+        //$$ float zBias = shadersActive && !state.firstPerson
+        //$$         ? IRIS_TAA_Z_BIAS : 0.0f;
+        //$$ if (state.capturedProjectionMatrix4fValid && (needScale || zBias != 0.0f)) {
         //$$     maskProjection = computeScaledProjection(state.capturedProjectionMatrix4f,
         //$$             scale, zBias, SCRATCH_SCALED_PROJECTION);
         //$$     maskScale = scale;
@@ -765,9 +810,10 @@ public final class GlowCaptureManager {
         //$$ Matrix4f maskProjection = state.capturedProjectionMatrix4f;
         //$$ boolean shadersActive = IrisCompat.isShaderActive();
         //$$ boolean needScale = shadersActive && IrisCompat.getShaderInternalScale() < 0.999f;
-        //$$ if (state.capturedProjectionMatrix4fValid && (needScale || shadersActive)) {
-        //$$     float scale = needScale ? IrisCompat.getShaderInternalScale() : 1.0f;
-        //$$     float zBias = shadersActive ? IRIS_TAA_Z_BIAS : 0.0f;
+        //$$ float scale = needScale ? IrisCompat.getShaderInternalScale() : 1.0f;
+        //$$ float zBias = shadersActive && !state.firstPerson
+        //$$         ? IRIS_TAA_Z_BIAS : 0.0f;
+        //$$ if (state.capturedProjectionMatrix4fValid && (needScale || zBias != 0.0f)) {
         //$$     maskProjection = computeScaledProjection(state.capturedProjectionMatrix4f,
         //$$             scale, zBias, SCRATCH_SCALED_PROJECTION);
         //$$     maskScale = scale;
@@ -824,7 +870,8 @@ public final class GlowCaptureManager {
      * Returns a slice into a reused buffer; the contents are valid until the next call.
      */
     //#if MC>=1_21_06
-    private static @Nullable GpuBufferSlice uploadScaledProjection(Matrix4f baseProjection, float scale, float zBias) {
+    private static @Nullable GpuBufferSlice uploadScaledProjection(
+            Matrix4f baseProjection, float scale, float zBias) {
         if (scaledProjectionBuffer == null) {
             scaledProjectionBuffer = RenderSystem.getDevice().createBuffer(
                     () -> "Glow Scaled Projection",
@@ -834,7 +881,8 @@ public final class GlowCaptureManager {
             // Passing `0` (a literal int) is accepted by both signatures via implicit widening.
             scaledProjectionSlice = scaledProjectionBuffer.slice(0, RenderSystem.PROJECTION_MATRIX_UBO_SIZE);
         }
-        Matrix4f result = computeScaledProjection(baseProjection, scale, zBias, SCRATCH_SCALED_PROJECTION);
+        Matrix4f result = computeScaledProjection(
+                baseProjection, scale, zBias, SCRATCH_SCALED_PROJECTION);
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
             ByteBuffer data = Std140Builder.onStack(stack, RenderSystem.PROJECTION_MATRIX_UBO_SIZE)
@@ -850,22 +898,34 @@ public final class GlowCaptureManager {
      * <ul>
      *   <li>{@code VertexDownscaling}: {@code xy *= scale; xy += t * w} (with {@code t = -(1 - scale)}),
      *       producing the {@code [0, scale]²} subrect Iris packs paint into.</li>
-     *   <li>Clip-space z-bias: {@code z -= zBias * w} (after divide: NDC.z shifts by -zBias).
-     *       Positive {@code zBias} pulls geometry toward camera in forward-Z.</li>
+     *   <li>Depth-adaptive clip-space z-bias: {@code NDC.z' = (1 + zBias) * NDC.z - zBias}.
+     *       Positive {@code zBias} pulls geometry toward the camera in forward-Z, but the pull is
+     *       strongest at the near plane ({@code NDC.z = 0} -> shift {@code -zBias}) and tapers to
+     *       zero at the far plane ({@code NDC.z = 1} -> no shift).</li>
      * </ul>
-     * Using the full 4x4 form keeps us robust against non-standard projection matrices.
+     * The bias must be depth-adaptive because sub-pixel TAA jitter maps to an NDC-depth error of
+     * {@code ~2n·θ/z}: large on near geometry, negligible at the far plane. A <em>constant</em>
+     * NDC bias therefore over-pulls far geometry by the same amount it needs near, letting an item
+     * sitting just behind a wall at distance win the replay's LEQUAL and draw an x-ray outline
+     * through the wall. Tapering the pull to zero at the far plane keeps the near silhouette stable
+     * (LEQUAL tolerates jitter) while restoring correct occlusion at distance.
+     *
+     * <p>Using the full 4x4 form keeps us robust against non-standard projection matrices.
      * Exposed package-private for tests.
      */
-    static Matrix4f computeScaledProjection(Matrix4f baseProjection, float scale, float zBias, Matrix4f dest) {
+    static Matrix4f computeScaledProjection(
+            Matrix4f baseProjection, float scale, float zBias, Matrix4f dest) {
         float t = -(1.0f - scale);
         // S * baseProjection. JOML stores column-major, so the constructor below lists columns.
-        // Layout reads as a transform with diag(scale, scale, 1, 1), translation (t, t, -zBias)
-        // applied after the perspective basis — equivalent to xy *= scale; xy += t * w; z -= zBias * w.
+        // Layout reads as a transform with diag(scale, scale, 1+zBias, 1), translation
+        // (t, t, -zBias) applied after the perspective basis — equivalent to
+        // xy *= scale; xy += t * w;
+        // z' = (1+zBias) * z - zBias * w  =>  NDC.z' = (1+zBias) * NDC.z - zBias.
         dest.set(
-                scale, 0,     0,      0,
-                0,     scale, 0,      0,
-                0,     0,     1,      0,
-                t,     t,     -zBias, 1);
+                scale, 0,      0,       0,
+                0,     scale,  0,       0,
+                0,     0,      (1 + zBias), 0,
+                t,     t,      -zBias,  1);
         return dest.mul(baseProjection);
     }
 

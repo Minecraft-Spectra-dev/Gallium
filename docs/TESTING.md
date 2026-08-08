@@ -1,9 +1,9 @@
 # Gallium 游戏内渲染测试清单
 
-> 适用版本：Minecraft 1.21.10、1.21.11、26.1.2 + Fabric Loader 0.18.4+
+> 适用版本：Minecraft 1.21.1、1.21.3、1.21.4、1.21.5、1.21.8、1.21.10、1.21.11、26.1.2、26.2 + Fabric Loader
 > 必备依赖：Fabric API、Sodium、Gallium
 >
-> 涉及 capture / mixin / pipeline / GUI 渲染的改动，应在**全部三个激活版本**上重跑相关章节（B/C GUI glow、D Iris 深度策略、G Iris/Sodium 组合）。各版本的 API 形态差异较大（sampler 状态、深度测试、GUI 图集路径），逐版本验证是必要的。
+> 涉及 capture / mixin / pipeline / GUI 渲染的改动，应在**全部受影响版本**上重跑相关章节（B/C GUI glow、D Iris 深度策略、G Iris/Sodium 组合）。各版本的 API 形态差异较大（sampler 状态、深度测试、GUI 图集路径），逐版本验证是必要的。
 >
 > 版本差异提示：1.21.10 搭配的 Sodium 0.7.3 早于 config API，因此**该版本没有 Sodium 配置 UI**——唯一可达的用户控制是未绑定的资源包重载键位（或 F3+T）。1.21.11+ 才有 Sodium 设置页。
 
@@ -89,10 +89,15 @@
 
 ### D-6 Iris shader 路径下的遮挡
 
-- [ ] 启用 shader pack 后，世界空间遮挡仍然成立（`GlowCaptureManager.captureSceneDepth` 在主深度被 clearDepthTexture 清掉前提前抓取；同一时刻把这份世界深度也复制到所有 active 状态的 mask depth，避免 `isOtherItem` 比较时把整张描边压成 0）。
+- [ ] 启用 shader pack 后，世界空间遮挡仍然成立（`GlowCaptureManager.captureSceneDepth` 在主深度被 clearDepthTexture 清掉前提前抓取；1.21.6+ 的 forward-Z Iris 路径将其做 3x3 最远值池化后写入 world mask depth，旧版本保留原始深度复制与自适应 bias 回退）。
 - [ ] Iris 阴影 pass 期间**不出现**任何发光（`IrisCompat.isShadowPass()` 应令所有 mixin 短路）。
 - [ ] 切换不同 shader pack 后遮挡仍正确，不出现穿墙描边。
+- [ ] 对带 TAA / 超分辨率的 shader pack，分别在 TAA **开/关**、相机**静止/移动**时观察半遮挡物品：描边轮廓不应随帧产生水波状抖动或断续闪烁。1.21.6+ 使用 3x3 scene-depth 最远值池化，使未抖动的 mask 回放在 TAA 深度的子像素邻域内保持稳定；这不是固定 Z 偏移。
+- [ ] **远距离**和**贴墙**两组场景中，物品被墙/地形遮挡后其描边不应穿过遮挡物。重点看物体刚进入或离开墙边的一像素邻域：池化只为抵消 TAA 的子像素位移，不能演变为持续的穿墙描边。
+- [ ] 将发光物品放在斜坡、地面与天空交界处，旋转相机并改变视距：描边既不整体消失（"仅地平线可见"），也不出现随镜头移动的波纹。
 - [ ] 物品发光放在地面（开启光影），描边应正常出现而非整体消失（这一旧 bug 由“Iris 路径下 mask depth 被清成 far → `step(scene, far) = 1` → `isOtherItem` 全屏命中”引起，已修复为始终复制世界深度到 mask depth）。
+
+> 实现约束：Gallium 不通过反射猜测 `taaJitter`、`taaOffset`、`TAAJitter` 等自定义 uniform。名称存在不代表当前 pass 启用了 TAA，且不同光影包会在内部缩放前后以不同顺序应用偏移。未来若增加精确 jitter 回放，只能由 `shaderpacks/<pack>/gallium.json` 显式声明 uniform、启用条件和坐标变换；通用回退继续使用有界深度池化。
 
 ---
 

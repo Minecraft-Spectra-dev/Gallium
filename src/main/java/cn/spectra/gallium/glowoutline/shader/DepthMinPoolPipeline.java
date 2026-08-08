@@ -1,10 +1,14 @@
 package cn.spectra.gallium.glowoutline.shader;
 
-//#if MC>=1_26_00
+//#if MC>=1_21_06
 import cn.spectra.gallium.Gallium;
+//#if MC>=1_26_00
 import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.pipeline.ColorTargetState;
 import com.mojang.blaze3d.pipeline.DepthStencilState;
+//#else
+//$$ import com.mojang.blaze3d.platform.DepthTestFunction;
+//#endif
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 //#if MC>=1_26_02
 //$$ import com.mojang.blaze3d.GpuFormat;
@@ -21,25 +25,29 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 //#endif
+//#if MC>=1_26_00
 import java.util.Optional;
+//#endif
 import java.util.OptionalDouble;
 //#if MC<1_26_02
 import java.util.OptionalInt;
 //#endif
+//#if MC>=1_21_11
 import net.minecraft.resources.Identifier;
+//#else
+//$$ import net.minecraft.resources.ResourceLocation;
+//#endif
 import org.jspecify.annotations.Nullable;
 //#endif
 
 /**
  * TAA-jitter compensation for the world-glow mask-depth pre-fill on Iris.
  *
- * <p>Problem: the composite-time mask replay runs
- * under {@code IrisCompat.setBypass(true)} (vanilla shaders) so it reliably writes to the mask, but
- * the pack author's gbuffer vsh applied {@code TemporalJitterProjPos} to the <em>scene</em> depth
- * we pre-fill the mask with. At silhouette boundary pixels that jitter makes the pre-filled mask
- * depth flip between item-z and neighbouring world-z across frames, so the replay's un-jittered
- * {@code itemDepth} PASS/FAILs LEQUAL inconsistently and the mask <em>color</em> shimmers ->
- * outline "waves like water".
+ * <p>Problem: the composite-time mask replay runs under {@code IrisCompat.setBypass(true)}
+ * (vanilla shaders) so it reliably writes to the mask, while the active shader pack may apply a
+ * temporal projection offset to the <em>scene</em> depth we pre-fill the mask with. At silhouette
+ * boundary pixels that mismatch makes the replay's un-jittered {@code itemDepth} PASS/FAIL
+ * LEQUAL inconsistently, so the mask <em>color</em> shimmers -> outline "waves like water".
  *
  * <p>Fix: instead of {@code copyTextureToTexture(sceneDepth -> mask.depth)} (which copies the
  * jittered depth verbatim), run this full-screen pass that samples {@code sceneDepth} over a 3x3
@@ -50,17 +58,24 @@ import org.jspecify.annotations.Nullable;
  * preserved because items significantly behind a wall still fail LEQUAL against the wall's pooled
  * depth. No z-bias is needed (z-bias breaks wall-occlusion at the exact NDC-z border).
  *
- * <p>The pipeline declares {@code depth-test=ALWAYS_PASS + writeDepth=true + color WRITE_NONE}.
- * The color attachment is a dummy ({@code mask.colorView}) only to satisfy {@code createRenderPass}'s
- * color-view contract - nothing is written to it (WRITE_NONE, no clear). Reading from
+ * <p>On 26.x the pipeline declares {@code depth-test=ALWAYS_PASS + writeDepth=true}; on
+ * 1.21.6-1.21.11, whose pipeline enum has no ALWAYS value, the render pass clears the destination
+ * depth to forward-Z far ({@code 1.0}) and uses {@code LEQUAL + writeDepth}. Every pooled value is
+ * in {@code [0,1]}, so every full-screen fragment still passes. The color attachment is a dummy
+ * ({@code mask.colorView}) only to satisfy {@code createRenderPass}'s color-view contract - nothing
+ * is written to it (color writes disabled, no clear). Reading from
  * {@code sceneDepthTarget} (already a copy of {@code srcDepth}) avoids a read-from-and-write-to
  * {@code mask.depth} hazard on the same texture. Capture runs this pass once, then copies the
  * resulting depth texture to the remaining masks so the cost does not scale with item count.
  *
  * <h2>Version scope</h2>
- * Active on 26.1 and on 26.2's Iris/OpenGL forward-Z compatibility path. Both use MAX + LEQUAL;
- * native 26.2 reverse-Z and Vulkan skip the pool. 1.21.6-1.21.11 are stubs because
- * {@code DepthTestFunction} has no ALWAYS and {@code NO_DEPTH_TEST} disables depth writes.
+ * Active on 1.21.6-1.21.11, 26.1, and 26.2's Iris/OpenGL forward-Z compatibility path. All use
+ * MAX-pooled forward-Z depth for the replay's LEQUAL test; native 26.2 reverse-Z and Vulkan skip
+ * the pool.
+ *
+ * <p>Gallium deliberately does not infer an exact offset from shader-pack custom-uniform names.
+ * Their names, enable conditions, and placement relative to internal-resolution scaling are not
+ * standardized; variable presence alone is therefore not enough to reproduce the pack transform.
  */
 //#if MC>=1_26_02
 //$$ public final class DepthMinPoolPipeline {
@@ -70,11 +85,8 @@ import org.jspecify.annotations.Nullable;
 //$$     private static final String VERTEX_SHADER = """
 //$$             #version 450
 //$$
-//$$             out vec2 v_uv;
-//$$
 //$$             void main() {
 //$$                 vec2 p = vec2((gl_VertexID & 1) << 2, (gl_VertexID & 2) << 1);
-//$$                 v_uv = p * 0.5;
 //$$                 gl_Position = vec4(p - 1.0, 0.0, 1.0);
 //$$             }
 //$$             """;
@@ -86,15 +98,16 @@ import org.jspecify.annotations.Nullable;
 //$$
 //$$             uniform sampler2D Source;
 //$$
-//$$             in vec2 v_uv;
 //$$             out vec4 fragColor;
 //$$
 //$$             void main() {
-//$$                 vec2 ts = 1.0 / vec2(textureSize(Source, 0));
-//$$                 float m = texture(Source, v_uv).r;
+//$$                 ivec2 size = textureSize(Source, 0);
+//$$                 ivec2 pixel = clamp(ivec2(gl_FragCoord.xy), ivec2(0), size - 1);
+//$$                 float m = 0.0;
 //$$                 for (int y = -1; y <= 1; y++) {
 //$$                     for (int x = -1; x <= 1; x++) {
-//$$                         m = max(m, texture(Source, v_uv + vec2(x, y) * ts).r);
+//$$                         ivec2 samplePixel = clamp(pixel + ivec2(x, y), ivec2(0), size - 1);
+//$$                         m = max(m, texelFetch(Source, samplePixel, 0).r);
 //$$                     }
 //$$                 }
 //$$                 gl_FragDepth = m;
@@ -162,14 +175,22 @@ import org.jspecify.annotations.Nullable;
 //$$             return false;
 //$$         }
 //$$
-//$$         try (RenderPass pass = encoder.createRenderPass(
-//$$                 () -> "Gallium DepthMinPool", destColorView, Optional.empty(),
-//$$                 destDepthView, OptionalDouble.empty())) {
-//$$             pass.setPipeline(pipeline);
-//$$             SamplerHelper.bindClampToEdge(pass, "Source", srcDepthView, FilterMode.NEAREST);
-//$$             pass.draw(3, 1, 0, 0);
+//$$         try {
+//$$             try (RenderPass pass = encoder.createRenderPass(
+//$$                     () -> "Gallium DepthMinPool", destColorView, Optional.empty(),
+//$$                     destDepthView, OptionalDouble.empty())) {
+//$$                 pass.setPipeline(pipeline);
+//$$                 SamplerHelper.bindClampToEdge(pass, "Source", srcDepthView, FilterMode.NEAREST);
+//$$                 pass.draw(3, 1, 0, 0);
+//$$             }
+//$$             return true;
+//$$         } catch (RuntimeException e) {
+//$$             Gallium.LOGGER.error(
+//$$                     "Depth-min-pool dispatch failed; falling back to raw scene depth", e);
+//$$             pipeline = null;
+//$$             ready = false;
+//$$             return false;
 //$$         }
-//$$         return true;
 //$$     }
 //$$
 //$$     private static void dispose() {
@@ -188,12 +209,9 @@ public final class DepthMinPoolPipeline {
     private static final String VERTEX_SHADER = """
             #version 450
 
-            out vec2 v_uv;
-
             void main() {
-                // gl_VertexID -> (0,0), (2,0), (0,2) corners; clip-space (-1,-1)..(3,-1)..(-1,3).
+                // gl_VertexID -> clip-space (-1,-1), (3,-1), (-1,3).
                 vec2 p = vec2((gl_VertexID & 1) << 2, (gl_VertexID & 2) << 1);
-                v_uv = p * 0.5;
                 gl_Position = vec4(p - 1.0, 0.0, 1.0);
             }
             """;
@@ -205,15 +223,16 @@ public final class DepthMinPoolPipeline {
 
             uniform sampler2D Source;
 
-            in vec2 v_uv;
             out vec4 fragColor;
 
             void main() {
-                vec2 ts = 1.0 / vec2(textureSize(Source, 0));
-                float m = texture(Source, v_uv).r;
+                ivec2 size = textureSize(Source, 0);
+                ivec2 pixel = clamp(ivec2(gl_FragCoord.xy), ivec2(0), size - 1);
+                float m = 0.0;
                 for (int y = -1; y <= 1; y++) {
                     for (int x = -1; x <= 1; x++) {
-                        m = max(m, texture(Source, v_uv + vec2(x, y) * ts).r);
+                        ivec2 samplePixel = clamp(pixel + ivec2(x, y), ivec2(0), size - 1);
+                        m = max(m, texelFetch(Source, samplePixel, 0).r);
                     }
                 }
                 gl_FragDepth = m;
@@ -294,14 +313,22 @@ public final class DepthMinPoolPipeline {
 
         // No clear on either attachment: we overwrite every depth texel via the fullscreen triangle
         // (ALWAYS_PASS + writeDepth), and the color attachment is WRITE_NONE (preserved as-is).
-        try (RenderPass pass = encoder.createRenderPass(
-                () -> "Gallium DepthMinPool", destColorView, OptionalInt.empty(),
-                destDepthView, OptionalDouble.empty())) {
-            pass.setPipeline(pipeline);
-            SamplerHelper.bindClampToEdge(pass, "Source", srcDepthView, FilterMode.NEAREST);
-            pass.draw(0, 3);
+        try {
+            try (RenderPass pass = encoder.createRenderPass(
+                    () -> "Gallium DepthMinPool", destColorView, OptionalInt.empty(),
+                    destDepthView, OptionalDouble.empty())) {
+                pass.setPipeline(pipeline);
+                SamplerHelper.bindClampToEdge(pass, "Source", srcDepthView, FilterMode.NEAREST);
+                pass.draw(0, 3);
+            }
+            return true;
+        } catch (RuntimeException e) {
+            Gallium.LOGGER.error(
+                    "Depth-min-pool dispatch failed; falling back to raw scene depth", e);
+            pipeline = null;
+            ready = false;
+            return false;
         }
-        return true;
     }
 
     private static void dispose() {
@@ -311,10 +338,134 @@ public final class DepthMinPoolPipeline {
         ready = false;
     }
 }
+//#elseif MC>=1_21_06
+//$$ public final class DepthMinPoolPipeline {
+//#if MC>=1_21_11
+//$$     private static final Identifier SHADER_ID =
+//$$             Identifier.fromNamespaceAndPath("gallium", "internal/depth_minpool");
 //#else
-//$$ // 1.21.6-1.21.11: DepthTestFunction has no ALWAYS (NO_DEPTH_TEST -> glDisable, so gl_FragDepth
-//$$ // writes are dropped), and there is no ColorTargetState/DepthStencilState API. The z-bias
-//$$ // backstop in GlowCaptureManager.renderCapturedNodes handles TAA jitter here (less perfectly).
+//$$     private static final ResourceLocation SHADER_ID =
+//$$             ResourceLocation.fromNamespaceAndPath("gallium", "internal/depth_minpool");
+//#endif
+//$$
+//$$     private static final String VERTEX_SHADER = """
+//$$             #version 150
+//$$
+//$$             void main() {
+//$$                 vec2 p = vec2((gl_VertexID & 1) << 2, (gl_VertexID & 2) << 1);
+//$$                 gl_Position = vec4(p - 1.0, 0.0, 1.0);
+//$$             }
+//$$             """;
+//$$
+//$$     private static final String FRAGMENT_SHADER = """
+//$$             #version 150
+//$$
+//$$             uniform sampler2D Source;
+//$$
+//$$             out vec4 fragColor;
+//$$
+//$$             void main() {
+//$$                 ivec2 size = textureSize(Source, 0);
+//$$                 ivec2 pixel = clamp(ivec2(gl_FragCoord.xy), ivec2(0), size - 1);
+//$$                 float m = 0.0;
+//$$                 for (int y = -1; y <= 1; y++) {
+//$$                     for (int x = -1; x <= 1; x++) {
+//$$                         ivec2 samplePixel = clamp(pixel + ivec2(x, y), ivec2(0), size - 1);
+//$$                         m = max(m, texelFetch(Source, samplePixel, 0).r);
+//$$                     }
+//$$                 }
+//$$                 gl_FragDepth = m;
+//$$                 fragColor = vec4(0.0);
+//$$             }
+//$$             """;
+//$$
+//$$     private static @Nullable RenderPipeline pipeline;
+//$$     private static boolean ready;
+//$$
+//$$     static {
+//$$         GlowResources.registerPipeline(DepthMinPoolPipeline::dispose);
+//$$     }
+//$$
+//$$     private DepthMinPoolPipeline() {}
+//$$
+//$$     public static void precompile() {
+//$$         try {
+//$$             if (pipeline == null) {
+//$$                 pipeline = RenderPipeline.builder()
+//$$                         .withLocation("pipeline/gallium_depth_minpool")
+//$$                         .withVertexShader(SHADER_ID)
+//$$                         .withFragmentShader(SHADER_ID)
+//$$                         .withSampler("Source")
+//$$                         .withCull(false)
+//$$                         .withColorWrite(false, false)
+//$$                         // DepthTestFunction has no ALWAYS value on these versions. Clearing
+//$$                         // the attachment to 1.0 in pool() makes every [0,1] output pass LEQUAL.
+//$$                         .withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+//$$                         .withDepthWrite(true)
+//$$                         .withVertexFormat(DefaultVertexFormat.EMPTY, VertexFormat.Mode.TRIANGLES)
+//$$                         .build();
+//$$             }
+//$$
+//$$             var compiled = RenderSystem.getDevice().precompilePipeline(pipeline, (id, type) -> {
+//$$                 if (!SHADER_ID.equals(id)) return null;
+//$$                 return type == ShaderType.VERTEX ? VERTEX_SHADER
+//$$                      : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER
+//$$                      : null;
+//$$             });
+//$$             if (!compiled.isValid()) {
+//$$                 throw new IllegalStateException("Depth-min-pool pipeline compilation failed");
+//$$             }
+//$$             ready = true;
+//$$             Gallium.LOGGER.info(
+//$$                     "Compiled gallium depth-min-pool pipeline (1.21.x TAA jitter compensation).");
+//$$         } catch (Throwable t) {
+//$$             Gallium.LOGGER.error(
+//$$                     "Failed to compile depth-min-pool pipeline; TAA jitter compensation disabled", t);
+//$$             pipeline = null;
+//$$             ready = false;
+//$$         }
+//$$     }
+//$$
+//$$     public static boolean isReady() {
+//$$         return ready && pipeline != null;
+//$$     }
+//$$
+//$$     public static boolean pool(
+//$$             CommandEncoder encoder,
+//$$             GpuTextureView srcDepthView,
+//$$             GpuTextureView destColorView,
+//$$             GpuTextureView destDepthView) {
+//$$         if (!isReady() || encoder == null || srcDepthView == null
+//$$                 || destColorView == null || destDepthView == null) {
+//$$             return false;
+//$$         }
+//$$
+//$$         // LEQUAL is equivalent to ALWAYS for this pass because the load op first clears the
+//$$         // forward-Z destination to 1.0 and the shader only emits normalized depth values.
+//$$         try {
+//$$             try (RenderPass pass = encoder.createRenderPass(
+//$$                     () -> "Gallium DepthMinPool", destColorView, OptionalInt.empty(),
+//$$                     destDepthView, OptionalDouble.of(1.0))) {
+//$$                 pass.setPipeline(pipeline);
+//$$                 SamplerHelper.bindClampToEdge(pass, "Source", srcDepthView, FilterMode.NEAREST);
+//$$                 pass.draw(0, 3);
+//$$             }
+//$$             return true;
+//$$         } catch (RuntimeException e) {
+//$$             Gallium.LOGGER.error(
+//$$                     "Depth-min-pool dispatch failed; falling back to raw scene depth", e);
+//$$             pipeline = null;
+//$$             ready = false;
+//$$             return false;
+//$$         }
+//$$     }
+//$$
+//$$     private static void dispose() {
+//$$         pipeline = null;
+//$$         ready = false;
+//$$     }
+//$$ }
+//#else
 //$$ public final class DepthMinPoolPipeline {
 //$$     private DepthMinPoolPipeline() {}
 //$$     public static void precompile() {}

@@ -150,8 +150,8 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
         //$$ cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.precompile();
         //#endif
         // Pre-compile the TAA-jitter depth-pool pipeline used by captureSceneDepth's mask-depth
-        // pre-fill (active on 26.1 and 26.2's Iris/OpenGL forward-Z path; a no-op stub on older
-        // versions). GpuDevice is available here (resource reload, well after client init).
+        // pre-fill (active on 1.21.6+, including 26.2's Iris/OpenGL forward-Z path; a no-op stub
+        // on versions without GpuTextureView). GpuDevice is available here after client init.
         cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.precompile();
         GlowPipeline.retainOnly(shaders);
         //#if MC<1_21_06

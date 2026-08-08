@@ -88,23 +88,33 @@ class ScaledProjectionTest {
     }
 
     @Test
-    void zBiasShiftsNdcZOnly() {
-        // scale = 1 (so t = 0) isolates the z-bias: only NDC.z moves, by exactly -zBias;
-        // xy and w pass through unchanged. Positive zBias pulls geometry toward the camera
-        // in forward-Z (smaller NDC.z = closer), which keeps the replayed mask depth on the
-        // near side of sceneDepth so LEQUAL tolerates TAA jitter without a wall-occluding break.
+    void zBiasShiftsNearNdcZButNotFar() {
+        // The z-bias is depth-adaptive: it pulls geometry toward the camera by ~zBias in the near
+        // field (where sub-pixel TAA jitter maps to a large NDC-depth error) and tapers to zero at
+        // the far plane (where the same jitter maps to a negligible error). A constant bias would
+        // otherwise over-pull far geometry and let items just behind a wall pass the replay's
+        // LEQUAL -> x-ray outlines through the wall at distance.
         Matrix4f base = new Matrix4f().perspective((float) Math.toRadians(70), 16f / 9f, 0.05f, 1000f);
         float zBias = 0.001f;
         Matrix4f biased = GlowCaptureManager.computeScaledProjection(base, 1.0f, zBias, new Matrix4f());
 
-        Vector4f baseClip = project(base, 0.3f, -0.5f, -10f);
-        Vector4f biasedClip = project(biased, 0.3f, -0.5f, -10f);
+        // scale = 1 -> t = 0, so xy and w are untouched regardless of depth.
+        for (float eyeZ : new float[]{-0.1f, -10f, -500f}) {
+            Vector4f baseClip = project(base, 0.3f, -0.5f, eyeZ);
+            Vector4f biasedClip = project(biased, 0.3f, -0.5f, eyeZ);
+            assertEquals(ndcX(baseClip), ndcX(biasedClip), 1e-5f);
+            assertEquals(ndcY(baseClip), ndcY(biasedClip), 1e-5f);
+            assertEquals(baseClip.w, biasedClip.w, 1e-5f);
+        }
 
-        // scale = 1 -> t = 0, so xy and w are untouched.
-        assertEquals(ndcX(baseClip), ndcX(biasedClip), 1e-5f);
-        assertEquals(ndcY(baseClip), ndcY(biasedClip), 1e-5f);
-        assertEquals(baseClip.w, biasedClip.w, 1e-5f);
-        // NDC.z shifts by exactly -zBias.
-        assertEquals(baseClip.z / baseClip.w - zBias, biasedClip.z / biasedClip.w, 1e-5f);
+        // Near field: NDC.z pulled toward the camera by ~zBias.
+        Vector4f nearBase = project(base, 0.05f, -0.05f, -0.1f);
+        Vector4f nearBiased = project(biased, 0.05f, -0.05f, -0.1f);
+        assertEquals(nearBase.z / nearBase.w - zBias, nearBiased.z / nearBiased.w, 1e-4f);
+
+        // Far field: essentially no shift (fixes far-distance x-ray through occluders).
+        Vector4f farBase = project(base, 0.05f, -0.05f, -500f);
+        Vector4f farBiased = project(biased, 0.05f, -0.05f, -500f);
+        assertEquals(farBase.z / farBase.w, farBiased.z / farBiased.w, 1e-5f);
     }
 }

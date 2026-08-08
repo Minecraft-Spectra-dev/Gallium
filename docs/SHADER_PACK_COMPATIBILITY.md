@@ -82,6 +82,19 @@ Both packs expose a single `ResolutionScale` float option (default `0.75`):
 
 (Values come from the pack's `shaders.properties` `size.buffer.colortex10` directives.)
 
+## Temporal jitter
+
+Gallium does not discover or replay shader-pack TAA offsets by reflecting custom uniforms such as
+`taaJitter`, `taaOffset`, or `TAAJitter`. A declared variable can remain present while TAA is off,
+different passes can conditionally skip it, and packs apply the offset on different sides of their
+internal-resolution transform. Uniform presence alone is therefore not an exact projection contract.
+
+On Minecraft 1.21.6 and newer forward-Z paths, the generic compatibility layer uses a bounded 3x3
+farthest-neighbour pool of the captured forward-Z scene depth before the un-jittered mask replay.
+Older versions retain a depth-adaptive bias fallback. A future exact replay mode would need an
+explicit `gallium.json` declaration covering the uniform, its enable condition, units, and transform
+order; Gallium intentionally does not guess those fields.
+
 ## Reload behavior
 
 Gallium reads the hint and resolves the option once per Iris pack reload — per-frame
