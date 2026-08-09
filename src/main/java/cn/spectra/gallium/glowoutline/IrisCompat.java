@@ -6,6 +6,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.function.BooleanSupplier;
+import java.util.function.IntSupplier;
 //#if MC>=1_26_02
 //$$ import com.mojang.blaze3d.systems.RenderSystem;
 //#endif
@@ -28,6 +29,7 @@ public final class IrisCompat {
 
     private static final BooleanSupplier IS_SHADER_ACTIVE;
     private static final BooleanSupplier IS_SHADOW_PASS;
+    private static final IntSupplier FRAME_COUNTER;
 
     private static final MethodHandle BYPASS_GETTER;
     private static final MethodHandle BYPASS_SETTER;
@@ -47,8 +49,10 @@ public final class IrisCompat {
     private static final ThreadLocal<Boolean> SKIP_EXTENSION;
 
     public record BypassSnapshot(boolean bypass, boolean renderWithExtended,
-                                  boolean bypassValid, boolean extendedValid) {
-        public static final BypassSnapshot NONE = new BypassSnapshot(false, false, false, false);
+                                  boolean bypassValid, boolean extendedValid,
+                                  boolean shaderBypassEnabled) {
+        public static final BypassSnapshot NONE =
+                new BypassSnapshot(false, false, false, false, false);
         public boolean valid() { return bypassValid || extendedValid; }
     }
 
@@ -57,6 +61,7 @@ public final class IrisCompat {
 
         BooleanSupplier shaderActive = () -> false;
         BooleanSupplier shadowPass = () -> false;
+        IntSupplier frameCounter = () -> -1;
         MethodHandle bypassGet = null, bypassSet = null, extendedGet = null, extendedSet = null;
         ThreadLocal<Boolean> skipExtension = null;
 
@@ -80,6 +85,30 @@ public final class IrisCompat {
                 };
             } catch (Throwable t) {
                 Gallium.LOGGER.debug("Iris detected but IrisApi reflection failed: {}", t.toString());
+            }
+
+            try {
+                Class<?> systemTimeUniforms = Class.forName(
+                        "net.irisshaders.iris.uniforms.SystemTimeUniforms");
+                Field counterField = systemTimeUniforms.getDeclaredField("COUNTER");
+                counterField.setAccessible(true);
+                Object counter = counterField.get(null);
+                Method getAsInt = counter.getClass().getDeclaredMethod("getAsInt");
+                getAsInt.setAccessible(true);
+                MethodHandle counterGetter = MethodHandles.lookup()
+                        .unreflect(getAsInt)
+                        .bindTo(counter);
+                frameCounter = () -> {
+                    try {
+                        return (int) counterGetter.invokeExact();
+                    } catch (Throwable t) {
+                        return -1;
+                    }
+                };
+            } catch (Throwable t) {
+                Gallium.LOGGER.debug(
+                        "Iris frame-counter reflection failed; exact temporal replay disabled: {}",
+                        t.toString());
             }
 
             Class<?> immediateState = null;
@@ -122,6 +151,7 @@ public final class IrisCompat {
 
         IS_SHADER_ACTIVE = shaderActive;
         IS_SHADOW_PASS = shadowPass;
+        FRAME_COUNTER = frameCounter;
         BYPASS_GETTER = bypassGet;
         BYPASS_SETTER = bypassSet;
         EXTENDED_GETTER = extendedGet;
@@ -172,9 +202,30 @@ public final class IrisCompat {
         return ShaderPackHint.getInternalScale();
     }
 
+    /**
+     * Returns the active pack's declared per-frame projection transform. The transform reports
+     * {@code exactTemporalJitter=false} when Iris's frame counter or the pack declaration is not
+     * available, allowing callers to retain their generic depth-tolerance fallback.
+     */
+    public static ShaderPackHint.ProjectionTransform getShaderProjectionTransform(
+            int viewWidth, int viewHeight) {
+        if (!isShaderActive()) return ShaderPackHint.ProjectionTransform.IDENTITY;
+        return ShaderPackHint.getProjectionTransform(
+                FRAME_COUNTER.getAsInt(), viewWidth, viewHeight);
+    }
+
+    /**
+     * Whether the Iris shader-selection bypass field was found. Exact replay never clears its
+     * mask depth based on the extended-vertex-format field alone: that field fixes vertex layout,
+     * but does not guarantee that Iris leaves the vanilla replay pipeline selected.
+     */
+    public static boolean isShaderBypassAvailable() {
+        return BYPASS_FIELD_OK;
+    }
+
     public static BypassSnapshot setBypass(boolean value) {
         if (!BYPASS_AVAILABLE) return BypassSnapshot.NONE;
-        boolean bypassValid = false, extendedValid = false;
+        boolean bypassValid = false, extendedValid = false, shaderBypassEnabled = false;
         boolean oldBypass = false, oldExtended = false;
         try {
             if (BYPASS_FIELD_OK) {
@@ -184,15 +235,18 @@ public final class IrisCompat {
                 // partial mutation would leak the modified Iris state until the next reload.
                 bypassValid = true;
                 BYPASS_SETTER.invokeExact(value);
+                shaderBypassEnabled = value;
             }
             if (EXTENDED_FIELD_OK) {
                 oldExtended = (boolean) EXTENDED_GETTER.invokeExact();
                 extendedValid = true;
                 if (value) EXTENDED_SETTER.invokeExact(false);
             }
-            return new BypassSnapshot(oldBypass, oldExtended, bypassValid, extendedValid);
+            return new BypassSnapshot(oldBypass, oldExtended, bypassValid, extendedValid,
+                    shaderBypassEnabled);
         } catch (Throwable t) {
-            return new BypassSnapshot(oldBypass, oldExtended, bypassValid, extendedValid);
+            return new BypassSnapshot(oldBypass, oldExtended, bypassValid, extendedValid,
+                    shaderBypassEnabled);
         }
     }
 

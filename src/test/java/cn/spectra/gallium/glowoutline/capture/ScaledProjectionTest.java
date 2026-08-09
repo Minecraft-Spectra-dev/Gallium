@@ -1,11 +1,14 @@
 package cn.spectra.gallium.glowoutline.capture;
 
+import cn.spectra.gallium.glowoutline.ShaderPackHint;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Locks down the matrix used to align the mask with shader-pack {@code VertexDownscaling}.
@@ -85,6 +88,47 @@ class ScaledProjectionTest {
         // computeScaledProjection writes into dest and returns the same instance — render-thread
         // reuse depends on this contract.
         assertSame(dest, result);
+    }
+
+    @Test
+    void anisotropicScaleAndTemporalOffsetApplyAfterProjection() {
+        Matrix4f base = new Matrix4f().perspective(
+                (float) Math.toRadians(80), 16f / 9f, 0.05f, 500f);
+        float scaleX = 0.6666f;
+        float scaleY = 0.6662f;
+        float jitterX = 0.00031f;
+        float jitterY = -0.00047f;
+        Matrix4f transformed = GlowCaptureManager.computeScaledProjection(
+                base, scaleX, scaleY, jitterX, jitterY, 0.0f, new Matrix4f());
+
+        Vector4f baseClip = project(base, 0.7f, -0.3f, -3.0f);
+        Vector4f transformedClip = project(transformed, 0.7f, -0.3f, -3.0f);
+        assertEquals(scaleX * ndcX(baseClip) + scaleX - 1.0f + jitterX,
+                ndcX(transformedClip), 1e-6f);
+        assertEquals(scaleY * ndcY(baseClip) + scaleY - 1.0f + jitterY,
+                ndcY(transformedClip), 1e-6f);
+        assertEquals(baseClip.z, transformedClip.z, 1e-5f);
+        assertEquals(baseClip.w, transformedClip.w, 1e-5f);
+    }
+
+    @Test
+    void exactTemporalReplayRequiresWorldProjectionAndDeclaredJitter() {
+        ShaderPackHint.ProjectionTransform exact = new ShaderPackHint.ProjectionTransform(
+                0.5f, 0.5f, 0.001f, -0.001f, true);
+        assertTrue(GlowCaptureManager.usesExactTemporalReplay(false, true, exact));
+        assertFalse(GlowCaptureManager.usesExactTemporalReplay(true, true, exact));
+        assertFalse(GlowCaptureManager.usesExactTemporalReplay(false, false, exact));
+        assertFalse(GlowCaptureManager.usesExactTemporalReplay(false, true,
+                exact.withoutTemporalJitter()));
+    }
+
+    @Test
+    void exactIrisReplayDefersWorldOcclusionToComposite() {
+        assertTrue(GlowCaptureManager.clearsMaskDepthForReplay(false, true, true));
+        assertFalse(GlowCaptureManager.clearsMaskDepthForReplay(false, true, false));
+        assertFalse(GlowCaptureManager.clearsMaskDepthForReplay(false, false, true));
+        // First-person masks are intentionally independent of world depth, with or without Iris.
+        assertTrue(GlowCaptureManager.clearsMaskDepthForReplay(true, false, false));
     }
 
     @Test

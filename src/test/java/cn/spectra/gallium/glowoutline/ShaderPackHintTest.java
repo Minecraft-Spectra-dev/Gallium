@@ -6,12 +6,52 @@ import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ShaderPackHintTest {
 
     private static float resolve(String json, Map<String, String> options) {
         Function<String, String> lookup = ShaderPackHint.mapLookup(options);
         return ShaderPackHint.resolveFromHintReader(new StringReader(json), lookup);
+    }
+
+    private static ShaderPackHint.ProjectionTransform resolveProjection(
+            String json, Map<String, String> options,
+            int frameCounter, int width, int height) {
+        return ShaderPackHint.resolveProjectionFromHintReader(
+                new StringReader(json), ShaderPackHint.mapLookup(options),
+                frameCounter, width, height);
+    }
+
+    private static String iterationHint() {
+        return "{"
+                + "\"internal_resolution_scale\":{"
+                + "\"option\":\"FSR2_SCALE\","
+                + "\"values\":{\"-1\":1.0,\"1\":0.6667,\"3\":0.5},"
+                + "\"pixel_rounding\":\"floor\"},"
+                + "\"temporal_jitter\":{"
+                + "\"sequence\":\"r2\","
+                + "\"units\":\"ndc_per_view_size\","
+                + "\"transform_order\":\"after_internal_scale\","
+                + "\"phase\":0.5,"
+                + "\"x_multiplier\":0.754877666,"
+                + "\"y_multiplier\":0.569840291,"
+                + "\"index_offset\":1,"
+                + "\"requires\":{\"RENDERING_MODE\":\"false\","
+                + "\"CUSTOM_RENDER_RESOLUTION\":\"false\","
+                + "\"DISABLE_PLAYER_TAA_MOTION_BLUR\":\"false\"},"
+                + "\"period\":{"
+                + "\"option\":\"FSR2_SCALE\","
+                + "\"values\":{\"1\":18,\"3\":32}}}}";
+    }
+
+    private static Map<String, String> iterationOptions(String scale, String renderingMode) {
+        return Map.of(
+                "FSR2_SCALE", scale,
+                "RENDERING_MODE", renderingMode,
+                "CUSTOM_RENDER_RESOLUTION", "false",
+                "DISABLE_PLAYER_TAA_MOTION_BLUR", "false");
     }
 
     @Test
@@ -78,5 +118,101 @@ class ShaderPackHintTest {
         assertEquals(0.1f, ShaderPackHint.clamp(0.0f), 1e-6f);
         assertEquals(1.0f, ShaderPackHint.clamp(1.5f), 1e-6f);
         assertEquals(1.0f, ShaderPackHint.clamp(Float.NaN), 1e-6f);
+    }
+
+    @Test
+    void iterationR2SequenceUsesDeclaredPeriodAndIndexOffset() {
+        ShaderPackHint.ProjectionTransform frame0 = resolveProjection(
+                iterationHint(), iterationOptions("1", "false"),
+                0, 1920, 1080);
+        ShaderPackHint.ProjectionTransform frame18 = resolveProjection(
+                iterationHint(), iterationOptions("1", "false"),
+                18, 1920, 1080);
+
+        float rawX = ((0.5f + 0.754877666f) % 1.0f) * 2.0f - 1.0f;
+        float rawY = ((0.5f + 0.569840291f) % 1.0f) * 2.0f - 1.0f;
+        assertTrue(frame0.exactTemporalJitter());
+        assertEquals(rawX / 1920.0f, frame0.jitterX(), 1e-7f);
+        assertEquals(rawY / 1080.0f, frame0.jitterY(), 1e-7f);
+        assertEquals(frame0.jitterX(), frame18.jitterX(), 1e-7f);
+        assertEquals(frame0.jitterY(), frame18.jitterY(), 1e-7f);
+    }
+
+    @Test
+    void pixelRoundingResolvesScalePerAxis() {
+        ShaderPackHint.ProjectionTransform transform = resolveProjection(
+                iterationHint(), iterationOptions("1", "false"),
+                0, 1919, 1079);
+        assertEquals((float) Math.floor(1919.0 * 0.6667) / 1919.0f,
+                transform.scaleX(), 1e-7f);
+        assertEquals((float) Math.floor(1079.0 * 0.6667) / 1079.0f,
+                transform.scaleY(), 1e-7f);
+    }
+
+    @Test
+    void unavailableFrameCounterKeepsScaleButDisablesExactJitter() {
+        ShaderPackHint.ProjectionTransform transform = resolveProjection(
+                iterationHint(), iterationOptions("3", "false"),
+                -1, 1920, 1080);
+        assertEquals(0.5f, transform.scaleX(), 1e-7f);
+        assertEquals(0.5f, transform.scaleY(), 1e-7f);
+        assertEquals(0.0f, transform.jitterX(), 0.0f);
+        assertEquals(0.0f, transform.jitterY(), 0.0f);
+        assertFalse(transform.exactTemporalJitter());
+    }
+
+    @Test
+    void exactTemporalReplayDisablesWhenPackModeRequirementsDoNotMatch() {
+        ShaderPackHint.ProjectionTransform renderingMode = resolveProjection(
+                iterationHint(), iterationOptions("1", "true"), 0, 1920, 1080);
+        assertEquals((float) Math.floor(1920.0 * 0.6667) / 1920.0f,
+                renderingMode.scaleX(), 1e-7f);
+        assertFalse(renderingMode.exactTemporalJitter());
+
+    }
+
+    @Test
+    void exactTemporalReplayDisablesForNativeResolutionAndProjectionOverrides() {
+        ShaderPackHint.ProjectionTransform nativeResolution = resolveProjection(
+                iterationHint(), iterationOptions("-1", "false"), 0, 1920, 1080);
+        assertFalse(nativeResolution.exactTemporalJitter());
+
+        ShaderPackHint.ProjectionTransform customResolution = resolveProjection(
+                iterationHint(), Map.of(
+                        "FSR2_SCALE", "1",
+                        "RENDERING_MODE", "false",
+                        "CUSTOM_RENDER_RESOLUTION", "true",
+                        "DISABLE_PLAYER_TAA_MOTION_BLUR", "false"), 0, 1920, 1080);
+        assertFalse(customResolution.exactTemporalJitter());
+
+        ShaderPackHint.ProjectionTransform playerTaaOverride = resolveProjection(
+                iterationHint(), Map.of(
+                        "FSR2_SCALE", "1",
+                        "RENDERING_MODE", "false",
+                        "CUSTOM_RENDER_RESOLUTION", "false",
+                        "DISABLE_PLAYER_TAA_MOTION_BLUR", "true"), 0, 1920, 1080);
+        assertFalse(playerTaaOverride.exactTemporalJitter());
+    }
+
+    @Test
+    void exactTemporalReplayRequiresResolvedInternalScale() {
+        ShaderPackHint.ProjectionTransform missingScaleMapping = resolveProjection(
+                iterationHint(), iterationOptions("99", "false"),
+                0, 1920, 1080);
+
+        assertEquals(1.0f, missingScaleMapping.scaleX(), 0.0f);
+        assertFalse(missingScaleMapping.exactTemporalJitter());
+    }
+
+    @Test
+    void incompleteTemporalDeclarationFallsBackWithoutPartialActivation() {
+        String hint = "{\"internal_resolution_scale\":{"
+                + "\"option\":\"ResolutionScale\"},"
+                + "\"temporal_jitter\":{"
+                + "\"sequence\":\"r2\",\"phase\":0.5}}";
+        ShaderPackHint.ProjectionTransform transform = resolveProjection(
+                hint, Map.of("ResolutionScale", "0.75"), 4, 1920, 1080);
+        assertEquals(0.75f, transform.scaleX(), 1e-7f);
+        assertFalse(transform.exactTemporalJitter());
     }
 }

@@ -105,7 +105,8 @@ public final class GlowPipeline {
     //$$                 .withSampler("SceneDepthSampler")
     //$$                 .withUniform("FrameTimeCounter", UniformType.FLOAT)
     //$$                 .withUniform("ScreenSize", UniformType.VEC2)
-    //$$                 .withUniform("ShaderAlign", UniformType.VEC4);
+    //$$                 .withUniform("ShaderAlign", UniformType.VEC4)
+    //$$                 .withUniform("ShaderOffset", UniformType.VEC4);
     //$$         for (ShaderParam p : c.params()) {
     //$$             switch (p) {
     //$$                 case ShaderParam.Float f2 -> builder.withUniform(f2.name(), UniformType.FLOAT);
@@ -333,6 +334,7 @@ public final class GlowPipeline {
 //$$         uniforms.add(uniform("FrameTimeCounter", 1));
 //$$         uniforms.add(uniform("ScreenSize", 2));
 //$$         uniforms.add(uniform("ShaderAlign", 4));
+//$$         uniforms.add(uniform("ShaderOffset", 4));
 //$$         for (ShaderParam p : cfg.params()) {
 //$$             switch (p) {
 //$$                 case ShaderParam.Float f -> uniforms.add(uniform(f.name(), 1));

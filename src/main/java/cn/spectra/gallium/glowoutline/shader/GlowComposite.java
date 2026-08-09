@@ -154,10 +154,23 @@ public final class GlowComposite {
 
         int w = mainTarget.width;
         int h = mainTarget.height;
-        float maskScale = state.lastMaskScale;
+        float maskScaleX = state.lastMaskScaleX;
+        float maskScaleY = state.lastMaskScaleY;
+        float sceneScaleX = state.lastSceneScaleX;
+        float sceneScaleY = state.lastSceneScaleY;
+        // Sign of sceneScaleY carries exact/fallback state without expanding the UBO contract.
+        float encodedSceneScaleY = state.exactDepthAlignment ? sceneScaleY : -sceneScaleY;
+        float maskOffsetX = state.lastMaskOffsetX;
+        float sceneOffsetX = state.lastSceneOffsetX;
+        float maskOffsetY = state.lastMaskOffsetY;
+        float sceneOffsetY = state.lastSceneOffsetY;
 
-        com.mojang.blaze3d.textures.GpuTextureView sceneDepthView = selectSceneDepthView(state, mask, mainTarget);
-        FilterMode maskFilter = maskScale < 1.0f ? FilterMode.LINEAR : FilterMode.NEAREST;
+        com.mojang.blaze3d.textures.GpuTextureView sceneDepthView = selectSceneDepthView(
+                state, mask, mainTarget, minecraft);
+        // The fragment shader maps all three depth/color inputs to one integer texel. Linear
+        // filtering here would blend neighboring item silhouettes before that mapping and create
+        // a one-pixel halo/penetration at internal-resolution boundaries.
+        FilterMode maskFilter = FilterMode.NEAREST;
 
         //#if MC>=1_26_02
         //$$ // Pack-author shaders consume forward-Z (0=near, 1=far). Native 26.2 renders in
@@ -175,9 +188,7 @@ public final class GlowComposite {
         //$$     // values to the pack shader's isOtherItem() test would suppress valid outlines, so
         //$$     // expose the unpooled scene view for both comparisons. The replayed mask color has
         //$$     // already applied LEQUAL and remains the source of occlusion truth.
-        //$$     maskDepthViewToBind = state.maskDepthPooled
-        //$$             ? sceneDepthView
-        //$$             : mask.getDepthTextureView();
+        //$$     maskDepthViewToBind = mask.getDepthTextureView();
         //$$     sceneDepthViewToBind = state.firstPerson ? maskDepthViewToBind : sceneDepthView;
         //$$ } else if (cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.isReady()) {
         //$$     // 1) Mask depth: flip the captured mask depth into a per-state forward-Z target.
@@ -191,7 +202,7 @@ public final class GlowComposite {
         //$$
         //$$     // 2) Native reverse-Z: flip the source selected above.
         //$$     //   - first-person  → mask.depth (already flipped above; reuse view)
-        //$$     //   - Iris/Vulkan   → the pre-hand sceneDepthTarget snapshot
+        //$$     //   - Iris/Vulkan   → the sceneDepthTarget snapshot (world + Iris hand)
         //$$     //   - no-Iris world → mainTarget.depth at composite time, including held items
         //$$     if (state.firstPerson) {
         //$$         sceneDepthViewToBind = maskDepthViewToBind;
@@ -224,7 +235,8 @@ public final class GlowComposite {
         // outlines overlap in screen space would each sample the other item's params.
         var encoder = RenderSystem.getDevice().createCommandEncoder();
         uniformBuffer.writeToEncoder(encoder, GlowTime.worldSecondsFloat(), w, h,
-                maskScale, maskScale, state.config);
+                maskScaleX, sceneScaleX, maskScaleY, encodedSceneScaleY,
+                maskOffsetX, sceneOffsetX, maskOffsetY, sceneOffsetY, state.config);
 
         try (RenderPass pass = encoder.createRenderPass(() -> "Glow", mainTarget.getColorTextureView(),
                 //#if MC>=1_26_02
@@ -247,19 +259,8 @@ public final class GlowComposite {
             //$$ SamplerHelper.bindClampToEdge(pass, "SceneDepthSampler",
             //$$         sceneDepthViewToBind, FilterMode.NEAREST);
             //#else
-            // When the mask depth was pooled (Iris world path), mask.depth holds 3x3 farthest-
-            // neighbour values; feeding those to isOtherItem() (step(sceneDepth+e, maskDepth))
-            // would suppress every outline whose 3x3 neighbourhood reaches a farther pixel (ground
-            // perspective, walls) - leaving glow only against flat sky ("horizon only"). Bind
-            // MaskDepthSampler to the SAME plain scene-depth view as SceneDepthSampler so isOtherItem
-            // is constant 0; occlusion is then handled solely by the replay's LEQUAL (the mask color
-            // silhouette). isItem's itemDepth becomes the scene depth (its depth check trivially
-            // passes), which is fine because the silhouette is already occlusion-correct.
-            com.mojang.blaze3d.textures.GpuTextureView maskDepthView = state.maskDepthPooled
-                    ? sceneDepthView
-                    : mask.getDepthTextureView();
             SamplerHelper.bindClampToEdge(pass, "MaskDepthSampler",
-                    maskDepthView, FilterMode.NEAREST);
+                    mask.getDepthTextureView(), FilterMode.NEAREST);
             SamplerHelper.bindClampToEdge(pass, "SceneDepthSampler",
                     sceneDepthView, FilterMode.NEAREST);
             //#endif
@@ -288,7 +289,15 @@ public final class GlowComposite {
     //$$
     //$$     int w = mainTarget.width;
     //$$     int h = mainTarget.height;
-    //$$     float maskScale = state.lastMaskScale; // always 1.0 on 1.21.5
+    //$$     float maskScaleX = state.lastMaskScaleX;
+    //$$     float maskScaleY = state.lastMaskScaleY;
+    //$$     float sceneScaleX = state.lastSceneScaleX;
+    //$$     float sceneScaleY = state.exactDepthAlignment
+    //$$             ? state.lastSceneScaleY : -state.lastSceneScaleY;
+    //$$     float maskOffsetX = state.lastMaskOffsetX;
+    //$$     float sceneOffsetX = state.lastSceneOffsetX;
+    //$$     float maskOffsetY = state.lastMaskOffsetY;
+    //$$     float sceneOffsetY = state.lastSceneOffsetY;
     //$$
     //$$     // Set up sampler state directly on GpuTexture (1.21.5 API)
     //$$     var diffTex = tempColorTarget.getColorTexture();
@@ -306,19 +315,19 @@ public final class GlowComposite {
     //$$     GpuTexture sceneDepthTex;
     //$$     if (state.firstPerson) {
     //$$         sceneDepthTex = mask.getDepthTexture();
+    //$$     } else if (usesLiveMainDepth(state.firstPerson,
+    //$$             minecraft.options.getCameraType().isFirstPerson(), IrisCompat.isShaderActive())) {
+    //$$         // With no Iris in first person, vanilla clears world depth and then writes the
+    //$$         // hand. The live attachment is the only source that can clip a world item's
+    //$$         // expanded outline at the hand silhouette.
+    //$$         sceneDepthTex = mainTarget.getDepthTexture();
     //$$     } else {
-    //$$         // Always prefer the early-captured sceneDepthTarget. On 1.21.5,
-    //$$         // GameRenderer.renderLevel clears mainTarget.getDepthTexture() to 1.0 right after
-    //$$         // levelRenderer.renderLevel and before renderItemInHand — so by the time this
-    //$$         // composite TAIL runs, mainTarget depth is the cleared (1.0) + held-item depth,
-    //$$         // not world depth. Comparing item z against 1.0 makes step(itemDepth, 1.0) always
-    //$$         // 1.0, so every item — even ones behind walls — would get an outline. The
-    //$$         // captureSceneDepth hook fires at exactly that clearDepthTexture, so
-    //$$         // sceneDepthTarget holds the pre-clear world depth and is the correct source for
-    //$$         // both the no-shader and Iris-active occlusion tests. The mask fallback is only
-    //$$         // for the (unexpected) case where capture never ran this frame.
+    //$$         // In third person the same clear is not followed by a hand pass, so live depth is
+    //$$         // all far and would let outlines pass through the world. The pre-clear snapshot
+    //$$         // keeps completed world depth; under Iris it also contains the custom hand rendered
+    //$$         // inside LevelRenderer before vanilla's later hand draw is suppressed.
     //$$         TextureTarget sd = GlowCaptureManager.getSceneDepthTarget();
-    //$$         sceneDepthTex = sd != null ? sd.getDepthTexture() : mask.getDepthTexture();
+    //$$         sceneDepthTex = sd != null ? sd.getDepthTexture() : mainTarget.getDepthTexture();
     //$$     }
     //$$     sceneDepthTex.setTextureFilter(FilterMode.NEAREST, false);
     //$$     sceneDepthTex.setAddressMode(AddressMode.CLAMP_TO_EDGE, AddressMode.CLAMP_TO_EDGE);
@@ -334,7 +343,10 @@ public final class GlowComposite {
     //$$         // 1.21.5: individual uniforms instead of UBO
     //$$         pass.setUniform("FrameTimeCounter", GlowTime.worldSecondsFloat());
     //$$         pass.setUniform("ScreenSize", (float) w, (float) h);
-    //$$         pass.setUniform("ShaderAlign", maskScale, maskScale, 0.0f, 0.0f);
+    //$$         pass.setUniform("ShaderAlign",
+    //$$                 maskScaleX, sceneScaleX, maskScaleY, sceneScaleY);
+    //$$         pass.setUniform("ShaderOffset",
+    //$$                 maskOffsetX, sceneOffsetX, maskOffsetY, sceneOffsetY);
     //$$         for (cn.spectra.gallium.glowoutline.ShaderParam p : state.config.params()) {
     //$$             switch (p) {
     //$$                 case cn.spectra.gallium.glowoutline.ShaderParam.Float f2 ->
@@ -372,22 +384,27 @@ public final class GlowComposite {
     //$$     int h = mainTarget.height;
     //$$     // SceneDepthSampler choice mirrors selectSceneDepthView() on 1.21.6+:
     //$$     //   firstPerson    → mask.depth (self-compare; outline never occluded by world)
-    //$$     //   Iris active    → sceneDepthTarget (pre-clear world depth — Iris rewrites
-    //$$     //                    mainTarget.depth with shader-pack post-process output, so
-    //$$     //                    its z is no longer comparable to vanilla item z)
-    //$$     //   else (no Iris) → mainTarget.depth at composite time. By this point
-    //$$     //                    GameRenderer.renderLevel has cleared the world depth and
-    //$$     //                    overwritten it with the held-item depth, so this captures
-    //$$     //                    "what's in front" including the player's own hand. Pack shaders
-    //$$     //                    use this to occlude world-item outlines behind the held item.
+    //$$     //   Iris active    → sceneDepthTarget (Iris renders both hand phases inside
+    //$$     //                    LevelRenderer before our pre-clear snapshot, then suppresses
+    //$$     //                    vanilla's later hand draw; the snapshot contains world + hand)
+    //$$     //   no Iris + first person → mainTarget.depth at composite time. The renderLevel
+    //$$     //                    hand-stage clear is followed by the held-item pass, so this
+    //$$     //                    captures "what's in front" including the player's own hand.
+    //$$     //   no Iris + third person → sceneDepthTarget. The same clear is not followed by
+    //$$     //                    a hand pass in third person, so mainTarget.depth is otherwise
+    //$$     //                    all far and lets every outline pass through world geometry.
     //$$     int sceneDepth;
     //$$     if (state.firstPerson) {
     //$$         sceneDepth = mask.getDepthTextureId();
+    //$$     } else if (usesLiveMainDepth(state.firstPerson,
+    //$$             minecraft.options.getCameraType().isFirstPerson(), IrisCompat.isShaderActive())) {
+    //$$         sceneDepth = mainTarget.getDepthTextureId();
     //$$     } else if (IrisCompat.isShaderActive()
     //$$             && GlowCaptureManager.getSceneDepthTarget() != null) {
     //$$         sceneDepth = GlowCaptureManager.getSceneDepthTarget().getDepthTextureId();
     //$$     } else {
-    //$$         sceneDepth = mainTarget.getDepthTextureId();
+    //$$         TextureTarget scene = GlowCaptureManager.getSceneDepthTarget();
+    //$$         sceneDepth = scene != null ? scene.getDepthTextureId() : mainTarget.getDepthTextureId();
     //$$     }
     //$$
     //$$     setTextureLinear(tempColorTarget.getColorTextureId());
@@ -408,8 +425,19 @@ public final class GlowComposite {
     //#endif
     //$$     program.safeGetUniform("FrameTimeCounter").set(GlowTime.worldSecondsFloat());
     //$$     program.safeGetUniform("ScreenSize").set((float) w, (float) h);
-    //$$     float maskScale = state.lastMaskScale;
-    //$$     program.safeGetUniform("ShaderAlign").set(maskScale, maskScale, 0.0f, 0.0f);
+    //$$     float maskScaleX = state.lastMaskScaleX;
+    //$$     float maskScaleY = state.lastMaskScaleY;
+    //$$     float sceneScaleX = state.lastSceneScaleX;
+    //$$     float sceneScaleY = state.exactDepthAlignment
+    //$$             ? state.lastSceneScaleY : -state.lastSceneScaleY;
+    //$$     float maskOffsetX = state.lastMaskOffsetX;
+    //$$     float sceneOffsetX = state.lastSceneOffsetX;
+    //$$     float maskOffsetY = state.lastMaskOffsetY;
+    //$$     float sceneOffsetY = state.lastSceneOffsetY;
+    //$$     program.safeGetUniform("ShaderAlign").set(
+    //$$             maskScaleX, sceneScaleX, maskScaleY, sceneScaleY);
+    //$$     program.safeGetUniform("ShaderOffset").set(
+    //$$             maskOffsetX, sceneOffsetX, maskOffsetY, sceneOffsetY);
     //$$     for (cn.spectra.gallium.glowoutline.ShaderParam p : state.config.params()) {
     //$$         switch (p) {
     //$$             case cn.spectra.gallium.glowoutline.ShaderParam.Float f -> program.safeGetUniform(f.name()).set(f.value());
@@ -472,17 +500,39 @@ public final class GlowComposite {
 
     //#if MC>=1_21_06
     private static com.mojang.blaze3d.textures.GpuTextureView selectSceneDepthView(
-            GlowCaptureState state, TextureTarget mask, RenderTarget mainTarget) {
+            GlowCaptureState state, TextureTarget mask, RenderTarget mainTarget, Minecraft minecraft) {
         // First-person uses mask self-compare: hud3d projection captured at the hand pass
         // doesn't match the level/entity projection used for sceneDepthTarget, so depth
         // comparison would be meaningless. Self-compare = no world occlusion in first-
         // person, but first-person doesn't show the player's own body anyway.
         if (state.firstPerson) return mask.getDepthTextureView();
-        if (!IrisCompat.isShaderActive()) return mainTarget.getDepthTextureView();
+        if (usesLiveMainDepth(state.firstPerson,
+                minecraft.options.getCameraType().isFirstPerson(), IrisCompat.isShaderActive())) {
+            // Vanilla clears mainTarget.depth before the first-person hand pass. In first person
+            // the hand writes depth again, so this live view is the only source that includes the
+            // hand when it occludes a glowing world item. In third person the same clear still
+            // happens, but no hand pass follows it; use the early world snapshot below instead.
+            return mainTarget.getDepthTextureView();
+        }
+        // Iris's custom hand is already present in this pre-clear snapshot. Its redirected
+        // vanilla hand pass writes nothing after the clear, so post-clear main depth is not a
+        // useful fallback while a shader pack is active.
         TextureTarget sceneDepth = GlowCaptureManager.getSceneDepthTarget();
-        return sceneDepth != null ? sceneDepth.getDepthTextureView() : mask.getDepthTextureView();
+        return sceneDepth != null ? sceneDepth.getDepthTextureView() : mainTarget.getDepthTextureView();
     }
     //#endif
+
+    /**
+     * Returns whether the post-clear main depth still represents a useful occluder for a
+     * world-space mask. Vanilla repopulates the depth attachment during the first-person hand
+     * pass, but performs the same clear in third person without drawing a hand afterward. Iris
+     * renders its hand before the snapshot and suppresses that later vanilla pass, so it must use
+     * the captured scene instead of the live attachment.
+     */
+    static boolean usesLiveMainDepth(boolean stateFirstPerson, boolean cameraFirstPerson,
+                                     boolean shaderActive) {
+        return !stateFirstPerson && cameraFirstPerson && !shaderActive;
+    }
 
     private static void dispose() {
         if (tempColorTarget != null) {

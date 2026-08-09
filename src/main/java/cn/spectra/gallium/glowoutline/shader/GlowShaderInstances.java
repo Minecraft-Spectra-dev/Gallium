@@ -70,6 +70,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$         appendFloatUniform(json, "FrameTimeCounter", 1, true);
 //$$         appendFloatUniform(json, "ScreenSize", 2, false);
 //$$         appendFloatUniform(json, "ShaderAlign", 4, false);
+//$$         appendFloatUniform(json, "ShaderOffset", 4, false);
 //$$         appendParamUniforms(json, cfg);
 //$$         json.append("]}");
 //$$

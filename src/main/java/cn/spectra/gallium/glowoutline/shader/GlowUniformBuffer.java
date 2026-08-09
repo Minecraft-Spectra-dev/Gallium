@@ -49,13 +49,23 @@ public class GlowUniformBuffer implements AutoCloseable {
     public void update(float frameTimeCounter, int screenWidth, int screenHeight,
                        float maskUvFactor, float sceneUvFactor,
                        ItemEffectConfig cfg) {
+        update(frameTimeCounter, screenWidth, screenHeight,
+                maskUvFactor, sceneUvFactor, maskUvFactor, sceneUvFactor, cfg);
+    }
+
+    public void update(float frameTimeCounter, int screenWidth, int screenHeight,
+                       float maskUvFactorX, float sceneUvFactorX,
+                       float maskUvFactorY, float sceneUvFactorY,
+                       ItemEffectConfig cfg) {
         // Bare encoder: used when the caller doesn't own a CommandEncoder (GUI glow path).
         // World glow MUST use writeToEncoder(CommandEncoder, ...) so the UBO write and the
         // subsequent RenderPass share one encoder — without that, another drawGlow iteration
         // may overwrite the UBO before the previous iteration's RenderPass has read it, so
         // outlines at overlapping screen positions appear with the wrong item's parameters.
         writeToEncoder(RenderSystem.getDevice().createCommandEncoder(),
-                frameTimeCounter, screenWidth, screenHeight, maskUvFactor, sceneUvFactor, cfg);
+                frameTimeCounter, screenWidth, screenHeight,
+                maskUvFactorX, sceneUvFactorX, maskUvFactorY, sceneUvFactorY,
+                0.0f, 0.0f, 0.0f, 0.0f, cfg);
     }
 
     /**
@@ -68,29 +78,60 @@ public class GlowUniformBuffer implements AutoCloseable {
                                float frameTimeCounter, int screenWidth, int screenHeight,
                                float maskUvFactor, float sceneUvFactor,
                                ItemEffectConfig cfg) {
+        writeToEncoder(encoder, frameTimeCounter, screenWidth, screenHeight,
+                maskUvFactor, sceneUvFactor, maskUvFactor, sceneUvFactor, cfg);
+    }
+
+    public void writeToEncoder(CommandEncoder encoder,
+                               float frameTimeCounter, int screenWidth, int screenHeight,
+                               float maskUvFactorX, float sceneUvFactorX,
+                               float maskUvFactorY, float sceneUvFactorY,
+                               ItemEffectConfig cfg) {
+        writeToEncoder(encoder, frameTimeCounter, screenWidth, screenHeight,
+                maskUvFactorX, sceneUvFactorX, maskUvFactorY, sceneUvFactorY,
+                0.0f, 0.0f, 0.0f, 0.0f, cfg);
+    }
+
+    /**
+     * Writes scale and sub-pixel offset data for the world composite. Offsets are full-texture
+     * UV units, so the fragment shader can convert them to physical texels without knowing the
+     * pack's internal scale. The mask and scene offsets stay independent when replay and scene
+     * depth do not share the same projection.
+     */
+    public void writeToEncoder(CommandEncoder encoder,
+                               float frameTimeCounter, int screenWidth, int screenHeight,
+                               float maskUvFactorX, float sceneUvFactorX,
+                               float maskUvFactorY, float sceneUvFactorY,
+                               float maskUvOffsetX, float sceneUvOffsetX,
+                               float maskUvOffsetY, float sceneUvOffsetY,
+                               ItemEffectConfig cfg) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             Std140Builder builder = Std140Builder.onStack(stack, BUFFER_CAPACITY);
             ByteBuffer data;
             try {
                 // Layout (std140):
-                //   float FrameTimeCounter; vec2 ScreenSize; <user params...>; vec4 ShaderAlign;
-                // ShaderAlign sits at the *tail* on purpose — packs that pre-date Iris internal-
-                // resolution scaling never declared it, and putting it here means their shaders
-                // don't need to know about it at all. Old packs read header + params at exactly
-                // the same offsets they always did; the trailing 16 bytes are unused (a UBO can
-                // be larger than what the shader declares without GLSL caring). Packs that need
-                // alignment declare {vec4 ShaderAlign} as the LAST member of their uniform block.
+                //   float FrameTimeCounter; vec2 ScreenSize; <user params...>;
+                //   vec4 ShaderAlign; vec4 ShaderOffset;
+                // ShaderAlign sits at the tail on purpose: packs that pre-date Iris alignment
+                // keep reading header + params at their original offsets.
                 //
                 // ShaderAlign vec4 (not vec3): a following scalar would slot into the vec3's
                 // 4-byte tail (std140 offset 12) producing a Java↔GLSL mismatch. With a vec4
-                // tail there's no scalar after, but keeping vec4 documents the contract for
-                // anyone re-extending the block here.
+                // tail keeps the binary contract explicit for future extensions.
                 builder.putFloat(frameTimeCounter);
                 builder.putVec2((float) screenWidth, (float) screenHeight);
                 for (ShaderParam param : cfg.params()) {
                     param.pack(builder);
                 }
-                builder.putVec4(maskUvFactor, sceneUvFactor, 0.0f, 0.0f);
+                // ShaderAlign = (maskScaleX, sceneScaleX, maskScaleY, sceneScaleY). The first
+                // two components retain the original isotropic contract for older packs.
+                builder.putVec4(maskUvFactorX, sceneUvFactorX,
+                        maskUvFactorY, sceneUvFactorY);
+                // ShaderOffset = (maskOffsetX, sceneOffsetX, maskOffsetY, sceneOffsetY).
+                // Offsets are UV units, not NDC units; Iris's NDC jitter is divided by two by
+                // GlowCaptureManager before it reaches this buffer.
+                builder.putVec4(maskUvOffsetX, sceneUvOffsetX,
+                        maskUvOffsetY, sceneUvOffsetY);
                 data = builder.get();
             } catch (BufferOverflowException e) {
                 if (!overflowLogged) {

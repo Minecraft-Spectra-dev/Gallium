@@ -13,7 +13,7 @@
 
 ## A. 准备工作
 
-- [ ] 用资源包提供 `assets/gallium/item_effects.json` + 至少 2 个 fragment/vertex shader（便于多 pipeline 测试）。
+- [ ] 用资源包提供 `assets/gallium/item_effects.json` 和世界/GUI 描边 shader。
 - [ ] 截屏对照：在不开 Gallium 的相同视角先截一张作为基线。
 - [ ] 客户端启动日志确认 `Loaded item effects: N rules, M shaders` 出现，且数量与 json 一致。
 - [ ] 检查无 mixin apply 失败、无 `defaultRequire=1` 报错。
@@ -68,6 +68,8 @@
 - [ ] 展示架隔着玻璃看 → 玻璃透过部分应可见，背后实体方块部分应被遮挡。
 - [ ] 怪物站在树叶 / 雕花玻璃后 → 半透明区域的遮挡应与原版描边一致（不应整体被剔除）。
 - [ ] 自己的盔甲在第三人称视角下被自身身体某些部分遮挡 → 描边在身体几何处应正确截断。
+- [ ] 第三人称手持物品的可见边缘靠近玩家身体轮廓时，描边扩张部分也应被身体截断；不能只裁掉物品 mask 本体后又让外扩描边覆盖到身体上。
+- [ ] 掉落物、物品框、展示架、实体手持物和盔甲分别贴近方块、实体及另一件世界物品时，所有外扩描边都应在较近几何处截断，不能有局部嵌入。
 
 ### D-3 半遮挡 / 边界过渡
 
@@ -89,15 +91,19 @@
 
 ### D-6 Iris shader 路径下的遮挡
 
-- [ ] 启用 shader pack 后，世界空间遮挡仍然成立（`GlowCaptureManager.captureSceneDepth` 在主深度被 clearDepthTexture 清掉前提前抓取；1.21.6+ 的 forward-Z Iris 路径将其做 3x3 最远值池化后写入 world mask depth，旧版本保留原始深度复制与自适应 bias 回退）。
+- [ ] 启用 shader pack 后，世界空间遮挡仍然成立（`GlowCaptureManager.captureSceneDepth` 在主深度被 clearDepthTexture 清掉前提前抓取；有完整 `temporal_jitter` 声明时重放精确跟随当帧 TAA，未知 pack 才使用 3x3 最远值池化或旧版自适应 bias 回退）。
+- [ ] 启用 shader pack 后，在第一人称用手臂或手持物遮住发光的掉落物、物品框或展示架 → 世界描边应在 Iris 手部轮廓处截断；Iris 手部在 `LevelRenderer` 内、深度清除前完成，因此应存在于 `sceneDepthTarget`。
 - [ ] Iris 阴影 pass 期间**不出现**任何发光（`IrisCompat.isShadowPass()` 应令所有 mixin 短路）。
 - [ ] 切换不同 shader pack 后遮挡仍正确，不出现穿墙描边。
-- [ ] 对带 TAA / 超分辨率的 shader pack，分别在 TAA **开/关**、相机**静止/移动**时观察半遮挡物品：描边轮廓不应随帧产生水波状抖动或断续闪烁。1.21.6+ 使用 3x3 scene-depth 最远值池化，使未抖动的 mask 回放在 TAA 深度的子像素邻域内保持稳定；这不是固定 Z 偏移。
-- [ ] **远距离**和**贴墙**两组场景中，物品被墙/地形遮挡后其描边不应穿过遮挡物。重点看物体刚进入或离开墙边的一像素邻域：池化只为抵消 TAA 的子像素位移，不能演变为持续的穿墙描边。
+- [ ] 对带 TAA / 超分辨率的 shader pack，分别在 TAA **开/关**、相机**静止/移动**时观察半遮挡物品：描边轮廓不应随帧产生水波状抖动或断续闪烁。iterationRP 的内置 `FSR2_SCALE=0/1/2/3/4`、正常投影模式应走当帧 R2 jitter 精确重放；`-1`、外部超分、自定义渲染分辨率或玩家 TAA 排除则必须保守回退。
+- [ ] **远距离**和**贴墙**两组场景中，物品被墙/地形遮挡后其描边不应穿过遮挡物。重点看物体刚进入或离开墙边的一像素邻域：精确路径不得扩大遮挡物轮廓；未知 pack 的池化回退也不能演变为持续穿墙。
+- [ ] 用奇数窗口尺寸（例如 1919x1079）分别测试 `FSR2_SCALE=1/2/3/4`：描边 X/Y 均贴合，不因内部尺寸分别向下取整而出现单轴偏移。
 - [ ] 将发光物品放在斜坡、地面与天空交界处，旋转相机并改变视距：描边既不整体消失（"仅地平线可见"），也不出现随镜头移动的波纹。
-- [ ] 物品发光放在地面（开启光影），描边应正常出现而非整体消失（这一旧 bug 由“Iris 路径下 mask depth 被清成 far → `step(scene, far) = 1` → `isOtherItem` 全屏命中”引起，已修复为始终复制世界深度到 mask depth）。
+- [ ] 物品发光放在地面（开启光影），描边应正常出现而非整体消失。精确 Iris 重放会清空 mask depth，但 FSH 必须在每个扩张来源 texel 上与场景深度比较，不能让被遮挡的来源从边缘漏出。
 
-> 实现约束：Gallium 不通过反射猜测 `taaJitter`、`taaOffset`、`TAAJitter` 等自定义 uniform。名称存在不代表当前 pass 启用了 TAA，且不同光影包会在内部缩放前后以不同顺序应用偏移。未来若增加精确 jitter 回放，只能由 `shaderpacks/<pack>/gallium.json` 显式声明 uniform、启用条件和坐标变换；通用回退继续使用有界深度池化。
+> 实现约束：Gallium 不通过反射猜测 `taaJitter`、`taaOffset`、`TAAJitter` 等自定义 uniform。名称存在不代表当前 pass 启用了 TAA，且不同光影包会在内部缩放前后以不同顺序应用偏移。精确 jitter 重放必须由 `shaderpacks/<pack>/gallium.json` 显式声明序列、周期、单位和坐标变换；通用回退继续使用有界深度池化。
+>
+> 资源包 shader 在扩张轮廓时，必须先将每个来源 mask texel 的 `MaskDepthSampler` 与其自身的 `SceneDepthSampler` 比较，再与当前输出像素处 `MaskDepthSampler` 与 `SceneDepthSampler` 的较近值比较。前者会剔除精确 Iris 重放中原本被遮挡的来源；后者会裁掉落在前景几何上的外扩描边。无 Iris 时场景深度补充清除后渲染的 vanilla 手部，Iris 时则读取已包含 Iris 自定义手部的清除前快照。比较时不要添加固定 raw-depth 偏移。参考 `docs/SHADER_PACK_COMPATIBILITY.md` 的 Outline occlusion sampling。
 
 ---
 
