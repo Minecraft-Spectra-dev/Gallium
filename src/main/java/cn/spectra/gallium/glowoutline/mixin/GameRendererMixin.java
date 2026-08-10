@@ -29,6 +29,14 @@ public class GameRendererMixin {
         // resets currentCapture, prunes pool above the high-water mark). Skipping it leaves
         // last frame's capturedThisFrame=true states alive, which the TAIL hook below would
         // happily re-composite against the new mainTarget — producing ghost glows.
+        //
+        // endFrame() recycles the capture-only RenderBuffers' StagedVertexBuffer GPU buffer
+        // pools. This RenderBuffers is Gallium-owned (not vanilla's), so GameRenderer's own
+        // renderBuffers.endFrame() never runs on it; without this per-frame call every
+        // offscreen capture re-render allocates fresh vertex/index/staging buffers that are
+        // never freed — OOMing the GPU (Vulkan) or the host commit charge (OpenGL) after a
+        // few minutes. See GlowCaptureManager.endFrame().
+        GlowCaptureManager.endFrame();
         GlowCaptureManager.beginFrame();
         GlowTime.advanceWorld(deltaTracker.getGameTimeDeltaTicks());
     }

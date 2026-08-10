@@ -122,6 +122,34 @@ public final class GlowCaptureManager {
         }
     }
 
+    /**
+     * Recycles the GPU buffer pools owned by the capture-only {@link RenderBuffers} (its
+     * {@link net.minecraft.client.renderer.StagedVertexBuffer}). Vanilla's
+     * {@code GameRenderer.render()} calls {@code renderBuffers.endFrame()} only on ITS OWN
+     * RenderBuffers; the shared capture RenderBuffers Gallium allocates would otherwise never
+     * recycle the vertex/index/staging buffers that each frame's offscreen entity re-render
+     * ({@code FeatureRenderDispatcher.renderAllFeatures -> StagedVertexBuffer.upload ->
+     * GpuBufferPool.acquire}) acquires. That is a native-memory leak: on Vulkan it exhausts the
+     * GPU (VK_ERROR_OUT_OF_DEVICE_MEMORY), on OpenGL it balloons the process commit charge until
+     * the OS kills a JVM malloc — both after just a few minutes of play. Call once per frame from
+     * {@code GameRendererMixin.galliumGlowFrameStart} so buffers from the prior frame are recycled
+     * before the next frame's capture allocates.
+     */
+    public static void endFrame() {
+        //#if MC>=1_26_02
+        //$$ // 26.2's capture dispatcher uploads through the StagedVertexBuffer owned by
+        //$$ // sharedCaptureBuffers (a field that only exists on MC>=1_21_09). Its GpuBufferPools
+        //$$ // (staging/vertex/index) are only recycled by endFrame(); older versions flush
+        //$$ // bufferSource/outlineBufferSource inside renderCapturedNodes and have no endFrame()
+        //$$ // here.
+        //$$ if (sharedCaptureBuffers == null) return;
+        //$$ sharedCaptureBuffers.endFrame();
+        //#else
+        // no-op: pre-1.21.9 builds have no sharedCaptureBuffers field, and pre-26.2 renderers
+        // recycle their own buffer pools inside renderCapturedNodes.
+        //#endif
+    }
+
     public static List<GlowCaptureState> getActiveStates() {
         return activeStates;
     }
