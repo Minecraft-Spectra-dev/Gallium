@@ -12,6 +12,10 @@ import cn.spectra.gallium.glowoutline.mixin.accessor.GameRendererAccessor;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
+//#endif
+//#if MC>=1_21_05
+// CommandEncoder exists from 1.21.5 on (the GpuDevice rewrite); copyDepthBounded types its
+// parameter with it on 1.21.5 too, so it gets its own guard rather than riding the 1.21.6 one.
 import com.mojang.blaze3d.systems.CommandEncoder;
 //#endif
 import com.mojang.blaze3d.pipeline.RenderTarget;
@@ -154,16 +158,94 @@ public final class GlowCaptureManager {
         return activeStates;
     }
 
+    //#if MC>=1_21_05
+    /** Returns whether an actual texture extent exactly matches the logical frame extent. */
+    static boolean dimensionsMatch(int actualWidth, int actualHeight,
+                                   int expectedWidth, int expectedHeight) {
+        return expectedWidth > 0 && expectedHeight > 0
+                && actualWidth == expectedWidth && actualHeight == expectedHeight;
+    }
+
+    /** Pure dimension check used by the GPU copy guard and its regression tests. */
+    static boolean copyDimensionsMatch(int sourceWidth, int sourceHeight,
+                                       int destinationWidth, int destinationHeight,
+                                       int expectedWidth, int expectedHeight) {
+        return dimensionsMatch(sourceWidth, sourceHeight, expectedWidth, expectedHeight)
+                && dimensionsMatch(destinationWidth, destinationHeight,
+                expectedWidth, expectedHeight);
+    }
+
+    private static boolean textureSizeMatches(@Nullable GpuTexture texture, int w, int h) {
+        return texture != null && dimensionsMatch(texture.getWidth(0), texture.getHeight(0), w, h);
+    }
+
+    /** Checks both RenderTarget metadata and its real GPU attachment extents. HD screenshot
+     *  mods resize the main target around capture boundaries, so trusting only width/height can
+     *  leave Gallium about to use an old pooled attachment with a new frame extent. */
+    private static boolean renderTargetSizeMatches(@Nullable RenderTarget target, int w, int h) {
+        if (target == null || !dimensionsMatch(target.width, target.height, w, h)
+                || !textureSizeMatches(target.getColorTexture(), w, h)) return false;
+        return !target.useDepth || textureSizeMatches(target.getDepthTexture(), w, h);
+    }
+
+    private static void invalidateCapture(GlowCaptureState state) {
+        state.capturedThisFrame = false;
+        state.maskDepthPrepared = false;
+    }
+
+    private static void invalidateAllCaptures() {
+        for (GlowCaptureState state : activeStates) invalidateCapture(state);
+    }
+
+    /** Marks every stale-size state unusable before either the pool pass or a direct copy can
+     *  touch it. This includes first-person and exact-Iris states, which intentionally skip the
+     *  depth prefill loop but would otherwise replay a low-resolution mask into a larger frame. */
+    private static void invalidateMismatchedCaptures(int w, int h) {
+        for (GlowCaptureState state : activeStates) {
+            if (!renderTargetSizeMatches(state.maskTarget, w, h)) invalidateCapture(state);
+        }
+    }
+
+    /** Exact-size depth copy shared by {@link #captureSceneDepth} and replay fallbacks.
+     *
+     *  <p>Gallium pools scene/mask targets across frames. HD screenshot mods can change the
+     *  main target extent at capture boundaries; the old code trusted logical width/height and
+     *  could ask Minecraft to write a 7680x4053 rectangle into an actual 2560x1351 texture.
+     *  Minecraft 1.21.11 correctly rejects that with {@link IllegalArgumentException}.
+     *
+     *  <p>Both smaller and larger attachments are rejected. Copying only a sub-rectangle of a
+     *  larger stale target is just as incoherent as overflowing a smaller one. On rejection the
+     *  destination is cleared to the far plane and the caller skips that capture for this frame.
+     *
+     *  @return true only when source, destination, and the requested rectangle all match. */
+    private static boolean copyDepthBounded(CommandEncoder encoder, GpuTexture src, GpuTexture dst,
+                                            int w, int h, double farDepth) {
+        if (encoder == null || dst == null) return false;
+        if (src == null || !copyDimensionsMatch(
+                src.getWidth(0), src.getHeight(0), dst.getWidth(0), dst.getHeight(0), w, h)) {
+            encoder.clearDepthTexture(dst, farDepth);
+            return false;
+        }
+        encoder.copyTextureToTexture(src, dst, 0, 0, 0, 0, 0, w, h);
+        return true;
+    }
+    //#endif
+
     public static void captureSceneDepth(RenderTarget mainTarget) {
         //#if MC>=1_21_05
         if (sceneDepthCaptured) return;
         GpuTexture srcDepth = mainTarget.getDepthTexture();
-        if (srcDepth == null) return;
+        if (srcDepth == null) {
+            invalidateAllCaptures();
+            return;
+        }
 
         int w = mainTarget.width, h = mainTarget.height;
-        ShaderPackHint.ProjectionTransform packProjection =
-                IrisCompat.getShaderProjectionTransform(w, h);
-        if (sceneDepthTarget == null || sceneDepthTarget.width != w || sceneDepthTarget.height != h) {
+        if (!renderTargetSizeMatches(mainTarget, w, h)) {
+            invalidateAllCaptures();
+            return;
+        }
+        if (!renderTargetSizeMatches(sceneDepthTarget, w, h)) {
             if (sceneDepthTarget != null) sceneDepthTarget.destroyBuffers();
             sceneDepthTarget = new TextureTarget("GlowSceneDepth", w, h, true
                     //#if MC>=1_26_02
@@ -182,7 +264,25 @@ public final class GlowCaptureManager {
         }
 
         var encoder = RenderSystem.getDevice().createCommandEncoder();
-        encoder.copyTextureToTexture(srcDepth, sceneDepthTarget.getDepthTexture(), 0, 0, 0, 0, 0, w, h);
+        boolean sceneDepthReady;
+        //#if MC>=1_26_02
+        //$$ sceneDepthReady = copyDepthBounded(
+        //$$         encoder, srcDepth, sceneDepthTarget.getDepthTexture(), w, h, 0.0);
+        //#else
+        sceneDepthReady = copyDepthBounded(
+                encoder, srcDepth, sceneDepthTarget.getDepthTexture(), w, h, 1.0);
+        //#endif
+        if (!sceneDepthReady) {
+            invalidateAllCaptures();
+            return;
+        }
+
+        // Reject stale pooled targets before the depth-pool path can silently resample into one.
+        // Fabrishot always renders a warm-up frame before saving, so dropping an incoherent
+        // resize-boundary frame is safer than allocating several gigabytes of replacement masks.
+        invalidateMismatchedCaptures(w, h);
+        ShaderPackHint.ProjectionTransform packProjection =
+                IrisCompat.getShaderProjectionTransform(w, h);
 
         // Iris's HandRenderer runs inside LevelRenderer before this hook. Consequently srcDepth
         // already contains the Iris hand here; on the vanilla path it still contains only world
@@ -203,7 +303,7 @@ public final class GlowCaptureManager {
         //$$         && cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.isReady();
         //$$ GpuTexture pooledDepth = null;
         //$$ for (GlowCaptureState state : activeStates) {
-        //$$     if (state.maskTarget != null && !state.firstPerson) {
+        //$$     if (state.capturedThisFrame && state.maskTarget != null && !state.firstPerson) {
         //$$         boolean exactTemporalReplay = canPrepareExactTemporalReplay(state, packProjection);
         //$$         if (clearsMaskDepthForReplay(state.firstPerson, IrisCompat.isShaderActive(),
         //$$                 exactTemporalReplay)) continue;
@@ -220,15 +320,16 @@ public final class GlowCaptureManager {
         //$$                 }
         //$$                 useDepthPool = false;
         //$$             } else {
-        //$$                 encoder.copyTextureToTexture(pooledDepth, state.maskTarget.getDepthTexture(),
-        //$$                         0, 0, 0, 0, 0, w, h);
-        //$$                 state.maskDepthPrepared = true;
+        //$$                 // Exact-size copy; any late skew invalidates this state below.
+        //$$                 state.maskDepthPrepared = copyDepthBounded(encoder, pooledDepth,
+        //$$                         state.maskTarget.getDepthTexture(), w, h, 0.0);
+        //$$                 if (!state.maskDepthPrepared) invalidateCapture(state);
         //$$                 continue;
         //$$             }
         //$$         }
-        //$$         encoder.copyTextureToTexture(srcDepth, state.maskTarget.getDepthTexture(),
-        //$$                 0, 0, 0, 0, 0, w, h);
-        //$$         state.maskDepthPrepared = true;
+        //$$         state.maskDepthPrepared = copyDepthBounded(encoder, srcDepth,
+        //$$                 state.maskTarget.getDepthTexture(), w, h, 0.0);
+        //$$         if (!state.maskDepthPrepared) invalidateCapture(state);
         //$$     }
         //$$ }
         //#elseif MC>=1_26_00
@@ -239,7 +340,7 @@ public final class GlowCaptureManager {
                 && cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.isReady();
         GpuTexture pooledDepth = null;
         for (GlowCaptureState state : activeStates) {
-            if (state.maskTarget != null && !state.firstPerson) {
+            if (state.capturedThisFrame && state.maskTarget != null && !state.firstPerson) {
                 boolean exactTemporalReplay = canPrepareExactTemporalReplay(state, packProjection);
                 if (clearsMaskDepthForReplay(state.firstPerson, IrisCompat.isShaderActive(),
                         exactTemporalReplay)) continue;
@@ -256,15 +357,16 @@ public final class GlowCaptureManager {
                         }
                         useDepthPool = false;
                     } else {
-                        encoder.copyTextureToTexture(pooledDepth, state.maskTarget.getDepthTexture(),
-                                0, 0, 0, 0, 0, w, h);
-                        state.maskDepthPrepared = true;
+                        // Exact-size copy; any late skew invalidates this state below.
+                        state.maskDepthPrepared = copyDepthBounded(encoder, pooledDepth,
+                                state.maskTarget.getDepthTexture(), w, h, 1.0);
+                        if (!state.maskDepthPrepared) invalidateCapture(state);
                         continue;
                     }
                 }
-                encoder.copyTextureToTexture(srcDepth, state.maskTarget.getDepthTexture(),
-                        0, 0, 0, 0, 0, w, h);
-                state.maskDepthPrepared = true;
+                state.maskDepthPrepared = copyDepthBounded(encoder, srcDepth,
+                        state.maskTarget.getDepthTexture(), w, h, 1.0);
+                if (!state.maskDepthPrepared) invalidateCapture(state);
             }
         }
         //#else
@@ -277,7 +379,7 @@ public final class GlowCaptureManager {
         //$$         && cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.isReady();
         //$$ GpuTexture pooledDepth = null;
         //$$ for (GlowCaptureState state : activeStates) {
-        //$$     if (state.maskTarget != null && !state.firstPerson) {
+        //$$     if (state.capturedThisFrame && state.maskTarget != null && !state.firstPerson) {
         //$$         boolean exactTemporalReplay = canPrepareExactTemporalReplay(state, packProjection);
         //$$         if (clearsMaskDepthForReplay(state.firstPerson, IrisCompat.isShaderActive(),
         //$$                 exactTemporalReplay)) continue;
@@ -294,32 +396,34 @@ public final class GlowCaptureManager {
         //$$                 }
         //$$                 useDepthPool = false;
         //$$             } else {
-        //$$                 encoder.copyTextureToTexture(pooledDepth, state.maskTarget.getDepthTexture(),
-        //$$                         0, 0, 0, 0, 0, w, h);
-        //$$                 state.maskDepthPrepared = true;
+        //$$                 // Exact-size copy; any late skew invalidates this state below.
+        //$$                 state.maskDepthPrepared = copyDepthBounded(encoder, pooledDepth,
+        //$$                         state.maskTarget.getDepthTexture(), w, h, 1.0);
+        //$$                 if (!state.maskDepthPrepared) invalidateCapture(state);
         //$$                 continue;
         //$$             }
         //$$         }
-        //$$         encoder.copyTextureToTexture(srcDepth, state.maskTarget.getDepthTexture(),
-        //$$                 0, 0, 0, 0, 0, w, h);
-        //$$         state.maskDepthPrepared = true;
+        //$$         state.maskDepthPrepared = copyDepthBounded(encoder, srcDepth,
+        //$$                 state.maskTarget.getDepthTexture(), w, h, 1.0);
+        //$$         if (!state.maskDepthPrepared) invalidateCapture(state);
         //$$     }
         //$$ }
         //#else
         //$$ // 1.21.5 has no GpuTextureView-based pool pass; retain its plain-copy fallback.
         //$$ for (GlowCaptureState state : activeStates) {
-        //$$     if (state.maskTarget != null) {
+        //$$     if (state.capturedThisFrame && state.maskTarget != null) {
         //$$         boolean exactTemporalReplay = canPrepareExactTemporalReplay(state, packProjection);
         //$$         if (clearsMaskDepthForReplay(state.firstPerson, IrisCompat.isShaderActive(),
         //$$                 exactTemporalReplay)) continue;
-        //$$         encoder.copyTextureToTexture(srcDepth, state.maskTarget.getDepthTexture(),
-        //$$                 0, 0, 0, 0, 0, w, h);
-        //$$         state.maskDepthPrepared = true;
+        //$$         // [issue #1] bounded copy - see copyDepthBounded.
+        //$$         state.maskDepthPrepared = copyDepthBounded(encoder, srcDepth,
+        //$$                 state.maskTarget.getDepthTexture(), w, h, 1.0);
+        //$$         if (!state.maskDepthPrepared) invalidateCapture(state);
         //$$     }
         //$$ }
         //#endif
         //#endif
-        sceneDepthCaptured = true;
+        sceneDepthCaptured = sceneDepthReady;
         //#else
         //$$ if (sceneDepthCaptured) return;
         //$$ int w = mainTarget.width, h = mainTarget.height;
@@ -445,7 +549,7 @@ public final class GlowCaptureManager {
         //#else
         RenderTarget main = mc.getMainRenderTarget();
         //#endif
-        if (main == null) return false;
+        if (main == null || !renderTargetSizeMatches(main, main.width, main.height)) return false;
 
         GlowCaptureState state = allocateState();
         state.active = true;
@@ -494,7 +598,7 @@ public final class GlowCaptureManager {
             //$$ state.maskTarget.getDepthTexture().setUseMipmaps(false);
             //#endif
             //#endif
-        } else if (state.maskTarget.width != main.width || state.maskTarget.height != main.height) {
+        } else if (!renderTargetSizeMatches(state.maskTarget, main.width, main.height)) {
             state.maskTarget.resize(main.width, main.height);
             //#if MC<1_21_11
             //#if MC>=1_21_06
@@ -502,6 +606,15 @@ public final class GlowCaptureManager {
             //$$ state.maskTarget.getDepthTexture().setUseMipmaps(false);
             //#endif
             //#endif
+        }
+
+        // resize() is synchronous, but verify the real attachments as well as RenderTarget's
+        // fields before committing this pool slot. If an external target transition is still in
+        // flight, skip capture and leave the slot reusable instead of carrying stale dimensions
+        // into captureSceneDepth.
+        if (!renderTargetSizeMatches(state.maskTarget, main.width, main.height)) {
+            state.resetFrame();
+            return false;
         }
 
         //#if MC>=1_21_09
@@ -592,7 +705,24 @@ public final class GlowCaptureManager {
 
     public static void renderCapturedNodes(GlowCaptureState state, Minecraft mc) {
         //#if MC>=1_21_09
-        if (state.captureDispatcher == null || sharedCaptureBuffers == null || state.maskTarget == null) return;
+        if (state.captureDispatcher == null || sharedCaptureBuffers == null || state.maskTarget == null) {
+            invalidateCapture(state);
+            return;
+        }
+
+        //#if MC>=1_26_02
+        //$$ RenderTarget frameTarget = mc.gameRenderer.mainRenderTarget();
+        //#else
+        RenderTarget frameTarget = mc.getMainRenderTarget();
+        //#endif
+        if (frameTarget == null
+                || !renderTargetSizeMatches(frameTarget, frameTarget.width, frameTarget.height)
+                || !renderTargetSizeMatches(state.maskTarget, frameTarget.width, frameTarget.height)
+                || (sceneDepthCaptured
+                && !renderTargetSizeMatches(sceneDepthTarget, frameTarget.width, frameTarget.height))) {
+            invalidateCapture(state);
+            return;
+        }
 
         var irisSnapshot = IrisCompat.setBypass(true);
         try {
@@ -627,10 +757,19 @@ public final class GlowCaptureManager {
             //#endif
             RenderTarget sourceDepth = sceneDepthCaptured && sceneDepthTarget != null
                     ? sceneDepthTarget : mainTarget;
-            encoder.copyTextureToTexture(
-                    sourceDepth.getDepthTexture(), state.maskTarget.getDepthTexture(),
-                    0, 0, 0, 0, 0, sourceDepth.width, sourceDepth.height);
-            state.maskDepthPrepared = true;
+            // Final exact-size guard for a target change after captureSceneDepth. Failure
+            // invalidates this state below rather than issuing an out-of-bounds GPU copy.
+            //#if MC>=1_26_02
+            //$$ state.maskDepthPrepared = copyDepthBounded(encoder, sourceDepth.getDepthTexture(),
+            //$$         state.maskTarget.getDepthTexture(), sourceDepth.width, sourceDepth.height, 0.0);
+            //#else
+            state.maskDepthPrepared = copyDepthBounded(encoder, sourceDepth.getDepthTexture(),
+                    state.maskTarget.getDepthTexture(), sourceDepth.width, sourceDepth.height, 1.0);
+            //#endif
+            if (!state.maskDepthPrepared) {
+                invalidateCapture(state);
+                return;
+            }
         }
         // Exact Iris world replays deliberately start at the far plane. Pre-filling scene depth
         // makes the bypassed vanilla shader compare against the pack's original item depth; tiny
@@ -742,7 +881,19 @@ public final class GlowCaptureManager {
             IrisCompat.restoreBypass(irisSnapshot);
         }
         //#elseif MC>=1_21_06
-        //$$ if (state.captureBuffers == null || state.maskTarget == null) return;
+        //$$ if (state.captureBuffers == null || state.maskTarget == null) {
+        //$$     invalidateCapture(state);
+        //$$     return;
+        //$$ }
+        //$$ RenderTarget frameTarget = mc.getMainRenderTarget();
+        //$$ if (frameTarget == null
+        //$$         || !renderTargetSizeMatches(frameTarget, frameTarget.width, frameTarget.height)
+        //$$         || !renderTargetSizeMatches(state.maskTarget, frameTarget.width, frameTarget.height)
+        //$$         || (sceneDepthCaptured
+        //$$         && !renderTargetSizeMatches(sceneDepthTarget, frameTarget.width, frameTarget.height))) {
+        //$$     invalidateCapture(state);
+        //$$     return;
+        //$$ }
         //$$
         //$$ var irisSnapshot = IrisCompat.setBypass(true);
         //$$ try {
@@ -761,10 +912,13 @@ public final class GlowCaptureManager {
         //$$     RenderTarget mainTarget = mc.getMainRenderTarget();
         //$$     RenderTarget sourceDepth = sceneDepthCaptured && sceneDepthTarget != null
         //$$             ? sceneDepthTarget : mainTarget;
-        //$$     encoder.copyTextureToTexture(
-        //$$             sourceDepth.getDepthTexture(), state.maskTarget.getDepthTexture(),
-        //$$             0, 0, 0, 0, 0, sourceDepth.width, sourceDepth.height);
-        //$$     state.maskDepthPrepared = true;
+        //$$     // [issue #1] bounded copy - see copyDepthBounded.
+        //$$     state.maskDepthPrepared = copyDepthBounded(encoder, sourceDepth.getDepthTexture(),
+        //$$             state.maskTarget.getDepthTexture(), sourceDepth.width, sourceDepth.height, 1.0);
+        //$$     if (!state.maskDepthPrepared) {
+        //$$         invalidateCapture(state);
+        //$$         return;
+        //$$     }
         //$$ }
         //$$ // Exact Iris replays intentionally defer world occlusion to the composite shader;
         //$$ // keeping the copied scene depth here would let tiny pack-vs-vanilla Z/coverage
@@ -861,7 +1015,19 @@ public final class GlowCaptureManager {
         //#elseif MC>=1_21_05
         //$$ // 1.21.5: no outputColorTextureOverride. DelayingMultiBufferSource.flushToTarget()
         //$$ // manually uploads meshes and opens a RenderPass targeting the mask textures.
-        //$$ if (state.captureBuffers == null || state.maskTarget == null) return;
+        //$$ if (state.captureBuffers == null || state.maskTarget == null) {
+        //$$     invalidateCapture(state);
+        //$$     return;
+        //$$ }
+        //$$ RenderTarget frameTarget = mc.getMainRenderTarget();
+        //$$ if (frameTarget == null
+        //$$         || !renderTargetSizeMatches(frameTarget, frameTarget.width, frameTarget.height)
+        //$$         || !renderTargetSizeMatches(state.maskTarget, frameTarget.width, frameTarget.height)
+        //$$         || (sceneDepthCaptured
+        //$$         && !renderTargetSizeMatches(sceneDepthTarget, frameTarget.width, frameTarget.height))) {
+        //$$     invalidateCapture(state);
+        //$$     return;
+        //$$ }
         //$$
         //$$ var irisSnapshot = IrisCompat.setBypass(true);
         //$$ try {
@@ -888,10 +1054,13 @@ public final class GlowCaptureManager {
         //$$     RenderTarget mainTarget = mc.getMainRenderTarget();
         //$$     RenderTarget sourceDepth = sceneDepthCaptured && sceneDepthTarget != null
         //$$             ? sceneDepthTarget : mainTarget;
-        //$$     encoder.copyTextureToTexture(
-        //$$             sourceDepth.getDepthTexture(), state.maskTarget.getDepthTexture(),
-        //$$             0, 0, 0, 0, 0, sourceDepth.width, sourceDepth.height);
-        //$$     state.maskDepthPrepared = true;
+        //$$     // [issue #1] bounded copy - see copyDepthBounded.
+        //$$     state.maskDepthPrepared = copyDepthBounded(encoder, sourceDepth.getDepthTexture(),
+        //$$             state.maskTarget.getDepthTexture(), sourceDepth.width, sourceDepth.height, 1.0);
+        //$$     if (!state.maskDepthPrepared) {
+        //$$         invalidateCapture(state);
+        //$$         return;
+        //$$     }
         //$$ }
         //$$ // Exact Iris world replays intentionally defer world occlusion to the composite
         //$$ // shader. Retaining the pre-clear depth here would let tiny pack-vs-vanilla Z or

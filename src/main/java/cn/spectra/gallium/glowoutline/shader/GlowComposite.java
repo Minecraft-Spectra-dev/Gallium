@@ -56,6 +56,31 @@ public final class GlowComposite {
 
     private GlowComposite() {}
 
+    //#if MC>=1_21_05
+    private static boolean textureSizeMatches(@Nullable GpuTexture texture, int w, int h) {
+        return texture != null && w > 0 && h > 0
+                && texture.getWidth(0) == w && texture.getHeight(0) == h;
+    }
+
+    private static boolean colorTargetSizeMatches(@Nullable TextureTarget target, int w, int h) {
+        return target != null && target.width == w && target.height == h
+                && textureSizeMatches(target.getColorTexture(), w, h);
+    }
+
+    private static boolean captureTargetSizeMatches(@Nullable TextureTarget target, int w, int h) {
+        return colorTargetSizeMatches(target, w, h)
+                && (!target.useDepth || textureSizeMatches(target.getDepthTexture(), w, h));
+    }
+
+    private static boolean hasAnyExactCapture(int w, int h) {
+        for (GlowCaptureState state : GlowCaptureManager.getActiveStates()) {
+            if (state.capturedThisFrame && state.config != null
+                    && captureTargetSizeMatches(state.maskTarget, w, h)) return true;
+        }
+        return false;
+    }
+    //#endif
+
     public static boolean hasAnyValidCapture() {
         for (GlowCaptureState state : GlowCaptureManager.getActiveStates()) {
             if (state.capturedThisFrame && state.config != null && state.maskTarget != null) return true;
@@ -67,8 +92,10 @@ public final class GlowComposite {
         //#if MC>=1_21_06
         int w = mainTarget.width;
         int h = mainTarget.height;
+        GpuTexture mainColor = mainTarget.getColorTexture();
+        if (!textureSizeMatches(mainColor, w, h) || !hasAnyExactCapture(w, h)) return;
 
-        if (tempColorTarget == null || tempColorTarget.width != w || tempColorTarget.height != h) {
+        if (!colorTargetSizeMatches(tempColorTarget, w, h)) {
             if (tempColorTarget != null) tempColorTarget.destroyBuffers();
             tempColorTarget = new TextureTarget("GlowColor", w, h, false
                     //#if MC>=1_26_02
@@ -83,9 +110,18 @@ public final class GlowComposite {
         }
         if (uniformBuffer == null) uniformBuffer = new GlowUniformBuffer("Glow Uniform Buffer");
 
-        RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(
-                mainTarget.getColorTexture(), tempColorTarget.getColorTexture(),
-                0, 0, 0, 0, 0, w, h);
+        // Snapshot the pre-glow image for DiffuseSampler. HD-screenshot capture boundaries can
+        // expose stale RenderTarget metadata/attachments; require both real textures to match
+        // the logical frame exactly. On a skew, skip this transition frame instead of crashing
+        // or smearing a cropped snapshot across the final image.
+        GpuTexture tempColor = tempColorTarget.getColorTexture();
+        if (textureSizeMatches(mainColor, w, h) && textureSizeMatches(tempColor, w, h)) {
+            RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(
+                    mainColor, tempColor,
+                    0, 0, 0, 0, 0, w, h);
+        } else {
+            return;
+        }
 
         for (GlowCaptureState state : GlowCaptureManager.getActiveStates()) {
             drawGlow(state, minecraft, mainTarget);
@@ -94,15 +130,23 @@ public final class GlowComposite {
         //$$ // 1.21.5: GpuTexture-based path — no GpuTextureView / SamplerHelper / GlowUniformBuffer.
         //$$ int w = mainTarget.width;
         //$$ int h = mainTarget.height;
+        //$$ GpuTexture mainColor = mainTarget.getColorTexture();
+        //$$ if (!textureSizeMatches(mainColor, w, h) || !hasAnyExactCapture(w, h)) return;
         //$$
-        //$$ if (tempColorTarget == null || tempColorTarget.width != w || tempColorTarget.height != h) {
+        //$$ if (!colorTargetSizeMatches(tempColorTarget, w, h)) {
         //$$     if (tempColorTarget != null) tempColorTarget.destroyBuffers();
         //$$     tempColorTarget = new TextureTarget("GlowColor", w, h, false);
         //$$ }
         //$$
-        //$$ RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(
-        //$$         mainTarget.getColorTexture(), tempColorTarget.getColorTexture(),
-        //$$         0, 0, 0, 0, 0, w, h);
+        //$$ // [issue #1] Require exact source/destination extents for the pre-glow snapshot.
+        //$$ GpuTexture tempColor = tempColorTarget.getColorTexture();
+        //$$ if (textureSizeMatches(mainColor, w, h) && textureSizeMatches(tempColor, w, h)) {
+        //$$     RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(
+        //$$             mainColor, tempColor,
+        //$$             0, 0, 0, 0, 0, w, h);
+        //$$ } else {
+        //$$     return;
+        //$$ }
         //$$
         //$$ for (GlowCaptureState state : GlowCaptureManager.getActiveStates()) {
         //$$     drawGlow(state, minecraft, mainTarget);
@@ -145,6 +189,7 @@ public final class GlowComposite {
         if (!state.capturedThisFrame || state.config == null || state.maskTarget == null) return;
 
         GlowCaptureManager.renderCapturedNodes(state, minecraft);
+        if (!state.capturedThisFrame) return;
 
         TextureTarget mask = state.maskTarget;
         if (mask.getColorTextureView() == null || mask.getDepthTextureView() == null) return;
@@ -280,6 +325,7 @@ public final class GlowComposite {
     //$$     if (!state.capturedThisFrame || state.config == null || state.maskTarget == null) return;
     //$$
     //$$     GlowCaptureManager.renderCapturedNodes(state, minecraft);
+    //$$     if (!state.capturedThisFrame) return;
     //$$
     //$$     TextureTarget mask = state.maskTarget;
     //$$     if (mask.getColorTexture() == null || mask.getDepthTexture() == null) return;
@@ -372,6 +418,7 @@ public final class GlowComposite {
     //$$ private static void drawGlow(GlowCaptureState state, Minecraft minecraft, RenderTarget mainTarget) {
     //$$     if (!state.capturedThisFrame || state.config == null || state.maskTarget == null) return;
     //$$     GlowCaptureManager.renderCapturedNodes(state, minecraft);
+    //$$     if (!state.capturedThisFrame) return;
     //$$     TextureTarget mask = state.maskTarget;
     //#if MC>=1_21_02
     //$$     CompiledShaderProgram program = GlowPipeline.getOrCreate(state.config);
