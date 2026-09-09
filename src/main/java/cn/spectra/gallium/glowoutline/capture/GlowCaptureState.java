@@ -11,7 +11,6 @@ import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 //#endif
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import net.minecraft.client.renderer.RenderBuffers;
 //#if MC>=1_21_09
 import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
 //#endif
@@ -24,7 +23,6 @@ import org.jspecify.annotations.Nullable;
 public final class GlowCaptureState {
 
     public @Nullable TextureTarget maskTarget;
-    public @Nullable RenderBuffers captureBuffers;
     //#if MC>=1_21_09
     public @Nullable FeatureRenderDispatcher captureDispatcher;
     //#endif
@@ -39,11 +37,21 @@ public final class GlowCaptureState {
     //$$ public @Nullable TextureTarget maskDepthForwardZTarget;
     //#endif
     // Pre-1.21.9 immediate-mode capture buffer. Retained across frames (its native buffers are
-    // pooled like captureBuffers) and freed on release; see GlowCaptureManager.releaseState.
+    // pooled by DelayingMultiBufferSource) and freed on release; see GlowCaptureManager.releaseState.
     //#if MC<1_21_09
     //$$ public CaptureSites.@Nullable DelayingMultiBufferSource customBufferSource;
     //#endif
     public boolean capturedThisFrame;
+    /** The captured mesh has been replayed into {@link #maskTarget} for this frame.  Super
+     *  Resolution compatibility prepares masks before SR destroys/resizes its input target,
+     *  then composites them later against the full-size display target. */
+    public boolean maskPreparedThisFrame;
+    /** The prepared mask has already contributed to the display color.  World glow uses
+     *  additive blending, so this flag is the guard against a second TAIL/compat callback
+     *  doubling the effect. */
+    public boolean compositedThisFrame;
+    /** True when the prepared mask belongs to the post-upscale output-space path. */
+    public boolean superResolutionPrepared;
     public boolean active;
     public boolean firstPerson;
     /** Whether captureSceneDepth populated mask depth for this state in the current frame. Exact
@@ -55,6 +63,15 @@ public final class GlowCaptureState {
      *  the fragment shader must retain its bounded temporal-mismatch fallback. */
     public boolean exactDepthAlignment = true;
     public @Nullable ItemEffectConfig config;
+
+    /**
+     * Conservative byte reservation for this state's pooled mask attachments. The reservation
+     * follows the GPU target across frames and is managed by {@link GlowCaptureManager}; frame
+     * reset deliberately does not clear it because the pooled textures remain allocated.
+     */
+    public long captureTargetBytesReserved;
+    public int captureTargetReservedWidth;
+    public int captureTargetReservedHeight;
 
     public @Nullable Matrix4f capturedModelViewMatrix;
     public boolean capturedModelViewMatrixValid;
@@ -102,8 +119,22 @@ public final class GlowCaptureState {
     public float lastSceneOffsetX;
     public float lastSceneOffsetY;
 
+    /** Marks this capture unusable and drops any 26.2 submit nodes that can no longer be replayed. */
+    public void invalidateCapture() {
+        capturedThisFrame = false;
+        maskPreparedThisFrame = false;
+        superResolutionPrepared = false;
+        maskDepthPrepared = false;
+        //#if MC>=1_26_02
+        //$$ captureStorage = null;
+        //#endif
+    }
+
     public void resetFrame() {
         capturedThisFrame = false;
+        maskPreparedThisFrame = false;
+        compositedThisFrame = false;
+        superResolutionPrepared = false;
         active = false;
         firstPerson = false;
         maskDepthPrepared = false;
@@ -127,6 +158,11 @@ public final class GlowCaptureState {
         lastMaskOffsetY = 0.0f;
         lastSceneOffsetX = 0.0f;
         lastSceneOffsetY = 0.0f;
+        //#if MC>=1_26_02
+        //$$ // A failed/aborted replay may leave SubmitNodes undrained. Pooling the state must not
+        //$$ // retain those models, render states, or custom-geometry closures into later frames.
+        //$$ captureStorage = null;
+        //#endif
         // Pre-1.21.9: rewind any builder left open by an early-returned renderCapturedNodes
         // (see DelayingMultiBufferSource.endFrame). Native buffers are pooled, only released in releaseState.
         //#if MC<1_21_09

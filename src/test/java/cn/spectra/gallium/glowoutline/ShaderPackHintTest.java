@@ -1,7 +1,15 @@
 package cn.spectra.gallium.glowoutline;
 
+import cn.spectra.gallium.glowoutline.sr.SrShaderPackContext;
+import cn.spectra.gallium.glowoutline.sr.SrShaderPackResolver.Session;
+import cn.spectra.gallium.glowoutline.sr.definition.SrDefinition.JitterOwner;
+import cn.spectra.gallium.glowoutline.sr.runtime.SrProjectionResolver.ProjectionResolution;
 import java.io.StringReader;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 
@@ -10,6 +18,23 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ShaderPackHintTest {
+
+    private static final class ThrowingPackContext implements SrShaderPackContext {
+        @Override
+        public boolean gallium$hasCapturedShaderPackContext() {
+            return true;
+        }
+
+        @Override
+        public Optional<Session> gallium$getSrDefinitionSession() {
+            throw new IllegalStateException("broken new pack context");
+        }
+
+        @Override
+        public Optional<String> gallium$getGalliumHint() {
+            return Optional.empty();
+        }
+    }
 
     private static float resolve(String json, Map<String, String> options) {
         Function<String, String> lookup = ShaderPackHint.mapLookup(options);
@@ -44,6 +69,32 @@ class ShaderPackHintTest {
                 + "\"period\":{"
                 + "\"option\":\"FSR2_SCALE\","
                 + "\"values\":{\"1\":18,\"3\":32}}}}";
+    }
+
+    @Test
+    void failedNewPackDefinitionLoadProducesAnEmptyAtomicReloadValue() {
+        assertTrue(ShaderPackHint.loadDefinitionForReload(
+                new ThrowingPackContext()).isEmpty());
+    }
+
+    @Test
+    void packIdentityHintAndSessionUseOneImmutableVolatilePublication() throws Exception {
+        var snapshotField = ShaderPackHint.class.getDeclaredField("cachedPackSnapshot");
+        assertTrue(Modifier.isVolatile(snapshotField.getModifiers()));
+
+        Class<?> snapshotType = snapshotField.getType();
+        assertTrue(snapshotType.isRecord());
+        assertEquals(List.of("packRef", "hint", "srDefinition"),
+                Arrays.stream(snapshotType.getRecordComponents())
+                        .map(component -> component.getName()).toList());
+        assertTrue(Arrays.stream(snapshotType.getDeclaredFields())
+                .filter(field -> !Modifier.isStatic(field.getModifiers()))
+                .allMatch(field -> Modifier.isFinal(field.getModifiers())));
+
+        var projectionKey = ShaderPackHint.class.getDeclaredField(
+                "cachedProjectionPackSnapshot");
+        assertTrue(Modifier.isVolatile(projectionKey.getModifiers()));
+        assertEquals(snapshotType, projectionKey.getType());
     }
 
     private static Map<String, String> iterationOptions(String scale, String renderingMode) {
@@ -213,6 +264,221 @@ class ShaderPackHintTest {
         ShaderPackHint.ProjectionTransform transform = resolveProjection(
                 hint, Map.of("ResolutionScale", "0.75"), 4, 1920, 1080);
         assertEquals(0.75f, transform.scaleX(), 1e-7f);
+        assertFalse(transform.exactTemporalJitter());
+    }
+
+    @Test
+    void activeSrDefinitionWinsAnOlderNativeUpscalerHintByDefault() {
+        String hint = "{\"internal_resolution_scale\":{"
+                + "\"option\":\"FSR2_SCALE\",\"values\":{\"-1\":1.0}}}";
+        ShaderPackHint.ProjectionTransform sr =
+                new ShaderPackHint.ProjectionTransform(0.5f, 0.5f, 0.0f, 0.0f, false);
+
+        ShaderPackHint.ProjectionTransform result =
+                ShaderPackHint.resolveProjectionFromHintReader(
+                        new StringReader(hint), ShaderPackHint.mapLookup(Map.of("FSR2_SCALE", "-1")),
+                        4, 3840, 2054, sr);
+
+        assertEquals(0.5f, result.scaleX(), 0.0f);
+        assertEquals(0.5f, result.scaleY(), 0.0f);
+    }
+
+    @Test
+    void nonstandardPackCanExplicitlyOverrideAnActiveSrDefinition() {
+        String hint = "{\"override_sr_definition\":true,"
+                + "\"internal_resolution_scale\":{"
+                + "\"option\":\"CUSTOM_SCALE\",\"values\":{\"native\":0.75}}}";
+        ShaderPackHint.ProjectionTransform sr =
+                new ShaderPackHint.ProjectionTransform(0.5f, 0.5f, 0.0f, 0.0f, false);
+
+        ShaderPackHint.ProjectionTransform result =
+                ShaderPackHint.resolveProjectionFromHintReader(
+                        new StringReader(hint),
+                        ShaderPackHint.mapLookup(Map.of("CUSTOM_SCALE", "native")),
+                        4, 3840, 2054, sr);
+
+        assertEquals(0.75f, result.scaleX(), 0.0f);
+        assertEquals(0.75f, result.scaleY(), 0.0f);
+    }
+
+    @Test
+    void srCompatiblePackRuntimeProjectionWinsLegacyHintWhenExternalSrIsInactive() {
+        ShaderPackHint.ProjectionTransform oldHint =
+                new ShaderPackHint.ProjectionTransform(1.0f, 1.0f, 0.0f, 0.0f, false);
+        ShaderPackHint.ProjectionTransform runtime =
+                new ShaderPackHint.ProjectionTransform(0.5f, 0.5f, 0.0f, 0.0f, false);
+
+        ShaderPackHint.ProjectionTransform result = ShaderPackHint.selectProjection(
+                oldHint, false, null, runtime);
+
+        assertEquals(0.5f, result.scaleX(), 0.0f);
+        assertEquals(0.5f, result.scaleY(), 0.0f);
+    }
+
+    @Test
+    void provenBuiltInFsrJitterRemainsExactWhenExternalSrIsInactive() {
+        ShaderPackHint.ProjectionTransform runtime =
+                new ShaderPackHint.ProjectionTransform(
+                        0.5f, 0.5f, 0.00025f, -0.0005f, true);
+
+        ShaderPackHint.ProjectionTransform result = ShaderPackHint.selectProjection(
+                null, false, null, runtime);
+
+        assertEquals(runtime, result);
+        assertTrue(result.exactTemporalJitter());
+    }
+
+    @Test
+    void provenPackJitterDoesNotPromoteLegacySrAtThePostUpscaleStage() {
+        ShaderPackHint.ProjectionTransform sr =
+                new ShaderPackHint.ProjectionTransform(0.5f, 0.5f, 0.0f, 0.0f, false);
+        ShaderPackHint.ProjectionTransform pack =
+                new ShaderPackHint.ProjectionTransform(
+                        0.5f, 0.5f, 0.00025f, -0.0005f, true);
+
+        ShaderPackHint.ProjectionTransform result =
+                ShaderPackHint.mergeCompatibleRuntimeJitter(sr, pack);
+
+        assertEquals(0.0f, result.jitterX(), 0.0f);
+        assertEquals(0.0f, result.jitterY(), 0.0f);
+        assertFalse(result.exactTemporalJitter());
+    }
+
+    @Test
+    void provenPackJitterCannotCrossAProjectionExtentMismatch() {
+        ShaderPackHint.ProjectionTransform sr =
+                new ShaderPackHint.ProjectionTransform(0.5f, 0.5f, 0.0f, 0.0f, false);
+        ShaderPackHint.ProjectionTransform pack =
+                new ShaderPackHint.ProjectionTransform(
+                        0.6f, 0.6f, 0.00025f, -0.0005f, true);
+
+        assertEquals(sr, ShaderPackHint.mergeCompatibleRuntimeJitter(sr, pack));
+    }
+
+    @Test
+    void conflictingExactSchemaAndCallSiteJitterDropsExactReplay() {
+        ShaderPackHint.ProjectionTransform sr =
+                new ShaderPackHint.ProjectionTransform(
+                        0.5f, 0.5f, 0.001f, -0.001f, true);
+        ShaderPackHint.ProjectionTransform pack =
+                new ShaderPackHint.ProjectionTransform(
+                        0.5f, 0.5f, 0.0005f, -0.0005f, true);
+
+        ShaderPackHint.ProjectionTransform result =
+                ShaderPackHint.mergeCompatibleRuntimeJitter(sr, pack);
+
+        assertFalse(result.exactTemporalJitter());
+        assertEquals(0.0f, result.jitterX(), 0.0f);
+        assertEquals(0.0f, result.jitterY(), 0.0f);
+    }
+
+    @Test
+    void matchingViewportWithoutGlobalProgramConsensusDropsSchemaExactReplay() {
+        ShaderPackHint.ProjectionTransform sr =
+                new ShaderPackHint.ProjectionTransform(
+                        0.5f, 0.5f, 0.0005f, -0.0005f, true);
+        ShaderPackHint.ProjectionTransform pack =
+                new ShaderPackHint.ProjectionTransform(
+                        0.5f, 0.5f, 0.0f, 0.0f, false);
+
+        ShaderPackHint.ProjectionTransform result =
+                ShaderPackHint.mergeCompatibleRuntimeJitter(sr, pack);
+
+        assertFalse(result.exactTemporalJitter());
+        assertEquals(0.0f, result.jitterX(), 0.0f);
+        assertEquals(0.0f, result.jitterY(), 0.0f);
+    }
+
+    @Test
+    void unresolvedExplicitOverrideCannotSuppressAValidSrProjection() {
+        ShaderPackHint.ProjectionTransform sr =
+                new ShaderPackHint.ProjectionTransform(0.5f, 0.5f, 0.0f, 0.0f, false);
+        ShaderPackHint.ProjectionTransform runtime =
+                new ShaderPackHint.ProjectionTransform(0.75f, 0.75f, 0.0f, 0.0f, false);
+
+        ShaderPackHint.ProjectionTransform result = ShaderPackHint.selectProjection(
+                null, true, sr, runtime);
+
+        assertEquals(0.5f, result.scaleX(), 0.0f);
+    }
+
+    @Test
+    void activeSrSourceFlagFollowsTheSameOverridePrecedence() {
+        ShaderPackHint.ProjectionTransform explicit =
+                new ShaderPackHint.ProjectionTransform(0.75f, 0.75f, 0.0f, 0.0f, false);
+        ShaderPackHint.ProjectionTransform sr =
+                new ShaderPackHint.ProjectionTransform(0.5f, 0.5f, 0.0f, 0.0f, false);
+
+        assertTrue(ShaderPackHint.selectsActiveSrProjection(explicit, false, sr));
+        assertFalse(ShaderPackHint.selectsActiveSrProjection(explicit, true, sr));
+        assertFalse(ShaderPackHint.selectsActiveSrProjection(explicit, false, null));
+    }
+
+    @Test
+    void activeSrRuntimeRemainsVisibleWhenGalliumProjectionOverridesIt() {
+        ShaderPackHint.ProjectionTransform sr =
+                new ShaderPackHint.ProjectionTransform(0.5f, 0.5f, 0.0f, 0.0f, false);
+
+        assertTrue(ShaderPackHint.hasActiveSrRuntime(sr));
+        assertFalse(ShaderPackHint.hasActiveSrRuntime(null));
+    }
+
+    @Test
+    void srPixelProtocolConvertsPerAxisScaleOriginAndJitter() {
+        ProjectionResolution resolution = new ProjectionResolution(
+                1279, 719, 1919, 1079,
+                1279.0f / 1919.0f, 719.0f / 1079.0f,
+                4.0f / 1919.0f, 2.0f / 1079.0f,
+                0.5f, -0.25f, 16,
+                true, true, true, JitterOwner.SHADERPACK,
+                true, true, true);
+
+        ShaderPackHint.ProjectionTransform transform =
+                ShaderPackHint.projectionFromSrResolution(resolution);
+
+        assertEquals(resolution.scaleX(), transform.scaleX(), 0.0f);
+        assertEquals(resolution.scaleY(), transform.scaleY(), 0.0f);
+        assertEquals(resolution.originX(), transform.viewportOriginX(), 0.0f);
+        assertEquals(resolution.originY(), transform.viewportOriginY(), 0.0f);
+        assertEquals(1.0f / 1919.0f, transform.jitterX(), 1e-8f);
+        assertEquals(-0.5f / 1079.0f, transform.jitterY(), 1e-8f);
+        assertTrue(transform.exactTemporalJitter());
+        assertEquals(transform.viewportOriginX() + transform.jitterX() * 0.5f,
+                transform.uvOffsetX(), 1e-8f);
+    }
+
+    @Test
+    void modOwnedSrJitterUsesTheShaderFacingRuntimeValue() {
+        ProjectionResolution resolution = new ProjectionResolution(
+                1280, 720, 1920, 1080,
+                2.0f / 3.0f, 2.0f / 3.0f,
+                0.0f, 0.0f,
+                0.5f, 0.5f, 16,
+                true, true, true, JitterOwner.MOD,
+                true, true, true);
+
+        ShaderPackHint.ProjectionTransform transform =
+                ShaderPackHint.projectionFromSrResolution(resolution);
+
+        assertEquals(1.0f / 1920.0f, transform.jitterX(), 1e-8f);
+        assertTrue(transform.exactTemporalJitter());
+    }
+
+    @Test
+    void nonExactSrConventionNeverLeaksApproximateJitterToConsumers() {
+        ProjectionResolution resolution = new ProjectionResolution(
+                1280, 720, 1920, 1080,
+                2.0f / 3.0f, 2.0f / 3.0f,
+                0.0f, 0.0f,
+                0.5f, -0.5f, 16,
+                true, true, true, JitterOwner.MOD,
+                true, true, false);
+
+        ShaderPackHint.ProjectionTransform transform =
+                ShaderPackHint.projectionFromSrResolution(resolution);
+
+        assertEquals(0.0f, transform.jitterX(), 0.0f);
+        assertEquals(0.0f, transform.jitterY(), 0.0f);
         assertFalse(transform.exactTemporalJitter());
     }
 }

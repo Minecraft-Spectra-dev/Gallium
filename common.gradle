@@ -176,7 +176,15 @@ List<String> STUB_MIXIN_CLASSES_PRE_1_21_02 = [
         "ShaderUboCompatMixin"
 ]
 
-	List<String> ACTIVE_STUB_MIXINS = []
+// The invasive SR RenderTarget lifecycle bridge is intentionally limited to Minecraft lines
+// still covered by SR mainline.  Every version keeps the universal JSON definition reader, but
+// non-mainline Gallium builds must not inject into frozen/third-party SR handler implementations.
+List<String> STUB_MIXIN_CLASSES_NON_SR_MAINLINE = [
+        "SuperResolutionRenderHandlerMixin",
+        "RenderSystemFrameCleanupMixin"
+]
+
+List<String> ACTIVE_STUB_MIXINS = []
 ACTIVE_STUB_MIXINS += unobfuscated ? STUB_MIXIN_CLASSES_FROM_1_26 : STUB_MIXIN_CLASSES_PRE_1_26
 if (mcVersion >= 1_21_11) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_FROM_1_21_11
@@ -198,6 +206,13 @@ if (mcVersion >= 1_21_06) {
 }
 if (mcVersion < 1_21_09) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_PRE_1_21_09
+}
+boolean srMainlineMinecraft = mcVersion == 1_21_01
+        || mcVersion == 1_21_11
+        || mcVersion == 1_26_01
+        || mcVersion == 1_26_02
+if (!srMainlineMinecraft) {
+    ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_NON_SR_MAINLINE
 }
 
 loom {

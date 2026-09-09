@@ -95,13 +95,13 @@
 - [ ] 启用 shader pack 后，在第一人称用手臂或手持物遮住发光的掉落物、物品框或展示架 → 世界描边应在 Iris 手部轮廓处截断；Iris 手部在 `LevelRenderer` 内、深度清除前完成，因此应存在于 `sceneDepthTarget`。
 - [ ] Iris 阴影 pass 期间**不出现**任何发光（`IrisCompat.isShadowPass()` 应令所有 mixin 短路）。
 - [ ] 切换不同 shader pack 后遮挡仍正确，不出现穿墙描边。
-- [ ] 对带 TAA / 超分辨率的 shader pack，分别在 TAA **开/关**、相机**静止/移动**时观察半遮挡物品：描边轮廓不应随帧产生水波状抖动或断续闪烁。iterationRP 的内置 `FSR2_SCALE=0/1/2/3/4`、正常投影模式应走当帧 R2 jitter 精确重放；`-1`、外部超分、自定义渲染分辨率或玩家 TAA 排除则必须保守回退。
+- [ ] 对带 TAA / 超分辨率的 shader pack，分别在 TAA **开/关**、相机**静止/移动**时观察半遮挡物品：描边轮廓不应随帧产生水波状抖动或断续闪烁。iterationRP 内置 `FSR2_SCALE=1/2/3/4` 应自动取得正确viewport；只有 mask 与 Terrain/Water/DH scene-depth 的全部实际 Iris program/fallback 调用取得同一 uniform（或全为零）时才报告 exact，混合零 jitter 分支必须保守回退。`-1`与自定义渲染分辨率也不得误报exact。
 - [ ] **远距离**和**贴墙**两组场景中，物品被墙/地形遮挡后其描边不应穿过遮挡物。重点看物体刚进入或离开墙边的一像素邻域：精确路径不得扩大遮挡物轮廓；未知 pack 的池化回退也不能演变为持续穿墙。
 - [ ] 用奇数窗口尺寸（例如 1919x1079）分别测试 `FSR2_SCALE=1/2/3/4`：描边 X/Y 均贴合，不因内部尺寸分别向下取整而出现单轴偏移。
 - [ ] 将发光物品放在斜坡、地面与天空交界处，旋转相机并改变视距：描边既不整体消失（"仅地平线可见"），也不出现随镜头移动的波纹。
 - [ ] 物品发光放在地面（开启光影），描边应正常出现而非整体消失。精确 Iris 重放会清空 mask depth，但 FSH 必须在每个扩张来源 texel 上与场景深度比较，不能让被遮挡的来源从边缘漏出。
 
-> 实现约束：Gallium 不通过反射猜测 `taaJitter`、`taaOffset`、`TAAJitter` 等自定义 uniform。名称存在不代表当前 pass 启用了 TAA，且不同光影包会在内部缩放前后以不同顺序应用偏移。精确 jitter 重放必须由 `shaderpacks/<pack>/gallium.json` 显式声明序列、周期、单位和坐标变换；通用回退继续使用有界深度池化。
+> 实现约束：Gallium 不通过名字猜测 `taaJitter`、`taaOffset`、`TAAJitter` 等自定义 uniform。标准 SR 可使用 schema `source_config`；内置 FSR 只有在语义输入、整数 extent、live viewport、全部实际 program/fallback 的受限仿射公式和调用参数同时一致后，才读取已证明的 shader-facing uniform。非标准顺序/表达式仍需完整 `gallium.json`，否则使用有界深度池化。
 >
 > 资源包 shader 在扩张轮廓时，必须先将每个来源 mask texel 的 `MaskDepthSampler` 与其自身的 `SceneDepthSampler` 比较，再与当前输出像素处 `MaskDepthSampler` 与 `SceneDepthSampler` 的较近值比较。前者会剔除精确 Iris 重放中原本被遮挡的来源；后者会裁掉落在前景几何上的外扩描边。无 Iris 时场景深度补充清除后渲染的 vanilla 手部，Iris 时则读取已包含 Iris 自定义手部的清除前快照。比较时不要添加固定 raw-depth 偏移。参考 `docs/SHADER_PACK_COMPATIBILITY.md` 的 Outline occlusion sampling。
 
@@ -161,3 +161,60 @@
 3. 物品框、展示架、怪物手持物品共用 `other_entities` 开关。
 4. `DuplicatingSubmitNodeStorage` 直接 submit（不走 `order(int)`）的调用会被复制到 order=0 层。
 5. `GlCommandEncoderMixin` 修补的是 vanilla `copyTextureToTexture` 的 size→absolute 坐标 bug（1.21.10、1.21.11、26.1.2 三个版本均存在）。该修复在零偏移拷贝时是 no-op，故无条件应用于所有版本；未来 Mojang 修复上游后需重新加版本门控，否则会双重偏移。
+
+---
+
+## J. Super Resolution 定义与主线渲染兼容
+
+### J-1 全版本定义读取
+
+以下检查在全部 Gallium 构建执行，不能按 Minecraft 版本删减 parser：
+
+- [ ] 同一光影包分别只放 legacy、v1、v2、v3 定义，Gallium均能选中正确 profile。
+- [ ] 多文件共存时严格选择 `v3 → v2 → v1 → superresolution.json` 的第一个文件。
+- [ ] 目录包、根级 `shaders/` zip及带外层目录的zip都从Iris实际 shader root读取。
+- [ ] 首选文件损坏、schema未知或文件名/schema不一致时 fail closed，不回退旧文件。
+- [ ] `-1/-2`、显式 region、非零 origin及 1919×1079 奇数尺寸的 X/Y比例正确。至少使用一个
+      四边均不贴物理纹理边界的region，分别检查左/右/上/下边缘：mask、mask depth和scene
+      depth均只能访问`origin .. origin+size`，3×3保守采样不得泄漏到相邻packed region。
+- [ ] 在上述非零origin用例中分别施加正、负sub-pixel jitter；合法region边界保持不动，
+      只有当帧采样坐标及边缘的sub-pixel覆盖率移动，不能把整数region起止位置移到前一列/行
+      或把absolute coordinate再次按`0 .. activeSize`裁剪。
+- [ ] `source=mod`、shaderpack `const/uniform/variable` 均能解析；缺值/NaN回退而不崩溃。
+- [ ] 带宏配置使用 SR/Iris环境、当前shaderpack boolean/string option及SR动态宏预处理；
+      安装/不安装SR必须选择同一光影选项分支，无法完整预处理时不猜分支。
+- [ ] 完全不装SR时，含普通 Iris option/环境宏的定义仍可解析；引用不可取得的`SR_*`
+      动态宏时 fail closed，不能按0静默选错分支；但位于未选中的`#ifdef SR_INSTALLED`
+      或 shaderpack option 分支内的动态宏不得误伤整份定义，未访问的`#elif`同理。
+- [ ] v1/v2/v3省略input/output `region`时统一得到`[0,0,-1,-1]`；X/Y为负数、W/H为0
+      或小于`-2`必须fail closed。
+- [ ] 标准 SR 光影包不放 `gallium.json` 仍能自动对齐；显式 `gallium.json` 能覆盖自动定义。
+- [ ] 活动 SR 的 live scale默认覆盖旧的内置 FSR `gallium.json`；只有
+      `override_sr_definition=true` 才允许完整的非标准覆盖。
+- [ ] iterationRP启用内置FSR且外部SR inactive/未安装时，从SR profile的语义输入和
+      Iris已预处理target extent得到逐轴比例，不需要`gallium.json`。
+- [ ] SR像素jitter按`2 * offset / screenExtent`逐轴转换为NDC；v2/v3 exact值必须与
+      实际Iris调用参数一致。v1/legacy活动SR不得由调用点提升为post-upscale exact，
+      应保留稳定的保守深度路径；同一调用点仍可供光影内置FSR使用。
+
+### J-2 SR 0.9+ 主线
+
+发布阻断目标：1.21.1、1.21.11、26.1.2、26.2。
+
+- [ ] CaptureMode A/B/C分别测试世界物品与第一人称手持物。
+- [ ] 比例 1.0、0.75、0.6667、0.5 均只合成一次，亮度不翻倍。
+- [ ] 世界深度在全分 mask 中正确重采样；手/前景仍遮挡世界描边。
+- [ ] 窗口缩放、全屏、最小化、资源重载和算法切换不复用旧 attachment。
+- [ ] Iris shadercompat 与无 Iris hack path 都不出现尺寸不匹配、穿墙或黑帧。
+- [ ] shadercompat 只有在本帧同一算法的 dispatch start/finish、输出尺寸及显示尺寸全部
+      匹配时才用 display-identity mask；事件缺失、resize或base projection缺失均 fail closed。
+- [ ] Vulkan presentation 的 hudless/final capture 都包含正确阶段的世界/GUI描边。
+- [ ] 世界描边在entity outline及可选PostChain之后、`FogRenderer.endFrame`/hudless capture之前
+      合成；首帧也不得先在renderLevel TAIL绘制后被Iris/SR覆盖。final hook失配时下一帧应
+      只告警一次并恢复legacy TAIL，而不是永久丢失描边。
+- [ ] Vulkan presentation取消`RenderSystem.flipFrame`时，下一客户端渲染帧补做一次
+      DynamicUniforms/LevelRenderer cleanup；进入世界后的UBO容量不得跨帧持续翻倍。
+- [ ] 有效帧生成路径中世界描边随真实帧进入 hudless input，不隔帧消失。
+- [ ] 26.2 OpenGL/Iris forward-Z与原生 reverse-Z路径分别验证。
+
+非 SR 主线的 Gallium 构建只认证通用定义读取，不声明旧 SR RenderTarget生命周期兼容。

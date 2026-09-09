@@ -153,6 +153,9 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
         // pre-fill (active on 1.21.6+, including 26.2's Iris/OpenGL forward-Z path; a no-op stub
         // on versions without GpuTextureView). GpuDevice is available here after client init.
         cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.precompile();
+        // Output-space SR masks may be screen-sized while their world-depth snapshot remains at
+        // render size.  Compile the normalized nearest-depth transfer pass alongside the pool.
+        cn.spectra.gallium.glowoutline.shader.DepthResamplePipeline.precompile();
         GlowPipeline.retainOnly(shaders);
         //#if MC<1_21_06
         //$$ // 1.21.5 also has a per-config pipeline cache (statically declares per-param

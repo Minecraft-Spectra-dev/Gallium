@@ -3,6 +3,7 @@ package cn.spectra.gallium.glowoutline.mixin;
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import cn.spectra.gallium.glowoutline.IrisCompat;
 import cn.spectra.gallium.glowoutline.ItemEffectsManager;
+import cn.spectra.gallium.glowoutline.SuperResolutionCompat;
 import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 import cn.spectra.gallium.glowoutline.shader.GlowComposite;
 import cn.spectra.gallium.glowoutline.shader.GlowTime;
@@ -17,14 +18,24 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(GameRenderer.class)
+// SR's hudless/presentation injector uses priority 900 at the same final call point.  Keep the
+// vanilla/default 1000 priority explicit: Gallium must paint the final target before SR captures
+// it, while avoiding a global priority change relative to Iris's ordinary renderLevel hooks.
+@Mixin(value = GameRenderer.class, priority = 1000)
 public class GameRendererMixin {
 
     @Shadow @Final private Minecraft minecraft;
 
+    @Inject(method = "render(Lnet/minecraft/client/DeltaTracker;Z)V", at = @At("HEAD"))
+    private void galliumClientRenderFrameStart(
+            DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
+        SuperResolutionCompat.beginClientRenderFrame();
+    }
+
     @Inject(method = "renderLevel", at = @At("HEAD"))
     private void galliumGlowFrameStart(DeltaTracker deltaTracker, CallbackInfo ci) {
         if (IrisCompat.isShadowPass()) return;
+        SuperResolutionCompat.beginFrame();
         // No player==null guard here: beginFrame is pure cleanup (drains stale activeStates,
         // resets currentCapture, prunes pool above the high-water mark). Skipping it leaves
         // last frame's capturedThisFrame=true states alive, which the TAIL hook below would
@@ -39,6 +50,52 @@ public class GameRendererMixin {
         GlowCaptureManager.endFrame();
         GlowCaptureManager.beginFrame();
         GlowTime.advanceWorld(deltaTracker.getGameTimeDeltaTicks());
+    }
+
+    @Inject(method = "renderItemInHand", at = @At("TAIL"), require = 0)
+    private void galliumPrepareInlineSrHand(CallbackInfo ci) {
+        SuperResolutionCompat.afterInlineHandRender();
+    }
+
+    //#if MC>=1_21_11
+    /**
+     * One final call point shared by 1.21.11, 26.1 and 26.2. It is after renderLevel, Iris color
+     * conversion, vanilla entity outlines and post effects, but immediately before SR's priority
+     * 900 hudless/presentation capture at FogRenderer.endFrame. Since this mixin has priority
+     * 1000, Gallium's callback is injected ahead of SR's callback at the same instruction.
+     */
+    @Inject(method = "render(Lnet/minecraft/client/DeltaTracker;Z)V",
+            at = @At(value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/fog/FogRenderer;endFrame()V",
+                    shift = At.Shift.BEFORE),
+            require = 0)
+    private void galliumCompositeSrDisplayFrame(DeltaTracker deltaTracker, boolean advanceGameTime,
+                                                CallbackInfo ci) {
+        if (SuperResolutionCompat.compositeDisplayFrame()) return;
+        galliumCompositeLegacyFinalTarget();
+    }
+    //#endif
+
+    /** Ordinary Gallium replay owned by the final hook when no SR frame consumed the capture. */
+    private void galliumCompositeLegacyFinalTarget() {
+        if (this.minecraft.level == null) return;
+        if (!ItemEffectsManager.isActive()) return;
+        if (!GlowOutlineConfig.isEnabled()) return;
+        if (IrisCompat.isShadowPass()) return;
+
+        //#if MC>=1_26_02
+        //$$ RenderTarget mainTarget = minecraft.gameRenderer.mainRenderTarget();
+        //#else
+        RenderTarget mainTarget = minecraft.getMainRenderTarget();
+        //#endif
+        //#if MC>=1_21_05
+        if (mainTarget == null || mainTarget.getColorTexture() == null) return;
+        //#else
+        //$$ if (mainTarget == null || mainTarget.getColorTextureId() == -1) return;
+        //#endif
+        if (!GlowComposite.hasAnyValidCapture()) return;
+
+        GlowComposite.composite(minecraft, mainTarget);
     }
 
     //#if MC>=1_21_05
@@ -62,6 +119,7 @@ public class GameRendererMixin {
         //#else
         RenderTarget mainTarget = minecraft.getMainRenderTarget();
         //#endif
+        mainTarget = SuperResolutionCompat.worldDepthSource(mainTarget);
         if (mainTarget == null || mainTarget.getDepthTexture() == null) return;
 
         GlowCaptureManager.captureSceneDepth(mainTarget);
@@ -79,7 +137,8 @@ public class GameRendererMixin {
     //$$ private void galliumCaptureSceneDepth(DeltaTracker deltaTracker, CallbackInfo ci) {
     //$$     if (IrisCompat.isShadowPass()) return;
     //$$     if (!ItemEffectsManager.isActive()) return;
-    //$$     RenderTarget mainTarget = minecraft.getMainRenderTarget();
+    //$$     RenderTarget mainTarget = SuperResolutionCompat.worldDepthSource(
+    //$$             minecraft.getMainRenderTarget());
     //$$     if (mainTarget == null || mainTarget.getDepthTextureId() == -1) return;
     //$$     GlowCaptureManager.captureSceneDepth(mainTarget);
     //$$ }
@@ -91,6 +150,10 @@ public class GameRendererMixin {
     // intervention. Keep the simple TAIL hook here.
     @Inject(method = "renderLevel", at = @At("TAIL"))
     private void galliumGlowComposite(DeltaTracker deltaTracker, CallbackInfo ci) {
+        // Mainline builds defer from frame one so the final hook owns both SR and no-SR replay.
+        // If that optional injection point ever stops matching, the next frame's HEAD watchdog
+        // logs once and re-enables this legacy path permanently.
+        if (SuperResolutionCompat.shouldDeferLegacyCompositeAtTail()) return;
         if (!ItemEffectsManager.isActive()) return;
         if (!GlowOutlineConfig.isEnabled()) return;
         if (IrisCompat.isShadowPass()) return;
@@ -139,6 +202,7 @@ public class GameRendererMixin {
     //$$                 remap = false),
     //$$         expect = 1)
     //$$ private void galliumGlowComposite(DeltaTracker deltaTracker, boolean bl, CallbackInfo ci) {
+    //$$     if (SuperResolutionCompat.compositeDisplayFrame()) return;
     //$$     if (this.minecraft.level == null) return;
     //$$     if (!ItemEffectsManager.isActive()) return;
     //$$     if (!GlowOutlineConfig.isEnabled()) return;
@@ -168,6 +232,7 @@ public class GameRendererMixin {
     //$$                 remap = false),
     //$$         expect = 1)
     //$$ private void galliumGlowComposite(DeltaTracker deltaTracker, boolean bl, CallbackInfo ci) {
+    //$$     if (SuperResolutionCompat.compositeDisplayFrame()) return;
     //$$     if (this.minecraft.level == null) return;
     //$$     if (!ItemEffectsManager.isActive()) return;
     //$$     if (!GlowOutlineConfig.isEnabled()) return;

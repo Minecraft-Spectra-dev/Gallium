@@ -9,6 +9,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$ import com.mojang.blaze3d.pipeline.RenderPipeline;
 //$$ import com.mojang.blaze3d.pipeline.TextureTarget;
 //$$ import com.mojang.blaze3d.shaders.ShaderType;
+//$$ import com.mojang.blaze3d.systems.CommandEncoder;
 //$$ import com.mojang.blaze3d.systems.RenderPass;
 //$$ import com.mojang.blaze3d.systems.RenderSystem;
 //$$ import com.mojang.blaze3d.textures.FilterMode;
@@ -168,18 +169,24 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$      *
 //$$      * <p>Call from within a CommandEncoder scope — opens its own RenderPass internally.
 //$$      */
-//$$     public static void flip(GpuTextureView srcDepthView, TextureTarget dest) {
-//$$         if (!isReady() || srcDepthView == null || dest == null) return;
+//$$     public static boolean flip(
+//$$             CommandEncoder encoder, GpuTextureView srcDepthView, TextureTarget dest) {
+//$$         if (!isReady() || encoder == null || srcDepthView == null || dest == null) return false;
 //$$         GpuTextureView destView = dest.getColorTextureView();
-//$$         if (destView == null) return;
+//$$         if (destView == null) return false;
 //$$
-//$$         var encoder = RenderSystem.getDevice().createCommandEncoder();
 //$$         // Optional.empty() = no clear; we overwrite every fragment anyway via the full-screen tri.
 //$$         try (RenderPass pass = encoder.createRenderPass(
 //$$                 () -> "Gallium DepthFlip", destView, Optional.empty())) {
 //$$             pass.setPipeline(pipeline);
 //$$             SamplerHelper.bindClampToEdge(pass, "Source", srcDepthView, FilterMode.NEAREST);
 //$$             pass.draw(3, 1, 0, 0);
+//$$             return true;
+//$$         } catch (RuntimeException e) {
+//$$             Gallium.LOGGER.error(
+//$$                     "Gallium reverse-Z depth normalization failed; disabling the pipeline", e);
+//$$             ready = false;
+//$$             return false;
 //$$         }
 //$$     }
 //$$

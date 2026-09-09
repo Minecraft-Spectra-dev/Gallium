@@ -7,6 +7,7 @@
 		"ItemInHandRendererMixin",
 		"ItemInHandLayerMixin",
 		"HumanoidArmorLayerMixin",
+		"IrisShaderPackContextMixin",
 		"ItemFrameRendererMixin",
 		"ItemFrameRenderStateMixin",
 		"ItemEntityRendererMixin",
@@ -24,6 +25,8 @@
 		"ProjectionMatrixBufferMixin",
 		"ArmedEntityRenderStateMixin",
 		"ShaderUboCompatMixin",
+		"SuperResolutionRenderHandlerMixin",
+		"RenderSystemFrameCleanupMixin",
 		"accessor.FeatureRenderDispatcherAccessor",
 		"accessor.GameRendererAccessor",
 		"accessor.GuiRendererAccessor"

@@ -74,7 +74,7 @@ public final class GlowComposite {
 
     private static boolean hasAnyExactCapture(int w, int h) {
         for (GlowCaptureState state : GlowCaptureManager.getActiveStates()) {
-            if (state.capturedThisFrame && state.config != null
+            if (state.capturedThisFrame && !state.compositedThisFrame && state.config != null
                     && captureTargetSizeMatches(state.maskTarget, w, h)) return true;
         }
         return false;
@@ -83,7 +83,17 @@ public final class GlowComposite {
 
     public static boolean hasAnyValidCapture() {
         for (GlowCaptureState state : GlowCaptureManager.getActiveStates()) {
-            if (state.capturedThisFrame && state.config != null && state.maskTarget != null) return true;
+            if (state.capturedThisFrame && !state.compositedThisFrame
+                    && state.config != null && state.maskTarget != null) return true;
+        }
+        return false;
+    }
+
+    public static boolean hasAnyPreparedCapture() {
+        for (GlowCaptureState state : GlowCaptureManager.getActiveStates()) {
+            if (state.capturedThisFrame && state.maskPreparedThisFrame
+                    && !state.compositedThisFrame && state.config != null
+                    && state.maskTarget != null) return true;
         }
         return false;
     }
@@ -186,19 +196,33 @@ public final class GlowComposite {
 
     //#if MC>=1_21_06
     private static void drawGlow(GlowCaptureState state, Minecraft minecraft, RenderTarget mainTarget) {
-        if (!state.capturedThisFrame || state.config == null || state.maskTarget == null) return;
-
-        GlowCaptureManager.renderCapturedNodes(state, minecraft);
-        if (!state.capturedThisFrame) return;
+        if (!state.capturedThisFrame || state.compositedThisFrame
+                || state.config == null || state.maskTarget == null) return;
 
         TextureTarget mask = state.maskTarget;
-        if (mask.getColorTextureView() == null || mask.getDepthTextureView() == null) return;
+        int w = mainTarget.width;
+        int h = mainTarget.height;
+        // The composite-level gate only proves that at least one capture matches. A resize can
+        // occur between SR world and hand preparation, so reject each stale prepared state here
+        // instead of stretching it alongside a different state that matches the new output.
+        if (!captureTargetSizeMatches(mask, w, h)) {
+            state.invalidateCapture();
+            return;
+        }
+
+        if (!state.maskPreparedThisFrame) {
+            GlowCaptureManager.renderCapturedNodes(state, minecraft);
+        }
+        if (!state.capturedThisFrame) return;
+
+        if (mask.getColorTextureView() == null || mask.getDepthTextureView() == null) {
+            state.invalidateCapture();
+            return;
+        }
 
         RenderPipeline pipeline = GlowPipeline.get(state.config.shader());
         if (pipeline == null) return;
 
-        int w = mainTarget.width;
-        int h = mainTarget.height;
         float maskScaleX = state.lastMaskScaleX;
         float maskScaleY = state.lastMaskScaleY;
         float sceneScaleX = state.lastSceneScaleX;
@@ -212,10 +236,15 @@ public final class GlowComposite {
 
         com.mojang.blaze3d.textures.GpuTextureView sceneDepthView = selectSceneDepthView(
                 state, mask, mainTarget, minecraft);
+        if (sceneDepthView == null) return;
         // The fragment shader maps all three depth/color inputs to one integer texel. Linear
         // filtering here would blend neighboring item silhouettes before that mapping and create
         // a one-pixel halo/penetration at internal-resolution boundaries.
         FilterMode maskFilter = FilterMode.NEAREST;
+
+        // Keep depth normalization, the UBO upload, and the final draw in one command stream.
+        // Separate encoders can be reordered by deferred backends and expose last frame's depth.
+        var encoder = RenderSystem.getDevice().createCommandEncoder();
 
         //#if MC>=1_26_02
         //$$ // Pack-author shaders consume forward-Z (0=near, 1=far). Native 26.2 renders in
@@ -235,40 +264,51 @@ public final class GlowComposite {
         //$$     // already applied LEQUAL and remains the source of occlusion truth.
         //$$     maskDepthViewToBind = mask.getDepthTextureView();
         //$$     sceneDepthViewToBind = state.firstPerson ? maskDepthViewToBind : sceneDepthView;
-        //$$ } else if (cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.isReady()) {
-        //$$     // 1) Mask depth: flip the captured mask depth into a per-state forward-Z target.
-        //$$     state.maskDepthForwardZTarget = cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline
-        //$$             .ensureForwardZTarget(state.maskDepthForwardZTarget,
-        //$$                     "GlowMaskDepthForwardZ_" + Integer.toHexString(System.identityHashCode(state)),
-        //$$                     mask.width, mask.height);
-        //$$     cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.flip(
-        //$$             mask.getDepthTextureView(), state.maskDepthForwardZTarget);
-        //$$     maskDepthViewToBind = state.maskDepthForwardZTarget.getColorTextureView();
-        //$$
-        //$$     // 2) Native reverse-Z: flip the source selected above.
-        //$$     //   - first-person  → mask.depth (already flipped above; reuse view)
-        //$$     //   - Iris/Vulkan   → the sceneDepthTarget snapshot (world + Iris hand)
-        //$$     //   - no-Iris world → mainTarget.depth at composite time, including held items
-        //$$     if (state.firstPerson) {
-        //$$         sceneDepthViewToBind = maskDepthViewToBind;
-        //$$     } else {
-        //$$         // Normalize the selected world-depth source into a shared lazy target.
-        //$$         TextureTarget liveScene = cn.spectra.gallium.glowoutline.capture
-        //$$                 .GlowCaptureManager.ensureLiveSceneDepthForwardZTarget(
-        //$$                         mainTarget.width, mainTarget.height);
-        //$$         if (liveScene != null && sceneDepthView != null) {
-        //$$             cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.flip(
-        //$$                     sceneDepthView, liveScene);
-        //$$             sceneDepthViewToBind = liveScene.getColorTextureView();
-        //$$         } else {
-        //$$             sceneDepthViewToBind = maskDepthViewToBind;
-        //$$         }
-        //$$     }
         //$$ } else {
-        //$$     // Pipeline failed to compile — bind raw views as last resort (broken depth, but
-        //$$     // at least no crash). Diagnostic warning logged once at compile time.
-        //$$     maskDepthViewToBind = mask.getDepthTextureView();
-        //$$     sceneDepthViewToBind = sceneDepthView;
+        //$$     // Native reverse-Z must never reach a forward-Z pack shader. Every allocation
+        //$$     // and flip is therefore fail-closed instead of binding raw depth as a fallback.
+        //$$     if (!cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.isReady()) {
+        //$$         state.invalidateCapture();
+        //$$         return;
+        //$$     }
+        //$$     try {
+        //$$         state.maskDepthForwardZTarget = cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline
+        //$$                 .ensureForwardZTarget(state.maskDepthForwardZTarget,
+        //$$                         "GlowMaskDepthForwardZ_" + Integer.toHexString(System.identityHashCode(state)),
+        //$$                         mask.width, mask.height);
+        //$$         if (state.maskDepthForwardZTarget == null
+        //$$                 || state.maskDepthForwardZTarget.getColorTextureView() == null
+        //$$                 || !cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.flip(
+        //$$                 encoder, mask.getDepthTextureView(), state.maskDepthForwardZTarget)) {
+        //$$             state.invalidateCapture();
+        //$$             return;
+        //$$         }
+        //$$         maskDepthViewToBind = state.maskDepthForwardZTarget.getColorTextureView();
+        //$$
+        //$$         if (state.firstPerson) {
+        //$$             sceneDepthViewToBind = maskDepthViewToBind;
+        //$$         } else {
+        //$$             TextureTarget liveScene = cn.spectra.gallium.glowoutline.capture
+        //$$                     .GlowCaptureManager.ensureLiveSceneDepthForwardZTarget(
+        //$$                             mainTarget.width, mainTarget.height);
+        //$$             if (liveScene == null || liveScene.getColorTextureView() == null
+        //$$                     || !cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline.flip(
+        //$$                     encoder, sceneDepthView, liveScene)) {
+        //$$                 state.invalidateCapture();
+        //$$                 return;
+        //$$             }
+        //$$             sceneDepthViewToBind = liveScene.getColorTextureView();
+        //$$         }
+        //$$     } catch (RuntimeException ignored) {
+        //$$         state.invalidateCapture();
+        //$$         return;
+        //$$     }
+        //$$ }
+        //$$ if (!depthNormalizationComplete(
+        //$$         maskDepthViewToBind != null,
+        //$$         state.firstPerson, sceneDepthViewToBind != null)) {
+        //$$     state.invalidateCapture();
+        //$$     return;
         //$$ }
         //#endif
 
@@ -278,7 +318,6 @@ public final class GlowComposite {
         // Without this, the next drawGlow iteration can overwrite the UBO before
         // the current RenderPass reads it — two items with different effects whose
         // outlines overlap in screen space would each sample the other item's params.
-        var encoder = RenderSystem.getDevice().createCommandEncoder();
         uniformBuffer.writeToEncoder(encoder, GlowTime.worldSecondsFloat(), w, h,
                 maskScaleX, sceneScaleX, maskScaleY, encodedSceneScaleY,
                 maskOffsetX, sceneOffsetX, maskOffsetY, sceneOffsetY, state.config);
@@ -318,23 +357,33 @@ public final class GlowComposite {
             pass.draw(0, 3);
             //#endif
         }
+        state.compositedThisFrame = true;
     }
     //#elseif MC>=1_21_05
     //$$ // 1.21.5: GpuTexture path — no GpuTextureView / SamplerHelper / GlowUniformBuffer.
     //$$ private static void drawGlow(GlowCaptureState state, Minecraft minecraft, RenderTarget mainTarget) {
-    //$$     if (!state.capturedThisFrame || state.config == null || state.maskTarget == null) return;
-    //$$
-    //$$     GlowCaptureManager.renderCapturedNodes(state, minecraft);
-    //$$     if (!state.capturedThisFrame) return;
+    //$$     if (!state.capturedThisFrame || state.compositedThisFrame
+    //$$             || state.config == null || state.maskTarget == null) return;
     //$$
     //$$     TextureTarget mask = state.maskTarget;
-    //$$     if (mask.getColorTexture() == null || mask.getDepthTexture() == null) return;
+    //$$     int w = mainTarget.width;
+    //$$     int h = mainTarget.height;
+    //$$     if (!captureTargetSizeMatches(mask, w, h)) {
+    //$$         state.invalidateCapture();
+    //$$         return;
+    //$$     }
+    //$$
+    //$$     if (!state.maskPreparedThisFrame) GlowCaptureManager.renderCapturedNodes(state, minecraft);
+    //$$     if (!state.capturedThisFrame) return;
+    //$$
+    //$$     if (mask.getColorTexture() == null || mask.getDepthTexture() == null) {
+    //$$         state.invalidateCapture();
+    //$$         return;
+    //$$     }
     //$$
     //$$     RenderPipeline pipeline = GlowPipeline.get(state.config);
     //$$     if (pipeline == null) return;
     //$$
-    //$$     int w = mainTarget.width;
-    //$$     int h = mainTarget.height;
     //$$     float maskScaleX = state.lastMaskScaleX;
     //$$     float maskScaleY = state.lastMaskScaleY;
     //$$     float sceneScaleX = state.lastSceneScaleX;
@@ -361,6 +410,16 @@ public final class GlowComposite {
     //$$     GpuTexture sceneDepthTex;
     //$$     if (state.firstPerson) {
     //$$         sceneDepthTex = mask.getDepthTexture();
+    //$$     } else if (state.superResolutionPrepared) {
+    //$$         TextureTarget foreground = GlowCaptureManager.getForegroundDepthTarget();
+    //$$         sceneDepthTex = switch (chooseSuperResolutionSceneDepth(
+    //$$                 false, IrisCompat.isShaderActive(), false,
+    //$$                 foreground != null, minecraft.options.getCameraType().isFirstPerson())) {
+    //$$             case MASK, DISPLAY_SCENE -> mask.getDepthTexture();
+    //$$             case FOREGROUND -> foreground.getDepthTexture();
+    //$$             case NONE -> null;
+    //$$         };
+    //$$         if (sceneDepthTex == null) return;
     //$$     } else if (usesLiveMainDepth(state.firstPerson,
     //$$             minecraft.options.getCameraType().isFirstPerson(), IrisCompat.isShaderActive())) {
     //$$         // With no Iris in first person, vanilla clears world depth and then writes the
@@ -408,6 +467,7 @@ public final class GlowComposite {
     //$$         pass.setVertexBuffer(0, RenderSystem.getQuadVertexBuffer());
     //$$         pass.draw(0, 3);
     //$$     }
+    //$$     state.compositedThisFrame = true;
     //$$ }
     //#else
     //$$ // Pre-1.21.5 legacy GL composite. Covers 1.21.2–1.21.4 (CompiledShaderProgram path) and
@@ -416,10 +476,17 @@ public final class GlowComposite {
     //$$ // is a small nested //#if MC>=1_21_02 gate; the surrounding GL state setup, texture filter
     //$$ // params, sampler routing, and screen-quad geometry are identical across the two.
     //$$ private static void drawGlow(GlowCaptureState state, Minecraft minecraft, RenderTarget mainTarget) {
-    //$$     if (!state.capturedThisFrame || state.config == null || state.maskTarget == null) return;
-    //$$     GlowCaptureManager.renderCapturedNodes(state, minecraft);
-    //$$     if (!state.capturedThisFrame) return;
+    //$$     if (!state.capturedThisFrame || state.compositedThisFrame
+    //$$             || state.config == null || state.maskTarget == null) return;
     //$$     TextureTarget mask = state.maskTarget;
+    //$$     int w = mainTarget.width;
+    //$$     int h = mainTarget.height;
+    //$$     if (mask.width != w || mask.height != h) {
+    //$$         state.invalidateCapture();
+    //$$         return;
+    //$$     }
+    //$$     if (!state.maskPreparedThisFrame) GlowCaptureManager.renderCapturedNodes(state, minecraft);
+    //$$     if (!state.capturedThisFrame) return;
     //#if MC>=1_21_02
     //$$     CompiledShaderProgram program = GlowPipeline.getOrCreate(state.config);
     //#else
@@ -427,8 +494,6 @@ public final class GlowComposite {
     //#endif
     //$$     if (program == null || tempColorTarget == null) return;
     //$$
-    //$$     int w = mainTarget.width;
-    //$$     int h = mainTarget.height;
     //$$     // SceneDepthSampler choice mirrors selectSceneDepthView() on 1.21.6+:
     //$$     //   firstPerson    → mask.depth (self-compare; outline never occluded by world)
     //$$     //   Iris active    → sceneDepthTarget (Iris renders both hand phases inside
@@ -443,6 +508,16 @@ public final class GlowComposite {
     //$$     int sceneDepth;
     //$$     if (state.firstPerson) {
     //$$         sceneDepth = mask.getDepthTextureId();
+    //$$     } else if (state.superResolutionPrepared) {
+    //$$         TextureTarget foreground = GlowCaptureManager.getForegroundDepthTarget();
+    //$$         sceneDepth = switch (chooseSuperResolutionSceneDepth(
+    //$$                 false, IrisCompat.isShaderActive(), false,
+    //$$                 foreground != null, minecraft.options.getCameraType().isFirstPerson())) {
+    //$$             case MASK, DISPLAY_SCENE -> mask.getDepthTextureId();
+    //$$             case FOREGROUND -> foreground.getDepthTextureId();
+    //$$             case NONE -> -1;
+    //$$         };
+    //$$         if (sceneDepth == -1) return;
     //$$     } else if (usesLiveMainDepth(state.firstPerson,
     //$$             minecraft.options.getCameraType().isFirstPerson(), IrisCompat.isShaderActive())) {
     //$$         sceneDepth = mainTarget.getDepthTextureId();
@@ -533,6 +608,7 @@ public final class GlowComposite {
     //$$         RenderSystem.depthMask(true);
     //$$         RenderSystem.enableDepthTest();
     //$$     }
+    //$$     state.compositedThisFrame = true;
     //$$ }
     //$$ private static void setTextureLinear(int id) { setTextureParams(id, 9729); }
     //$$ private static void setTextureNearest(int id) { setTextureParams(id, 9728); }
@@ -553,6 +629,19 @@ public final class GlowComposite {
         // comparison would be meaningless. Self-compare = no world occlusion in first-
         // person, but first-person doesn't show the player's own body anyway.
         if (state.firstPerson) return mask.getDepthTextureView();
+        if (state.superResolutionPrepared) {
+            TextureTarget displayScene =
+                    GlowCaptureManager.getSuperResolutionDisplaySceneDepthTarget();
+            TextureTarget foreground = GlowCaptureManager.getForegroundDepthTarget();
+            return switch (chooseSuperResolutionSceneDepth(
+                    false, IrisCompat.isShaderActive(), displayScene != null,
+                    foreground != null, minecraft.options.getCameraType().isFirstPerson())) {
+                case MASK -> mask.getDepthTextureView();
+                case DISPLAY_SCENE -> displayScene.getDepthTextureView();
+                case FOREGROUND -> foreground.getDepthTextureView();
+                case NONE -> null;
+            };
+        }
         if (usesLiveMainDepth(state.firstPerson,
                 minecraft.options.getCameraType().isFirstPerson(), IrisCompat.isShaderActive())) {
             // Vanilla clears mainTarget.depth before the first-person hand pass. In first person
@@ -579,6 +668,35 @@ public final class GlowComposite {
     static boolean usesLiveMainDepth(boolean stateFirstPerson, boolean cameraFirstPerson,
                                      boolean shaderActive) {
         return !stateFirstPerson && cameraFirstPerson && !shaderActive;
+    }
+
+    /** Pure fail-closed contract for 26.2 depth normalization. */
+    static boolean depthNormalizationComplete(
+            boolean maskDepthReady, boolean firstPerson, boolean sceneDepthReady) {
+        if (!maskDepthReady) return false;
+        return firstPerson || sceneDepthReady;
+    }
+
+    enum SuperResolutionSceneDepth {
+        MASK, DISPLAY_SCENE, FOREGROUND, NONE
+    }
+
+    /** Chooses one coordinate-coherent display-space depth source for a prepared SR mask. */
+    static SuperResolutionSceneDepth chooseSuperResolutionSceneDepth(
+            boolean stateFirstPerson, boolean irisActive,
+            boolean displaySceneAvailable, boolean foregroundAvailable,
+            boolean cameraFirstPerson) {
+        if (stateFirstPerson) return SuperResolutionSceneDepth.MASK;
+        // Iris renders both hand phases before Gallium's pre-upscale snapshot. Prefer that
+        // combined world+hand image over Mode-B's restored origin depth, which is not populated.
+        if (irisActive) {
+            return displaySceneAvailable
+                    ? SuperResolutionSceneDepth.DISPLAY_SCENE
+                    : SuperResolutionSceneDepth.MASK;
+        }
+        if (foregroundAvailable) return SuperResolutionSceneDepth.FOREGROUND;
+        return cameraFirstPerson ? SuperResolutionSceneDepth.NONE
+                : SuperResolutionSceneDepth.MASK;
     }
 
     private static void dispose() {

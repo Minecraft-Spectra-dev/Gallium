@@ -123,6 +123,39 @@ class ScaledProjectionTest {
     }
 
     @Test
+    void outputSpaceReplayDropsInputScaleOriginAndJitter() {
+        ShaderPackHint.ProjectionTransform input = new ShaderPackHint.ProjectionTransform(
+                0.5f, 0.4995f, 0.002f, -0.003f,
+                0.125f, 0.25f, true);
+
+        ShaderPackHint.ProjectionTransform output =
+                GlowCaptureManager.projectionForReplay(input, true);
+
+        assertEquals(1.0f, output.scaleX(), 0.0f);
+        assertEquals(1.0f, output.scaleY(), 0.0f);
+        assertEquals(0.0f, output.jitterX(), 0.0f);
+        assertEquals(0.0f, output.jitterY(), 0.0f);
+        assertEquals(0.0f, output.viewportOriginX(), 0.0f);
+        assertEquals(0.0f, output.viewportOriginY(), 0.0f);
+        assertFalse(output.exactTemporalJitter());
+    }
+
+    @Test
+    void ordinaryShaderPackReplayKeepsItsDeclaredTransform() {
+        ShaderPackHint.ProjectionTransform input = new ShaderPackHint.ProjectionTransform(
+                0.5f, 0.5f, 0.002f, -0.003f, true);
+
+        assertSame(input, GlowCaptureManager.projectionForReplay(input, false));
+    }
+
+    @Test
+    void irisReplayFailsClosedWhenShaderBypassCouldNotBeEnabled() {
+        assertFalse(GlowCaptureManager.canReplayWithShaderBypass(true, false));
+        assertTrue(GlowCaptureManager.canReplayWithShaderBypass(true, true));
+        assertTrue(GlowCaptureManager.canReplayWithShaderBypass(false, false));
+    }
+
+    @Test
     void exactIrisReplayDefersWorldOcclusionToComposite() {
         assertTrue(GlowCaptureManager.clearsMaskDepthForReplay(false, true, true));
         assertFalse(GlowCaptureManager.clearsMaskDepthForReplay(false, true, false));

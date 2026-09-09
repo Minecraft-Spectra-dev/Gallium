@@ -28,6 +28,7 @@
 		"fabric-api": "*"
 	},
 	"suggests": {
-		"sodium": "*"
+		"sodium": "*",
+		"super_resolution": "*"
 	}
 }

@@ -193,9 +193,9 @@ public final class IrisCompat {
      * Effective internal-resolution scale applied by the active shader pack to its world/hand
      * passes (e.g. Kappa/Nostalgia {@code VertexDownscaling}, iterationRP {@code fsrRenderScale}).
      * <p>
-     * Resolved via a per-pack {@code shaderpacks/<pack>/gallium.json} hint file that names the
-     * pack option carrying the scale; see {@link ShaderPackHint}. Returns {@code 1.0f} when no
-     * pack is in use, the hint file is missing, or the option cannot be read.
+     * Resolved from a standard Super Resolution definition when present, otherwise from the
+     * optional per-pack {@code gallium.json} override; see {@link ShaderPackHint}. Returns
+     * {@code 1.0f} when no pack is in use or no safe runtime scale can be resolved.
      */
     public static float getShaderInternalScale() {
         if (!isShaderActive()) return 1.0f;
@@ -212,6 +212,16 @@ public final class IrisCompat {
         if (!isShaderActive()) return ShaderPackHint.ProjectionTransform.IDENTITY;
         return ShaderPackHint.getProjectionTransform(
                 FRAME_COUNTER.getAsInt(), viewWidth, viewHeight);
+    }
+
+    /** True when this frame's selected transform is supplied by an active external SR runtime. */
+    public static boolean isCurrentProjectionFromActiveSr() {
+        return isShaderActive() && ShaderPackHint.isCurrentProjectionFromActiveSr();
+    }
+
+    /** True when external SR is live, even if gallium.json overrides its projection transform. */
+    public static boolean isActiveSrRuntime() {
+        return isShaderActive() && ShaderPackHint.isActiveSrRuntime();
     }
 
     /**
