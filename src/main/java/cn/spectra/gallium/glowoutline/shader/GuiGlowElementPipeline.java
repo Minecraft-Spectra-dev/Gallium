@@ -12,8 +12,11 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 //$$ import com.mojang.blaze3d.pipeline.BindGroupLayout;
 //#endif
 import com.mojang.blaze3d.shaders.UniformType;
+import com.mojang.blaze3d.systems.RenderSystem;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -38,6 +41,8 @@ public final class GuiGlowElementPipeline {
     private static final Map<ItemEffectConfig, RenderPipeline> pipelinesByConfig = new HashMap<>();
     private static final Map<RenderPipeline, GlowUniformBuffer> uboByPipeline = new HashMap<>();
     private static final Map<RenderPipeline, ItemEffectConfig> configByPipeline = new HashMap<>();
+    /** Active-prefix list retained across frames; indexed iteration creates no iterator objects. */
+    private static final List<RenderPipeline> usedPipelines = new ArrayList<>();
     private static int locationCounter;
 
     static {
@@ -88,10 +93,44 @@ public final class GuiGlowElementPipeline {
         return configByPipeline.get(p);
     }
 
-    public static void updateAllForFrame(int screenW, int screenH, float frameTime) {
-        for (var entry : uboByPipeline.entrySet()) {
-            ItemEffectConfig cfg = configByPipeline.get(entry.getKey());
-            entry.getValue().update(frameTime, screenW, screenH, cfg);
+    /** Starts a fresh GUI usage frame, dropping markers from any aborted prior frame. */
+    public static void beginUsageFrame() {
+        usedPipelines.clear();
+    }
+
+    /** Records a pipeline only when its glow element was successfully submitted this frame. */
+    public static void markUsed(RenderPipeline pipeline) {
+        if (pipeline == null || !uboByPipeline.containsKey(pipeline)) return;
+        for (int i = 0; i < usedPipelines.size(); i++) {
+            if (usedPipelines.get(i) == pipeline) return;
+        }
+        usedPipelines.add(pipeline);
+    }
+
+    /** Clears frame-local usage without touching cached pipelines or their UBO contents. */
+    public static void discardFrameUsage() {
+        usedPipelines.clear();
+    }
+
+    /**
+     * Updates only pipelines referenced by submitted glow elements. All writes share one encoder,
+     * and usage is cleared even if encoder creation or a UBO write fails.
+     */
+    public static void updateUsedForFrame(int screenW, int screenH, float frameTime) {
+        try {
+            if (usedPipelines.isEmpty()) return;
+            var encoder = RenderSystem.getDevice().createCommandEncoder();
+            for (int i = 0; i < usedPipelines.size(); i++) {
+                RenderPipeline pipeline = usedPipelines.get(i);
+                GlowUniformBuffer ubo = uboByPipeline.get(pipeline);
+                ItemEffectConfig cfg = configByPipeline.get(pipeline);
+                if (ubo != null && cfg != null) {
+                    ubo.writeToEncoder(encoder, frameTime, screenW, screenH,
+                            1.0f, 1.0f, cfg);
+                }
+            }
+        } finally {
+            usedPipelines.clear();
         }
     }
 
@@ -102,6 +141,7 @@ public final class GuiGlowElementPipeline {
             Map.Entry<ItemEffectConfig, RenderPipeline> e = it.next();
             if (liveConfigs.contains(e.getKey())) continue;
             RenderPipeline p = e.getValue();
+            usedPipelines.remove(p);
             GlowUniformBuffer ubo = uboByPipeline.remove(p);
             if (ubo != null) ubo.close();
             configByPipeline.remove(p);
@@ -116,6 +156,7 @@ public final class GuiGlowElementPipeline {
     }
 
     public static void clear() {
+        usedPipelines.clear();
         for (var ubo : uboByPipeline.values()) ubo.close();
         pipelinesByConfig.clear();
         uboByPipeline.clear();
@@ -129,7 +170,10 @@ public final class GuiGlowElementPipeline {
 //$$     static { GlowResources.registerPipeline(() -> {}); }
 //$$     public static RenderPipeline getOrCreate(ItemEffectConfig cfg) { return null; }
 //$$     public static GlowUniformBuffer getUbo(RenderPipeline p) { return null; }
-//$$     public static void updateAllForFrame(int w, int h, float t) {}
+//$$     public static void beginUsageFrame() {}
+//$$     public static void markUsed(RenderPipeline pipeline) {}
+//$$     public static void discardFrameUsage() {}
+//$$     public static void updateUsedForFrame(int w, int h, float t) {}
 //$$     public static void retainOnly(java.util.Set<ItemEffectConfig> live) {}
 //$$ }
 //#endif
@@ -141,7 +185,10 @@ public final class GuiGlowElementPipeline {
 //$$     private GuiGlowElementPipeline() {}
 //$$     static { GlowResources.registerPipeline(() -> {}); }
 //$$     public static Object getOrCreate(ItemEffectConfig cfg) { return null; }
-//$$     public static void updateAllForFrame(int w, int h, float t) {}
+//$$     public static void beginUsageFrame() {}
+//$$     public static void markUsed(Object pipeline) {}
+//$$     public static void discardFrameUsage() {}
+//$$     public static void updateUsedForFrame(int w, int h, float t) {}
 //$$     public static void retainOnly(Set<ItemEffectConfig> live) {}
 //$$     public static void clear() {}
 //$$ }

@@ -73,6 +73,11 @@ import org.jspecify.annotations.Nullable;
 //$$     private static boolean ready;
 //$$     static { GlowResources.registerPipeline(DepthResamplePipeline::dispose); }
 //$$     private DepthResamplePipeline() {}
+//$$     public static @Nullable String shaderSource(Identifier id, ShaderType type) {
+//$$         if (!SHADER_ID.equals(id)) return null;
+//$$         return type == ShaderType.VERTEX ? VERTEX_SHADER
+//$$                 : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER : null;
+//$$     }
 //$$     public static void precompile() {
 //$$         try {
 //$$             if (pipeline == null) {
@@ -88,11 +93,8 @@ import org.jspecify.annotations.Nullable;
 //$$                         .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
 //$$                         .build();
 //$$             }
-//$$             var compiled = RenderSystem.getDevice().precompilePipeline(pipeline, (id, type) -> {
-//$$                 if (!SHADER_ID.equals(id)) return null;
-//$$                 return type == ShaderType.VERTEX ? VERTEX_SHADER
-//$$                         : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER : null;
-//$$             });
+//$$             var compiled = RenderSystem.getDevice().precompilePipeline(
+//$$                     pipeline, DepthResamplePipeline::shaderSource);
 //$$             if (!compiled.isValid()) throw new IllegalStateException("depth-resample compile failed");
 //$$             ready = true;
 //$$         } catch (Throwable t) {
@@ -148,6 +150,12 @@ public final class DepthResamplePipeline {
     private static boolean ready;
     static { GlowResources.registerPipeline(DepthResamplePipeline::dispose); }
     private DepthResamplePipeline() {}
+    /** Also used by the default shader resolver after the device's compiled cache is cleared. */
+    public static @Nullable String shaderSource(Identifier id, ShaderType type) {
+        if (!SHADER_ID.equals(id)) return null;
+        return type == ShaderType.VERTEX ? VERTEX_SHADER
+                : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER : null;
+    }
     public static void precompile() {
         try {
             if (pipeline == null) {
@@ -162,11 +170,8 @@ public final class DepthResamplePipeline {
                         .withVertexFormat(DefaultVertexFormat.EMPTY, VertexFormat.Mode.TRIANGLES)
                         .build();
             }
-            var compiled = RenderSystem.getDevice().precompilePipeline(pipeline, (id, type) -> {
-                if (!SHADER_ID.equals(id)) return null;
-                return type == ShaderType.VERTEX ? VERTEX_SHADER
-                        : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER : null;
-            });
+            var compiled = RenderSystem.getDevice().precompilePipeline(
+                    pipeline, DepthResamplePipeline::shaderSource);
             if (!compiled.isValid()) throw new IllegalStateException("depth-resample compile failed");
             ready = true;
         } catch (Throwable t) {
@@ -227,6 +232,15 @@ public final class DepthResamplePipeline {
 //$$     private static boolean ready;
 //$$     static { GlowResources.registerPipeline(DepthResamplePipeline::dispose); }
 //$$     private DepthResamplePipeline() {}
+//#if MC>=1_21_11
+//$$     public static @Nullable String shaderSource(Identifier id, ShaderType type) {
+//#else
+//$$     public static @Nullable String shaderSource(ResourceLocation id, ShaderType type) {
+//#endif
+//$$         if (!SHADER_ID.equals(id)) return null;
+//$$         return type == ShaderType.VERTEX ? VERTEX_SHADER
+//$$                 : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER : null;
+//$$     }
 //$$     public static void precompile() {
 //$$         try {
 //$$             if (pipeline == null) {
@@ -242,11 +256,8 @@ public final class DepthResamplePipeline {
 //$$                         .withVertexFormat(DefaultVertexFormat.EMPTY, VertexFormat.Mode.TRIANGLES)
 //$$                         .build();
 //$$             }
-//$$             var compiled = RenderSystem.getDevice().precompilePipeline(pipeline, (id, type) -> {
-//$$                 if (!SHADER_ID.equals(id)) return null;
-//$$                 return type == ShaderType.VERTEX ? VERTEX_SHADER
-//$$                         : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER : null;
-//$$             });
+//$$             var compiled = RenderSystem.getDevice().precompilePipeline(
+//$$                     pipeline, DepthResamplePipeline::shaderSource);
 //$$             if (!compiled.isValid()) throw new IllegalStateException("depth-resample compile failed");
 //$$             ready = true;
 //$$         } catch (Throwable t) {

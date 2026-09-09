@@ -350,7 +350,9 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
             mode = ItemCondition.Path.CheckMode.EXISTS;
         }
 
-        return new ItemCondition.Path(compType, mode, value, min, max);
+        // Path.compile parses immutable CONTAINS identifiers and numeric EQUALS operands once at
+        // resource reload. Runtime matching keeps the legacy string fallbacks without reparsing.
+        return ItemCondition.Path.compile(compType, mode, value, min, max);
     }
 
     private static ItemEffectConfig parseEffect(JsonObject obj, int ruleIndex) {

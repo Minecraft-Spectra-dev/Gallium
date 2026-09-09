@@ -41,216 +41,304 @@ import org.joml.Quaternionf;
 import org.jspecify.annotations.Nullable;
 
 import java.util.List;
-import java.util.function.Consumer;
 
 /**
  * Mirror submit calls into the active glow capture so the offscreen pass renders the same nodes.
  * <p>
  * The outer storage's direct {@code submitModel/submitItem/...} entry points (called when callers
- * skip the {@code order(int)} path) forward to the delegate first and then mirror into
- * {@code duplicate(0, ...)}: vanilla's default ordering sits at order 0, so this preserves draw
+ * skip the {@code order(int)} path) forward to the delegate first and then mirror directly into
+ * capture order 0: vanilla's default ordering sits at order 0, so this preserves draw
  * layering for the rare callers that use the storage directly. The inner
  * {@link DuplicatingSubmitNodeCollection} mirrors at whatever order value was requested via
  * {@link #order(int)}.
  */
 public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
 
+    /** Bounds heavy SubmitNodeCollection phase graphs when a mod emits ever-changing orders. */
+    private static final int MAX_CACHED_ORDERS = 64;
+
     /** Reused as the no-op super-storage for inner collections. The collection delegates everything
      *  to its real {@code delegate}; the super(SubmitNodeStorage) call is just to satisfy the
      *  superclass constructor and never receives any submits. */
     private static final SubmitNodeStorage SENTINEL = new SubmitNodeStorage();
 
-    private final SubmitNodeStorage delegate;
+    private @Nullable SubmitNodeStorage delegate;
+    private @Nullable GlowCaptureState state;
     private final Int2ObjectOpenHashMap<DuplicatingSubmitNodeCollection> collectionsByOrder = new Int2ObjectOpenHashMap<>();
 
-    public DuplicatingSubmitNodeStorage(SubmitNodeStorage delegate) {
+    public DuplicatingSubmitNodeStorage(SubmitNodeStorage delegate, GlowCaptureState state) {
+        reset(delegate, state);
+    }
+
+    /** Rebinds this pooled wrapper and releases every reference to the previous delegate. */
+    public void reset(SubmitNodeStorage delegate, GlowCaptureState state) {
+        if (delegate == null || state == null) throw new IllegalArgumentException("delegate/state");
         this.delegate = delegate;
+        this.state = state;
+    }
+
+    /**
+     * Stops Gallium mirroring without invalidating the collector that vanilla is still using.
+     * <p>
+     * Capture invalidation can happen in the middle of one renderer invocation (for example when
+     * a streaming domain closes between two submits).  Clearing {@link #delegate} there would make
+     * the renderer's next vanilla submit fail.  The scope owner calls {@link #detach()} only after
+     * the wrapped renderer returns.
+     */
+    public void disableCapture() {
+        this.state = null;
+    }
+
+    /** Full scope-end detach, called only after the wrapped vanilla submission returns. */
+    public void detach() {
+        this.delegate = null;
+        this.state = null;
+    }
+
+    private SubmitNodeStorage delegate() {
+        SubmitNodeStorage current = delegate;
+        if (current == null) throw new IllegalStateException("Detached capture submit wrapper");
+        return current;
+    }
+
+    private @Nullable OrderedSubmitNodeCollector captureCollector(int order) {
+        GlowCaptureState current = state;
+        SubmitNodeStorage capture = GlowCaptureManager.captureStorageFor(current);
+        if (capture == null) return null;
+        GlowCaptureManager.markCaptureStorageDirty(current);
+        return capture.order(order);
+    }
+
+    private void captured() {
+        GlowCaptureState current = state;
+        if (current != null) GlowCaptureManager.markCaptured(current);
     }
 
     @Override
     public SubmitNodeCollection order(int order) {
         DuplicatingSubmitNodeCollection cached = collectionsByOrder.get(order);
         if (cached != null) return cached;
-        DuplicatingSubmitNodeCollection created = new DuplicatingSubmitNodeCollection(delegate.order(order), order);
+        DuplicatingSubmitNodeCollection created = new DuplicatingSubmitNodeCollection(order);
+        if (collectionsByOrder.size() >= MAX_CACHED_ORDERS) return created;
         collectionsByOrder.put(order, created);
         return created;
     }
 
-    @Override public void submitShadow(PoseStack p, float r, List<EntityRenderState.ShadowPiece> pieces) { delegate.submitShadow(p, r, pieces); }
+    @Override public void submitShadow(PoseStack p, float r, List<EntityRenderState.ShadowPiece> pieces) { delegate().submitShadow(p, r, pieces); }
     //#if MC>=1_26_02
-    //$$ @Override public void submitNameTag(PoseStack p, @Nullable Vec3 a, int o, Component n, boolean s, int l, CameraRenderState c) { delegate.submitNameTag(p, a, o, n, s, l, c); }
+    //$$ @Override public void submitNameTag(PoseStack p, @Nullable Vec3 a, int o, Component n, boolean s, int l, CameraRenderState c) { delegate().submitNameTag(p, a, o, n, s, l, c); }
     //#else
-    @Override public void submitNameTag(PoseStack p, @Nullable Vec3 a, int o, Component n, boolean s, int l, double d, CameraRenderState c) { delegate.submitNameTag(p, a, o, n, s, l, d, c); }
+    @Override public void submitNameTag(PoseStack p, @Nullable Vec3 a, int o, Component n, boolean s, int l, double d, CameraRenderState c) { delegate().submitNameTag(p, a, o, n, s, l, d, c); }
     //#endif
-    @Override public void submitText(PoseStack p, float x, float y, FormattedCharSequence str, boolean ds, Font.DisplayMode dm, int l, int col, int bg, int oc) { delegate.submitText(p, x, y, str, ds, dm, l, col, bg, oc); }
-    @Override public void submitFlame(PoseStack p, EntityRenderState rs, Quaternionf q) { delegate.submitFlame(p, rs, q); }
-    @Override public void submitLeash(PoseStack p, EntityRenderState.LeashState ls) { delegate.submitLeash(p, ls); }
+    @Override public void submitText(PoseStack p, float x, float y, FormattedCharSequence str, boolean ds, Font.DisplayMode dm, int l, int col, int bg, int oc) { delegate().submitText(p, x, y, str, ds, dm, l, col, bg, oc); }
+    @Override public void submitFlame(PoseStack p, EntityRenderState rs, Quaternionf q) { delegate().submitFlame(p, rs, q); }
+    @Override public void submitLeash(PoseStack p, EntityRenderState.LeashState ls) { delegate().submitLeash(p, ls); }
     //#if MC>=1_26_02
-    //$$ @Override public void submitMovingBlock(PoseStack p, MovingBlockRenderState mb, int oc) { delegate.submitMovingBlock(p, mb, oc); }
+    //$$ @Override public void submitMovingBlock(PoseStack p, MovingBlockRenderState mb, int oc) { delegate().submitMovingBlock(p, mb, oc); }
     //#else
-    @Override public void submitMovingBlock(PoseStack p, MovingBlockRenderState mb) { delegate.submitMovingBlock(p, mb); }
+    @Override public void submitMovingBlock(PoseStack p, MovingBlockRenderState mb) { delegate().submitMovingBlock(p, mb); }
     //#endif
     //#if MC>=1_26_02
-    //$$ @Override public void submitBreakingBlockModel(PoseStack p, List<BlockStateModelPart> parts, int prog) { delegate.submitBreakingBlockModel(p, parts, prog); }
+    //$$ @Override public void submitBreakingBlockModel(PoseStack p, List<BlockStateModelPart> parts, int prog) { delegate().submitBreakingBlockModel(p, parts, prog); }
     //#elseif MC>=1_26_00
-    @Override public void submitBreakingBlockModel(PoseStack p, BlockStateModel m, long seed, int prog) { delegate.submitBreakingBlockModel(p, m, seed, prog); }
+    @Override public void submitBreakingBlockModel(PoseStack p, BlockStateModel m, long seed, int prog) { delegate().submitBreakingBlockModel(p, m, seed, prog); }
     //#else
-    //$$ @Override public void submitBlock(PoseStack p, BlockState bs, int i, int j, int k) { delegate.submitBlock(p, bs, i, j, k); }
+    //$$ @Override public void submitBlock(PoseStack p, BlockState bs, int i, int j, int k) { delegate().submitBlock(p, bs, i, j, k); }
     //#endif
     //#if MC<1_26_02
-    @Override public void submitParticleGroup(ParticleGroupRenderer r) { delegate.submitParticleGroup(r); }
-    @Override public void clear() { delegate.clear(); collectionsByOrder.clear(); }
-    @Override public void endFrame() { delegate.endFrame(); }
+    @Override public void submitParticleGroup(ParticleGroupRenderer r) { delegate().submitParticleGroup(r); }
+    @Override public void clear() { delegate().clear(); }
+    @Override public void endFrame() { delegate().endFrame(); }
     //#endif
-    @Override public Int2ObjectAVLTreeMap<SubmitNodeCollection> getSubmitsPerOrder() { return delegate.getSubmitsPerOrder(); }
+    @Override public Int2ObjectAVLTreeMap<SubmitNodeCollection> getSubmitsPerOrder() { return delegate().getSubmitsPerOrder(); }
 
     @Override
     public <S> void submitModel(Model<? super S> model, S state, PoseStack p, RenderType rt, int l, int ov, int tc, @Nullable TextureAtlasSprite sp, int oc, ModelFeatureRenderer.@Nullable CrumblingOverlay cr) {
-        delegate.submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr);
-        duplicate(0, c -> c.submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr));
+        delegate().submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr);
+        OrderedSubmitNodeCollector capture = captureCollector(0);
+        if (capture != null) {
+            capture.submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr);
+            captured();
+        }
     }
 
     //#if MC<1_26_02
     @Override
     public void submitModelPart(ModelPart mp, PoseStack p, RenderType rt, int l, int ov, @Nullable TextureAtlasSprite sp, boolean sh, boolean hf, int tc, ModelFeatureRenderer.@Nullable CrumblingOverlay cr, int oc) {
-        delegate.submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc);
-        duplicate(0, c -> c.submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc));
+        delegate().submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc);
+        OrderedSubmitNodeCollector capture = captureCollector(0);
+        if (capture != null) {
+            capture.submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc);
+            captured();
+        }
     }
     //#endif
 
     //#if MC>=1_26_00
     @Override
     public void submitBlockModel(PoseStack p, RenderType rt, List<BlockStateModelPart> parts, int[] tints, int l, int ov, int oc) {
-        delegate.submitBlockModel(p, rt, parts, tints, l, ov, oc);
-        duplicate(0, c -> c.submitBlockModel(p, rt, parts, tints, l, ov, oc));
+        delegate().submitBlockModel(p, rt, parts, tints, l, ov, oc);
+        OrderedSubmitNodeCollector capture = captureCollector(0);
+        if (capture != null) {
+            capture.submitBlockModel(p, rt, parts, tints, l, ov, oc);
+            captured();
+        }
     }
 
     @Override
     public void submitItem(PoseStack p, ItemDisplayContext dc, int l, int ov, int oc, int[] tints, List<BakedQuad> quads, ItemStackRenderState.FoilType ft) {
-        delegate.submitItem(p, dc, l, ov, oc, tints, quads, ft);
-        duplicate(0, c -> c.submitItem(p, dc, l, ov, oc, tints, quads, ft));
+        delegate().submitItem(p, dc, l, ov, oc, tints, quads, ft);
+        OrderedSubmitNodeCollector capture = captureCollector(0);
+        if (capture != null) {
+            capture.submitItem(p, dc, l, ov, oc, tints, quads, ft);
+            captured();
+        }
     }
     //#else
     //$$ @Override
     //$$ public void submitBlockModel(PoseStack p, RenderType rt, BlockStateModel m, float fr, float fg, float fb, int l, int ov, int oc) {
-    //$$     delegate.submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc);
-    //$$     duplicate(0, c -> c.submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc));
+    //$$     delegate().submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc);
+    //$$     OrderedSubmitNodeCollector capture = captureCollector(0);
+    //$$     if (capture != null) {
+    //$$         capture.submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc);
+    //$$         captured();
+    //$$     }
     //$$ }
     //$$
     //$$ @Override
     //$$ public void submitItem(PoseStack p, ItemDisplayContext dc, int l, int ov, int oc, int[] tints, List<BakedQuad> quads, RenderType rt, ItemStackRenderState.FoilType ft) {
-    //$$     delegate.submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
-    //$$     duplicate(0, c -> c.submitItem(p, dc, l, ov, oc, tints, quads, rt, ft));
+    //$$     delegate().submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
+    //$$     OrderedSubmitNodeCollector capture = captureCollector(0);
+    //$$     if (capture != null) {
+    //$$         capture.submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
+    //$$         captured();
+    //$$     }
     //$$ }
     //#endif
 
     @Override
     public void submitCustomGeometry(PoseStack p, RenderType rt, CustomGeometryRenderer cgr) {
-        delegate.submitCustomGeometry(p, rt, cgr);
-        duplicate(0, c -> c.submitCustomGeometry(p, rt, cgr));
-    }
-
-    private void duplicate(int order, Consumer<OrderedSubmitNodeCollector> consumer) {
-        SubmitNodeStorage capture = GlowCaptureManager.captureStorageForCurrent();
+        delegate().submitCustomGeometry(p, rt, cgr);
+        OrderedSubmitNodeCollector capture = captureCollector(0);
         if (capture != null) {
-            consumer.accept(capture.order(order));
-            var current = GlowCaptureManager.currentCapture();
-            if (current != null) current.capturedThisFrame = true;
+            capture.submitCustomGeometry(p, rt, cgr);
+            captured();
         }
     }
 
     private final class DuplicatingSubmitNodeCollection extends SubmitNodeCollection {
-        private final SubmitNodeCollection delegate;
         private final int order;
 
-        DuplicatingSubmitNodeCollection(SubmitNodeCollection delegate, int order) {
+        DuplicatingSubmitNodeCollection(int order) {
             //#if MC>=1_26_02
             //$$ // 26.2: SubmitNodeCollection no longer takes a SubmitNodeStorage — implicit no-arg ctor.
             //$$ super();
             //#else
             super(SENTINEL);
             //#endif
-            this.delegate = delegate;
             this.order = order;
         }
 
-        @Override public void submitShadow(PoseStack p, float r, List<EntityRenderState.ShadowPiece> pieces) { delegate.submitShadow(p, r, pieces); }
+        private SubmitNodeCollection delegate() {
+            return DuplicatingSubmitNodeStorage.this.delegate().order(order);
+        }
+
+        @Override public void submitShadow(PoseStack p, float r, List<EntityRenderState.ShadowPiece> pieces) { delegate().submitShadow(p, r, pieces); }
         //#if MC>=1_26_02
-        //$$ @Override public void submitNameTag(PoseStack p, @Nullable Vec3 a, int o, Component n, boolean s, int l, CameraRenderState c) { delegate.submitNameTag(p, a, o, n, s, l, c); }
+        //$$ @Override public void submitNameTag(PoseStack p, @Nullable Vec3 a, int o, Component n, boolean s, int l, CameraRenderState c) { delegate().submitNameTag(p, a, o, n, s, l, c); }
         //#else
-        @Override public void submitNameTag(PoseStack p, @Nullable Vec3 a, int o, Component n, boolean s, int l, double d, CameraRenderState c) { delegate.submitNameTag(p, a, o, n, s, l, d, c); }
+        @Override public void submitNameTag(PoseStack p, @Nullable Vec3 a, int o, Component n, boolean s, int l, double d, CameraRenderState c) { delegate().submitNameTag(p, a, o, n, s, l, d, c); }
         //#endif
-        @Override public void submitText(PoseStack p, float x, float y, FormattedCharSequence str, boolean ds, Font.DisplayMode dm, int l, int col, int bg, int oc) { delegate.submitText(p, x, y, str, ds, dm, l, col, bg, oc); }
-        @Override public void submitFlame(PoseStack p, EntityRenderState rs, Quaternionf q) { delegate.submitFlame(p, rs, q); }
-        @Override public void submitLeash(PoseStack p, EntityRenderState.LeashState ls) { delegate.submitLeash(p, ls); }
+        @Override public void submitText(PoseStack p, float x, float y, FormattedCharSequence str, boolean ds, Font.DisplayMode dm, int l, int col, int bg, int oc) { delegate().submitText(p, x, y, str, ds, dm, l, col, bg, oc); }
+        @Override public void submitFlame(PoseStack p, EntityRenderState rs, Quaternionf q) { delegate().submitFlame(p, rs, q); }
+        @Override public void submitLeash(PoseStack p, EntityRenderState.LeashState ls) { delegate().submitLeash(p, ls); }
         //#if MC>=1_26_02
-        //$$ @Override public void submitMovingBlock(PoseStack p, MovingBlockRenderState mb, int oc) { delegate.submitMovingBlock(p, mb, oc); }
+        //$$ @Override public void submitMovingBlock(PoseStack p, MovingBlockRenderState mb, int oc) { delegate().submitMovingBlock(p, mb, oc); }
         //#else
-        @Override public void submitMovingBlock(PoseStack p, MovingBlockRenderState mb) { delegate.submitMovingBlock(p, mb); }
+        @Override public void submitMovingBlock(PoseStack p, MovingBlockRenderState mb) { delegate().submitMovingBlock(p, mb); }
         //#endif
         //#if MC>=1_26_02
-        //$$ @Override public void submitBreakingBlockModel(PoseStack p, List<BlockStateModelPart> parts, int prog) { delegate.submitBreakingBlockModel(p, parts, prog); }
+        //$$ @Override public void submitBreakingBlockModel(PoseStack p, List<BlockStateModelPart> parts, int prog) { delegate().submitBreakingBlockModel(p, parts, prog); }
         //#elseif MC>=1_26_00
-        @Override public void submitBreakingBlockModel(PoseStack p, BlockStateModel m, long seed, int prog) { delegate.submitBreakingBlockModel(p, m, seed, prog); }
+        @Override public void submitBreakingBlockModel(PoseStack p, BlockStateModel m, long seed, int prog) { delegate().submitBreakingBlockModel(p, m, seed, prog); }
         //#else
-        //$$ @Override public void submitBlock(PoseStack p, BlockState bs, int i, int j, int k) { delegate.submitBlock(p, bs, i, j, k); }
+        //$$ @Override public void submitBlock(PoseStack p, BlockState bs, int i, int j, int k) { delegate().submitBlock(p, bs, i, j, k); }
         //#endif
         //#if MC<1_26_02
-        @Override public void submitParticleGroup(ParticleGroupRenderer r) { delegate.submitParticleGroup(r); }
+        @Override public void submitParticleGroup(ParticleGroupRenderer r) { delegate().submitParticleGroup(r); }
         //#endif
 
         @Override
         public <S> void submitModel(Model<? super S> model, S state, PoseStack p, RenderType rt, int l, int ov, int tc, @Nullable TextureAtlasSprite sp, int oc, ModelFeatureRenderer.@Nullable CrumblingOverlay cr) {
-            delegate.submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr);
-            dup(c -> c.submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr));
+            delegate().submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr);
+            OrderedSubmitNodeCollector capture = captureCollector(order);
+            if (capture != null) {
+                capture.submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr);
+                captured();
+            }
         }
 
         //#if MC<1_26_02
         @Override
         public void submitModelPart(ModelPart mp, PoseStack p, RenderType rt, int l, int ov, @Nullable TextureAtlasSprite sp, boolean sh, boolean hf, int tc, ModelFeatureRenderer.@Nullable CrumblingOverlay cr, int oc) {
-            delegate.submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc);
-            dup(c -> c.submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc));
+            delegate().submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc);
+            OrderedSubmitNodeCollector capture = captureCollector(order);
+            if (capture != null) {
+                capture.submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc);
+                captured();
+            }
         }
         //#endif
 
         //#if MC>=1_26_00
         @Override
         public void submitBlockModel(PoseStack p, RenderType rt, List<BlockStateModelPart> parts, int[] tints, int l, int ov, int oc) {
-            delegate.submitBlockModel(p, rt, parts, tints, l, ov, oc);
-            dup(c -> c.submitBlockModel(p, rt, parts, tints, l, ov, oc));
+            delegate().submitBlockModel(p, rt, parts, tints, l, ov, oc);
+            OrderedSubmitNodeCollector capture = captureCollector(order);
+            if (capture != null) {
+                capture.submitBlockModel(p, rt, parts, tints, l, ov, oc);
+                captured();
+            }
         }
 
         @Override
         public void submitItem(PoseStack p, ItemDisplayContext dc, int l, int ov, int oc, int[] tints, List<BakedQuad> quads, ItemStackRenderState.FoilType ft) {
-            delegate.submitItem(p, dc, l, ov, oc, tints, quads, ft);
-            dup(c -> c.submitItem(p, dc, l, ov, oc, tints, quads, ft));
+            delegate().submitItem(p, dc, l, ov, oc, tints, quads, ft);
+            OrderedSubmitNodeCollector capture = captureCollector(order);
+            if (capture != null) {
+                capture.submitItem(p, dc, l, ov, oc, tints, quads, ft);
+                captured();
+            }
         }
         //#else
         //$$ @Override
         //$$ public void submitBlockModel(PoseStack p, RenderType rt, BlockStateModel m, float fr, float fg, float fb, int l, int ov, int oc) {
-        //$$     delegate.submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc);
-        //$$     dup(c -> c.submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc));
+        //$$     delegate().submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc);
+        //$$     OrderedSubmitNodeCollector capture = captureCollector(order);
+        //$$     if (capture != null) {
+        //$$         capture.submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc);
+        //$$         captured();
+        //$$     }
         //$$ }
         //$$
         //$$ @Override
         //$$ public void submitItem(PoseStack p, ItemDisplayContext dc, int l, int ov, int oc, int[] tints, List<BakedQuad> quads, RenderType rt, ItemStackRenderState.FoilType ft) {
-        //$$     delegate.submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
-        //$$     dup(c -> c.submitItem(p, dc, l, ov, oc, tints, quads, rt, ft));
+        //$$     delegate().submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
+        //$$     OrderedSubmitNodeCollector capture = captureCollector(order);
+        //$$     if (capture != null) {
+        //$$         capture.submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
+        //$$         captured();
+        //$$     }
         //$$ }
         //#endif
 
         @Override
         public void submitCustomGeometry(PoseStack p, RenderType rt, CustomGeometryRenderer cgr) {
-            delegate.submitCustomGeometry(p, rt, cgr);
-            dup(c -> c.submitCustomGeometry(p, rt, cgr));
-        }
-
-        private void dup(Consumer<OrderedSubmitNodeCollector> consumer) {
-            SubmitNodeStorage capture = GlowCaptureManager.captureStorageForCurrent();
+            delegate().submitCustomGeometry(p, rt, cgr);
+            OrderedSubmitNodeCollector capture = captureCollector(order);
             if (capture != null) {
-                consumer.accept(capture.order(order));
-                var current = GlowCaptureManager.currentCapture();
-                if (current != null) current.capturedThisFrame = true;
+                capture.submitCustomGeometry(p, rt, cgr);
+                captured();
             }
         }
     }

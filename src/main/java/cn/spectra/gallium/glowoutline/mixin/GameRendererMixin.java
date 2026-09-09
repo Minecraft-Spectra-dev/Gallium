@@ -112,7 +112,10 @@ public class GameRendererMixin {
             expect = 1)
     private void galliumCaptureSceneDepth(DeltaTracker deltaTracker, CallbackInfo ci) {
         if (IrisCompat.isShadowPass()) return;
-        if (!ItemEffectsManager.isActive()) return;
+        if (!GlowCaptureManager.needsSceneDepthCapture()) {
+            SuperResolutionCompat.captureVanillaSceneDepth(null);
+            return;
+        }
 
         //#if MC>=1_26_02
         //$$ RenderTarget mainTarget = minecraft.gameRenderer.mainRenderTarget();
@@ -120,9 +123,8 @@ public class GameRendererMixin {
         RenderTarget mainTarget = minecraft.getMainRenderTarget();
         //#endif
         mainTarget = SuperResolutionCompat.worldDepthSource(mainTarget);
-        if (mainTarget == null || mainTarget.getDepthTexture() == null) return;
-
-        GlowCaptureManager.captureSceneDepth(mainTarget);
+        SuperResolutionCompat.captureVanillaSceneDepth(
+                mainTarget != null && mainTarget.getDepthTexture() != null ? mainTarget : null);
     }
     //#else
     //$$ @Inject(method = "renderLevel", at = @At(value = "INVOKE",
@@ -136,11 +138,14 @@ public class GameRendererMixin {
     //$$         remap = false))
     //$$ private void galliumCaptureSceneDepth(DeltaTracker deltaTracker, CallbackInfo ci) {
     //$$     if (IrisCompat.isShadowPass()) return;
-    //$$     if (!ItemEffectsManager.isActive()) return;
+    //$$     if (!GlowCaptureManager.needsSceneDepthCapture()) {
+    //$$         SuperResolutionCompat.captureVanillaSceneDepth(null);
+    //$$         return;
+    //$$     }
     //$$     RenderTarget mainTarget = SuperResolutionCompat.worldDepthSource(
     //$$             minecraft.getMainRenderTarget());
-    //$$     if (mainTarget == null || mainTarget.getDepthTextureId() == -1) return;
-    //$$     GlowCaptureManager.captureSceneDepth(mainTarget);
+    //$$     SuperResolutionCompat.captureVanillaSceneDepth(
+    //$$             mainTarget != null && mainTarget.getDepthTextureId() != -1 ? mainTarget : null);
     //$$ }
     //#endif
 

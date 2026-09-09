@@ -10,6 +10,7 @@ import net.minecraft.resources.Identifier;
 //#endif
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 
@@ -64,11 +65,106 @@ public sealed interface ItemCondition permits
         }
     }
 
-    record Path(DataComponentType<?> component, CheckMode mode, String value, float min, float max) implements ItemCondition {
+    /**
+     * Component predicate with the immutable string operands compiled when the resource rule is
+     * parsed.  {@code containsId} is used only when the runtime component value is an
+     * {@link ItemEnchantments}; ordinary values retain their historical
+     * {@code toString().contains(value)} behaviour.  {@code numericEqualsValue} is null when the
+     * equals operand is not a float, preserving the old string-equality fallback for numeric
+     * component values.
+     */
+    record Path(
+            DataComponentType<?> component,
+            CheckMode mode,
+            String value,
+            float min,
+            float max,
+            //#if MC>=1_21_09
+            @Nullable Identifier containsId,
+            //#else
+            //$$ @Nullable ResourceLocation containsId,
+            //#endif
+            @Nullable Float numericEqualsValue
+    ) implements ItemCondition {
         public enum CheckMode {
             /** Returns whatever {@code ItemStack.has} reports, including prototype defaults — not necessarily an "explicit override". */
             EXISTS,
             NOT_EMPTY, CONTAINS, RANGE, EQUALS
+        }
+
+        /**
+         * Backwards-compatible constructor for callers that build a path directly. Compilation
+         * still happens once here, rather than from {@link #test(ItemStack)} on every match.
+         */
+        public Path(DataComponentType<?> component, CheckMode mode, String value,
+                    float min, float max) {
+            this(component, mode, value, min, max,
+                    compileContainsId(mode, value), compileNumericEquals(mode, value));
+        }
+
+        /** Explicit resource-parser entry point, documenting that operands are precompiled. */
+        public static Path compile(DataComponentType<?> component, CheckMode mode, String value,
+                                   float min, float max) {
+            return new Path(component, mode, value, min, max);
+        }
+
+        //#if MC>=1_21_09
+        private static @Nullable Identifier compileContainsId(CheckMode mode, String value) {
+            if (mode != CheckMode.CONTAINS) return null;
+            try {
+                return Identifier.parse(value);
+            } catch (IdentifierException ignored) {
+                return null;
+            }
+        }
+        //#else
+        //$$ private static @Nullable ResourceLocation compileContainsId(CheckMode mode, String value) {
+        //$$     if (mode != CheckMode.CONTAINS) return null;
+        //$$     try {
+        //$$         return ResourceLocation.parse(value);
+        //$$     } catch (ResourceLocationException ignored) {
+        //$$         return null;
+        //$$     }
+        //$$ }
+        //#endif
+
+        private static @Nullable Float compileNumericEquals(CheckMode mode, String value) {
+            if (mode != CheckMode.EQUALS) return null;
+            try {
+                return java.lang.Float.parseFloat(value);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+
+        /** Package-private pure helper used by focused compatibility tests. */
+        boolean testContainsValue(@Nullable Object val) {
+            if (val == null) return false;
+            if (val instanceof ItemEnchantments enchants) {
+                if (containsId == null) return false;
+                for (var holder : enchants.keySet()) {
+                    if (holder.is(containsId)) return true;
+                }
+                return false;
+            }
+            return val.toString().contains(value);
+        }
+
+        /** Package-private pure helper used by focused compatibility tests. */
+        boolean testEqualsValue(@Nullable Object val) {
+            if (val == null) return value.equals("null");
+            if (val instanceof Number n && numericEqualsValue != null) {
+                float target = numericEqualsValue;
+                // Keep the existing relative-epsilon formula exactly: resource packs may rely on
+                // its behaviour for both small fractions and large integer-valued components.
+                float abs = Math.abs(n.floatValue() - target);
+                float rel = 1.0e-6f * Math.max(Math.abs(n.floatValue()), Math.abs(target));
+                float eps = Math.max(1.0e-6f, rel);
+                return abs <= eps;
+            }
+            // A numeric runtime value paired with a non-numeric target historically fell back to
+            // its string form after Float.parseFloat threw. Non-numeric values used the same path.
+            return val.toString().equals(value);
         }
 
         @Override
@@ -86,30 +182,7 @@ public sealed interface ItemCondition permits
                 }
                 case CONTAINS -> {
                     Object val = stack.get(component);
-                    if (val == null) yield false;
-                    if (val instanceof ItemEnchantments enchants) {
-                        //#if MC>=1_21_09
-                        Identifier id;
-                        try {
-                            id = Identifier.parse(value);
-                        } catch (IdentifierException e) {
-                            yield false;
-                        }
-                        //#else
-                        //$$ ResourceLocation id;
-                        //$$ try {
-                        //$$     id = ResourceLocation.parse(value);
-                        //$$ } catch (ResourceLocationException e) {
-                        //$$     yield false;
-                        //$$ }
-                        //#endif
-                        boolean found = false;
-                        for (var holder : enchants.keySet()) {
-                            if (holder.is(id)) { found = true; break; }
-                        }
-                        yield found;
-                    }
-                    yield val.toString().contains(value);
+                    yield testContainsValue(val);
                 }
                 case RANGE -> {
                     Object val = stack.get(component);
@@ -126,22 +199,7 @@ public sealed interface ItemCondition permits
                 }
                 case EQUALS -> {
                     Object val = stack.get(component);
-                    if (val == null) yield value.equals("null");
-                    if (val instanceof Number n) {
-                        // Number.toString format varies (1 vs 1.0 vs 1.0E0). Try numeric compare
-                        // with relative epsilon so small fractions match correctly and large
-                        // integers aren't false-negative from rounding error.
-                        try {
-                            float target = java.lang.Float.parseFloat(value);
-                            float abs = Math.abs(n.floatValue() - target);
-                            float rel = 1.0e-6f * Math.max(Math.abs(n.floatValue()), Math.abs(target));
-                            float eps = Math.max(1.0e-6f, rel);
-                            yield abs <= eps;
-                        } catch (NumberFormatException ignored) {
-                            yield val.toString().equals(value);
-                        }
-                    }
-                    yield val.toString().equals(value);
+                    yield testEqualsValue(val);
                 }
             };
         }

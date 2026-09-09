@@ -95,6 +95,17 @@ public class GuiRendererMixin {
         GuiGlowDispatcher.onPrepareItemElements();
     }
 
+    /** Recovers from a prior GUI render aborted before the normal TAIL cleanup. */
+    @Inject(method = "render", at = @At("HEAD"))
+    //#if MC>=1_26_02
+    //$$ private void galliumBeginFrameCleanup(CallbackInfo ci) {
+    //#else
+    private void galliumBeginFrameCleanup(GpuBufferSlice fogBuffer, CallbackInfo ci) {
+    //#endif
+        GuiGlowElementPipeline.discardFrameUsage();
+        GuiGlowCaptureManager.clear();
+    }
+
     @Inject(method = "render", at = @At("TAIL"))
     //#if MC>=1_26_02
     //$$ // 26.2: GuiRenderer.render() lost its GpuBufferSlice fogBuffer parameter.
@@ -102,6 +113,7 @@ public class GuiRendererMixin {
     //#else
     private void galliumClear(GpuBufferSlice fogBuffer, CallbackInfo ci) {
     //#endif
+        GuiGlowElementPipeline.discardFrameUsage();
         GuiGlowCaptureManager.clear();
     }
 }

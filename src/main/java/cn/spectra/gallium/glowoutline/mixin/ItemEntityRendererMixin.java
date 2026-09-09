@@ -2,6 +2,7 @@ package cn.spectra.gallium.glowoutline.mixin;
 
 //#if MC>=1_21_09
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
+import cn.spectra.gallium.glowoutline.ItemEffectsManager;
 import cn.spectra.gallium.glowoutline.capture.CaptureSites;
 import cn.spectra.gallium.glowoutline.capture.ItemEntityRenderStateAccessor;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -37,7 +38,12 @@ public class ItemEntityRendererMixin {
         // pickup starts (the bug this fix targets). Pre-1.21.9 used a real Entity (with its own
         // ItemEntity.copy()) and re-extracted every frame, so they were already safe.
         ItemStack picked = entity.getItem();
-        ((ItemEntityRenderStateAccessor) state).gallium$setItemStack(picked.isEmpty() ? ItemStack.EMPTY : picked.copy());
+        boolean captureEnabled = ItemEffectsManager.isActive()
+                && GlowOutlineConfig.isEnabled()
+                && GlowOutlineConfig.Toggle.DROPPED_ITEMS.get()
+                && !picked.isEmpty();
+        ((ItemEntityRenderStateAccessor) state).gallium$setItemStack(
+                captureEnabled ? picked.copy() : ItemStack.EMPTY);
     }
 
     @WrapOperation(method = "submit", at = @At(value = "INVOKE",
@@ -60,6 +66,7 @@ public class ItemEntityRendererMixin {
 }
 //#elseif MC>=1_21_05
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
+//$$ import cn.spectra.gallium.glowoutline.ItemEffectsManager;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
 //$$ import cn.spectra.gallium.glowoutline.capture.ItemEntityRenderStateAccessor;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -84,7 +91,12 @@ public class ItemEntityRendererMixin {
 //$$             at = @At("HEAD"))
 //$$     private void galliumCaptureItemStack(net.minecraft.world.entity.item.ItemEntity entity, ItemEntityRenderState state, float partialTicks, CallbackInfo ci) {
 //$$         ItemStack picked = entity.getItem();
-//$$         ((ItemEntityRenderStateAccessor) state).gallium$setItemStack(picked.isEmpty() ? ItemStack.EMPTY : picked.copy());
+//$$         boolean captureEnabled = ItemEffectsManager.isActive()
+//$$                 && GlowOutlineConfig.isEnabled()
+//$$                 && GlowOutlineConfig.Toggle.DROPPED_ITEMS.get()
+//$$                 && !picked.isEmpty();
+//$$         ((ItemEntityRenderStateAccessor) state).gallium$setItemStack(
+//$$                 captureEnabled ? picked.copy() : ItemStack.EMPTY);
 //$$     }
 //$$
 //$$     @WrapOperation(method = "render(Lnet/minecraft/client/renderer/entity/state/ItemEntityRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At(value = "INVOKE",
@@ -109,6 +121,7 @@ public class ItemEntityRendererMixin {
 //$$ // was added in 1.21.5 alongside the model bounding-box pre-pass. Both the injection
 //$$ // descriptor and the wrapper signature must drop AABB to match this version.
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
+//$$ import cn.spectra.gallium.glowoutline.ItemEffectsManager;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
 //$$ import cn.spectra.gallium.glowoutline.capture.ItemEntityRenderStateAccessor;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -132,7 +145,12 @@ public class ItemEntityRendererMixin {
 //$$             at = @At("HEAD"))
 //$$     private void galliumCaptureItemStack(net.minecraft.world.entity.item.ItemEntity entity, ItemEntityRenderState state, float partialTicks, CallbackInfo ci) {
 //$$         ItemStack picked = entity.getItem();
-//$$         ((ItemEntityRenderStateAccessor) state).gallium$setItemStack(picked.isEmpty() ? ItemStack.EMPTY : picked.copy());
+//$$         boolean captureEnabled = ItemEffectsManager.isActive()
+//$$                 && GlowOutlineConfig.isEnabled()
+//$$                 && GlowOutlineConfig.Toggle.DROPPED_ITEMS.get()
+//$$                 && !picked.isEmpty();
+//$$         ((ItemEntityRenderStateAccessor) state).gallium$setItemStack(
+//$$                 captureEnabled ? picked.copy() : ItemStack.EMPTY);
 //$$     }
 //$$
 //$$     @WrapOperation(method = "render(Lnet/minecraft/client/renderer/entity/state/ItemEntityRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At(value = "INVOKE",

@@ -65,8 +65,10 @@ import org.jspecify.annotations.Nullable;
  * ({@code mask.colorView}) only to satisfy {@code createRenderPass}'s color-view contract - nothing
  * is written to it (color writes disabled, no clear). Reading from
  * {@code sceneDepthTarget} (already a copy of {@code srcDepth}) avoids a read-from-and-write-to
- * {@code mask.depth} hazard on the same texture. Capture runs this pass once, then copies the
- * resulting depth texture to the remaining masks so the cost does not scale with item count.
+ * {@code mask.depth} hazard on the same texture. Independent masks share one pooled result via
+ * depth copies. Ordinary shared-mask reuse on 1.21.11 and 26.1 reruns this existing pass before
+ * each applicable world state, so pooling work can scale with capture count while mask allocation
+ * remains fixed.
  *
  * <h2>Version scope</h2>
  * Active on 1.21.6-1.21.11, 26.1, and 26.2's Iris/OpenGL forward-Z compatibility path. All use
@@ -251,6 +253,13 @@ public final class DepthMinPoolPipeline {
 
     private DepthMinPoolPipeline() {}
 
+    /** Also resolves cache misses before resource-reload listeners can precompile the private pipeline. */
+    public static @Nullable String shaderSource(Identifier id, ShaderType type) {
+        if (!SHADER_ID.equals(id)) return null;
+        return type == ShaderType.VERTEX ? VERTEX_SHADER
+                : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER : null;
+    }
+
     /**
      * Eagerly compile the pipeline. Called from {@link cn.spectra.gallium.glowoutline.ItemEffectsManager}'s
      * resource-reload listener after the GpuDevice exists. Idempotent.
@@ -276,12 +285,8 @@ public final class DepthMinPoolPipeline {
 
             // ShaderManager clears the device cache on every resource reload. Always seed it
             // again with the in-memory source even when our pipeline object is unchanged.
-            var compiled = RenderSystem.getDevice().precompilePipeline(pipeline, (id, type) -> {
-                if (!SHADER_ID.equals(id)) return null;
-                return type == ShaderType.VERTEX ? VERTEX_SHADER
-                     : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER
-                     : null;
-            });
+            var compiled = RenderSystem.getDevice().precompilePipeline(
+                    pipeline, DepthMinPoolPipeline::shaderSource);
             if (!compiled.isValid()) {
                 throw new IllegalStateException("Depth-min-pool pipeline compilation failed");
             }
@@ -388,6 +393,15 @@ public final class DepthMinPoolPipeline {
 //$$
 //$$     private DepthMinPoolPipeline() {}
 //$$
+//#if MC==1_21_11
+//$$     /** Independent of pipeline readiness, including the default resolver's reload cache misses. */
+//$$     public static @Nullable String shaderSource(Identifier id, ShaderType type) {
+//$$         if (!SHADER_ID.equals(id)) return null;
+//$$         return type == ShaderType.VERTEX ? VERTEX_SHADER
+//$$                 : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER : null;
+//$$     }
+//$$
+//#endif
 //$$     public static void precompile() {
 //$$         try {
 //$$             if (pipeline == null) {
@@ -406,12 +420,17 @@ public final class DepthMinPoolPipeline {
 //$$                         .build();
 //$$             }
 //$$
+//#if MC==1_21_11
+//$$             var compiled = RenderSystem.getDevice().precompilePipeline(
+//$$                     pipeline, DepthMinPoolPipeline::shaderSource);
+//#else
 //$$             var compiled = RenderSystem.getDevice().precompilePipeline(pipeline, (id, type) -> {
 //$$                 if (!SHADER_ID.equals(id)) return null;
 //$$                 return type == ShaderType.VERTEX ? VERTEX_SHADER
 //$$                      : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER
 //$$                      : null;
 //$$             });
+//#endif
 //$$             if (!compiled.isValid()) {
 //$$                 throw new IllegalStateException("Depth-min-pool pipeline compilation failed");
 //$$             }

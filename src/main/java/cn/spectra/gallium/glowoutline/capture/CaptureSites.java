@@ -41,14 +41,31 @@ public final class CaptureSites {
                                                          SubmitNodeCollector original,
                                                          GlowOutlineConfig.Toggle featureFlag,
                                                          boolean firstPerson) {
-        if (!GlowOutlineConfig.isEnabled()) return original;
-        if (!featureFlag.get()) return original;
-        if (IrisCompat.isShadowPass()) return original;
-        if (stack == null || stack.isEmpty()) return original;
-        if (!GlowCaptureManager.beginItemCapture(stack, firstPerson)) return original;
-        return original instanceof SubmitNodeStorage storage
-                ? new DuplicatingSubmitNodeStorage(storage)
-                : original;
+        GlowCaptureManager.beginItemCaptureScope();
+        try {
+            if (!GlowOutlineConfig.isEnabled()) return original;
+            if (!featureFlag.get()) return original;
+            if (IrisCompat.isShadowPass()) return original;
+            if (stack == null || stack.isEmpty()) return original;
+            if (!GlowCaptureManager.beginItemCapture(stack, firstPerson)) return original;
+            GlowCaptureManager.markItemCaptureScopeStarted();
+            if (original instanceof SubmitNodeStorage storage) {
+                GlowCaptureState state = GlowCaptureManager.currentCapture();
+                if (state == null) return original;
+                DuplicatingSubmitNodeStorage wrapper = state.duplicatingStorage;
+                if (wrapper == null) {
+                    wrapper = new DuplicatingSubmitNodeStorage(storage, state);
+                    state.duplicatingStorage = wrapper;
+                } else {
+                    wrapper.reset(storage, state);
+                }
+                return wrapper;
+            }
+            return original;
+        } catch (RuntimeException | Error e) {
+            GlowCaptureManager.cancelItemCaptureScope();
+            throw e;
+        }
     }
 
     public static void end() {
@@ -187,40 +204,154 @@ public final class CaptureSites {
 //$$             layers.clear();
 //$$         }
 //$$     }
+//$$
+//$$     /** Reusable world-capture tee; detached after each synchronous renderer call. */
+//$$     public static final class ReusableTeeMultiBufferSource implements MultiBufferSource {
+//$$         private MultiBufferSource original;
+//$$         private DelayingMultiBufferSource capture;
+//$$         private GlowCaptureState state;
+//$$         private boolean captureEnabled;
+//$$         private final List<TeeVertexConsumer> consumers = new ArrayList<>();
+//$$
+//$$         public void reset(MultiBufferSource original, DelayingMultiBufferSource capture,
+//$$                           GlowCaptureState state) {
+//$$             this.original = original;
+//$$             this.capture = capture;
+//$$             this.state = state;
+//$$             this.captureEnabled = true;
+//$$         }
+//$$
+//$$         /** Stop accepting new mask vertices while keeping vanilla's active consumers alive. */
+//$$         public void disableCapture() {
+//$$             captureEnabled = false;
+//$$             for (int i = 0; i < consumers.size(); i++) consumers.get(i).disableCapture();
+//$$         }
+//$$
+//$$         public void detach() {
+//$$             captureEnabled = false;
+//$$             original = null;
+//$$             capture = null;
+//$$             state = null;
+//$$             for (int i = 0; i < consumers.size(); i++) consumers.get(i).detach();
+//$$         }
+//$$
+//$$         @Override
+//$$         public VertexConsumer getBuffer(RenderType renderType) {
+//$$             if (original == null) {
+//$$                 throw new IllegalStateException("Detached capture buffer wrapper");
+//$$             }
+//$$             VertexConsumer orig = original.getBuffer(renderType);
+//$$             if (!captureEnabled) return orig;
+//$$             if (capture == null || state == null) {
+//$$                 throw new IllegalStateException("Detached capture buffer wrapper");
+//$$             }
+//$$             String name = renderType == null ? null : renderType.getName();
+//$$             if (name != null && GLINT_LAYER_NAMES.contains(name)) return orig;
+//$$             VertexConsumer cap = capture.getBuffer(renderType);
+//$$             for (int i = 0; i < consumers.size(); i++) {
+//$$                 TeeVertexConsumer consumer = consumers.get(i);
+//$$                 if (consumer.type == renderType) return consumer.reset(orig, cap, state);
+//$$             }
+//$$             TeeVertexConsumer consumer = new TeeVertexConsumer(renderType);
+//$$             consumers.add(consumer);
+//$$             return consumer.reset(orig, cap, state);
+//$$         }
+//$$
+//$$         /** Marks capture only when the first vertex is actually accepted by the mask. */
+//$$         private static final class TeeVertexConsumer implements VertexConsumer {
+//$$             private final RenderType type;
+//$$             private VertexConsumer original;
+//$$             private VertexConsumer capture;
+//$$             private GlowCaptureState state;
+//$$             private boolean marked;
+//$$             private boolean captureEnabled;
+//$$             private boolean mirrorCurrentVertex;
+//$$
+//$$             private TeeVertexConsumer(RenderType type) { this.type = type; }
+//$$
+//$$             private TeeVertexConsumer reset(VertexConsumer original, VertexConsumer capture,
+//$$                                             GlowCaptureState state) {
+//$$                 this.original = original;
+//$$                 this.capture = capture;
+//$$                 this.state = state;
+//$$                 this.marked = false;
+//$$                 this.captureEnabled = true;
+//$$                 this.mirrorCurrentVertex = false;
+//$$                 return this;
+//$$             }
+//$$
+//$$             private void disableCapture() { captureEnabled = false; }
+//$$             private void detach() {
+//$$                 original = null; capture = null; state = null; marked = false;
+//$$                 captureEnabled = false; mirrorCurrentVertex = false;
+//$$             }
+//$$             private void mark() {
+//$$                 if (!marked) { GlowCaptureManager.markCaptured(state); marked = true; }
+//$$             }
+//$$
+//$$             @Override public VertexConsumer addVertex(float x, float y, float z) {
+//$$                 original.addVertex(x, y, z);
+//$$                 mirrorCurrentVertex = captureEnabled && capture != null;
+//$$                 if (mirrorCurrentVertex) {
+//$$                     capture.addVertex(x, y, z); mark();
+//$$                 }
+//$$                 return this;
+//$$             }
+//$$             @Override public VertexConsumer setColor(int r, int g, int b, int a) {
+//$$                 original.setColor(r, g, b, a);
+//$$                 if (mirrorCurrentVertex) capture.setColor(r, g, b, a);
+//$$                 return this;
+//$$             }
+//$$             @Override public VertexConsumer setUv(float u, float v) {
+//$$                 original.setUv(u, v); if (mirrorCurrentVertex) capture.setUv(u, v); return this;
+//$$             }
+//$$             @Override public VertexConsumer setUv1(int u, int v) {
+//$$                 original.setUv1(u, v); if (mirrorCurrentVertex) capture.setUv1(u, v); return this;
+//$$             }
+//$$             @Override public VertexConsumer setUv2(int u, int v) {
+//$$                 original.setUv2(u, v); if (mirrorCurrentVertex) capture.setUv2(u, v); return this;
+//$$             }
+//$$             @Override public VertexConsumer setNormal(float x, float y, float z) {
+//$$                 original.setNormal(x, y, z);
+//$$                 if (mirrorCurrentVertex) capture.setNormal(x, y, z);
+//$$                 return this;
+//$$             }
+//$$         }
+//$$     }
 //$$ 
 //$$     public static MultiBufferSource beginIfCapturable(ItemStack stack,
 //$$                                                        MultiBufferSource original,
 //$$                                                        GlowOutlineConfig.Toggle featureFlag,
 //$$                                                        boolean firstPerson) {
-//$$         if (!GlowOutlineConfig.isEnabled()) return original;
-//$$         if (!featureFlag.get()) return original;
-//$$         if (IrisCompat.isShadowPass()) return original;
-//$$         if (stack == null) return original;
-//$$         boolean capturable = GlowCaptureManager.beginItemCapture(stack, firstPerson);
-//$$         if (!capturable) return original;
-//$$ 
-//$$         GlowCaptureState state = GlowCaptureManager.currentCapture();
-//$$         if (state == null) return original;
+//$$         GlowCaptureManager.beginItemCaptureScope();
+//$$         try {
+//$$             if (!GlowOutlineConfig.isEnabled()) return original;
+//$$             if (!featureFlag.get()) return original;
+//$$             if (IrisCompat.isShadowPass()) return original;
+//$$             if (stack == null) return original;
+//$$             boolean capturable = GlowCaptureManager.beginItemCapture(stack, firstPerson);
+//$$             if (!capturable) return original;
+//$$             GlowCaptureManager.markItemCaptureScopeStarted();
 //$$
-//$$         if (state.customBufferSource == null) {
-//$$             state.customBufferSource = new DelayingMultiBufferSource();
-//$$         }
-//$$         DelayingMultiBufferSource captureSource = state.customBufferSource;
-//$$ 
-//$$         return renderType -> {
-//$$             VertexConsumer orig = original.getBuffer(renderType);
-//$$             // Skip enchantment-glint layers — replaying them into the mask under our swapped
-//$$             // projection + bypass causes a geometry explosion. See GLINT_LAYER_NAMES.
-//$$             // RenderType.getName() is final on vanilla types but modded types could
-//$$             // hand back null; Set.of(...).contains(null) throws NPE so guard explicitly.
-//$$             String name = renderType.getName();
-//$$             if (name != null && GLINT_LAYER_NAMES.contains(name)) {
-//$$                 return orig;
+//$$             GlowCaptureState state = GlowCaptureManager.currentCapture();
+//$$             if (state == null) return original;
+//$$
+//$$             if (state.customBufferSource == null) {
+//$$                 state.customBufferSource = new DelayingMultiBufferSource();
 //$$             }
-//$$             state.capturedThisFrame = true;
-//$$             VertexConsumer cap = captureSource.getBuffer(renderType);
-//$$             return VertexMultiConsumer.create(orig, cap);
-//$$         };
+//$$             DelayingMultiBufferSource captureSource = state.customBufferSource;
+//$$
+//$$             ReusableTeeMultiBufferSource tee = state.reusableTee;
+//$$             if (tee == null) {
+//$$                 tee = new ReusableTeeMultiBufferSource();
+//$$                 state.reusableTee = tee;
+//$$             }
+//$$             tee.reset(original, captureSource, state);
+//$$             return tee;
+//$$         } catch (RuntimeException | Error e) {
+//$$             GlowCaptureManager.cancelItemCaptureScope();
+//$$             throw e;
+//$$         }
 //$$     }
 //$$ 
 //$$     public static void end() {
@@ -408,37 +539,142 @@ public final class CaptureSites {
 //$$         }
 //$$     }
 //$$
+//$$     public static final class ReusableTeeMultiBufferSource implements MultiBufferSource {
+//$$         private MultiBufferSource original;
+//$$         private DelayingMultiBufferSource capture;
+//$$         private GlowCaptureState state;
+//$$         private boolean captureEnabled;
+//$$         private final List<TeeVertexConsumer> consumers = new ArrayList<>();
+//$$
+//$$         public void reset(MultiBufferSource original, DelayingMultiBufferSource capture,
+//$$                           GlowCaptureState state) {
+//$$             this.original = original;
+//$$             this.capture = capture;
+//$$             this.state = state;
+//$$             this.captureEnabled = true;
+//$$         }
+//$$
+//$$         public void disableCapture() {
+//$$             captureEnabled = false;
+//$$             for (int i = 0; i < consumers.size(); i++) consumers.get(i).disableCapture();
+//$$         }
+//$$
+//$$         public void detach() {
+//$$             captureEnabled = false;
+//$$             original = null;
+//$$             capture = null;
+//$$             state = null;
+//$$             for (int i = 0; i < consumers.size(); i++) consumers.get(i).detach();
+//$$         }
+//$$
+//$$         @Override
+//$$         public VertexConsumer getBuffer(RenderType renderType) {
+//$$             if (original == null) {
+//$$                 throw new IllegalStateException("Detached capture buffer wrapper");
+//$$             }
+//$$             VertexConsumer orig = original.getBuffer(renderType);
+//$$             if (!captureEnabled) return orig;
+//$$             if (capture == null || state == null) {
+//$$                 throw new IllegalStateException("Detached capture buffer wrapper");
+//$$             }
+//$$             String name = renderType == null ? null : renderType.getName();
+//$$             if (name != null && GLINT_LAYER_NAMES.contains(name)) return orig;
+//$$             VertexConsumer cap = capture.getBuffer(renderType);
+//$$             for (int i = 0; i < consumers.size(); i++) {
+//$$                 TeeVertexConsumer consumer = consumers.get(i);
+//$$                 if (consumer.type == renderType) return consumer.reset(orig, cap, state);
+//$$             }
+//$$             TeeVertexConsumer consumer = new TeeVertexConsumer(renderType);
+//$$             consumers.add(consumer);
+//$$             return consumer.reset(orig, cap, state);
+//$$         }
+//$$
+//$$         private static final class TeeVertexConsumer implements VertexConsumer {
+//$$             private final RenderType type;
+//$$             private VertexConsumer original;
+//$$             private VertexConsumer capture;
+//$$             private GlowCaptureState state;
+//$$             private boolean marked;
+//$$             private boolean captureEnabled;
+//$$             private boolean mirrorCurrentVertex;
+//$$             private TeeVertexConsumer(RenderType type) { this.type = type; }
+//$$             private TeeVertexConsumer reset(VertexConsumer original, VertexConsumer capture,
+//$$                                             GlowCaptureState state) {
+//$$                 this.original = original; this.capture = capture; this.state = state;
+//$$                 this.marked = false; this.captureEnabled = true;
+//$$                 this.mirrorCurrentVertex = false; return this;
+//$$             }
+//$$             private void disableCapture() { captureEnabled = false; }
+//$$             private void detach() {
+//$$                 original = null; capture = null; state = null; marked = false;
+//$$                 captureEnabled = false; mirrorCurrentVertex = false;
+//$$             }
+//$$             private void mark() {
+//$$                 if (!marked) { GlowCaptureManager.markCaptured(state); marked = true; }
+//$$             }
+//$$             @Override public VertexConsumer addVertex(float x, float y, float z) {
+//$$                 original.addVertex(x, y, z);
+//$$                 mirrorCurrentVertex = captureEnabled && capture != null;
+//$$                 if (mirrorCurrentVertex) {
+//$$                     capture.addVertex(x, y, z); mark();
+//$$                 }
+//$$                 return this;
+//$$             }
+//$$             @Override public VertexConsumer setColor(int r, int g, int b, int a) {
+//$$                 original.setColor(r, g, b, a);
+//$$                 if (mirrorCurrentVertex) capture.setColor(r, g, b, a);
+//$$                 return this;
+//$$             }
+//$$             @Override public VertexConsumer setUv(float u, float v) {
+//$$                 original.setUv(u, v); if (mirrorCurrentVertex) capture.setUv(u, v); return this;
+//$$             }
+//$$             @Override public VertexConsumer setUv1(int u, int v) {
+//$$                 original.setUv1(u, v); if (mirrorCurrentVertex) capture.setUv1(u, v); return this;
+//$$             }
+//$$             @Override public VertexConsumer setUv2(int u, int v) {
+//$$                 original.setUv2(u, v); if (mirrorCurrentVertex) capture.setUv2(u, v); return this;
+//$$             }
+//$$             @Override public VertexConsumer setNormal(float x, float y, float z) {
+//$$                 original.setNormal(x, y, z);
+//$$                 if (mirrorCurrentVertex) capture.setNormal(x, y, z);
+//$$                 return this;
+//$$             }
+//$$         }
+//$$     }
+//$$
 //$$     public static MultiBufferSource beginIfCapturable(ItemStack stack,
 //$$                                                        MultiBufferSource original,
 //$$                                                        GlowOutlineConfig.Toggle featureFlag,
 //$$                                                        boolean firstPerson) {
-//$$         if (!GlowOutlineConfig.isEnabled()) return original;
-//$$         if (!featureFlag.get()) return original;
-//$$         if (IrisCompat.isShadowPass()) return original;
-//$$         if (stack == null) return original;
-//$$         boolean capturable = GlowCaptureManager.beginItemCapture(stack, firstPerson);
-//$$         if (!capturable) return original;
+//$$         GlowCaptureManager.beginItemCaptureScope();
+//$$         try {
+//$$             if (!GlowOutlineConfig.isEnabled()) return original;
+//$$             if (!featureFlag.get()) return original;
+//$$             if (IrisCompat.isShadowPass()) return original;
+//$$             if (stack == null) return original;
+//$$             boolean capturable = GlowCaptureManager.beginItemCapture(stack, firstPerson);
+//$$             if (!capturable) return original;
+//$$             GlowCaptureManager.markItemCaptureScopeStarted();
 //$$
-//$$         GlowCaptureState state = GlowCaptureManager.currentCapture();
-//$$         if (state == null) return original;
+//$$             GlowCaptureState state = GlowCaptureManager.currentCapture();
+//$$             if (state == null) return original;
 //$$
-//$$         if (state.customBufferSource == null) {
-//$$             state.customBufferSource = new DelayingMultiBufferSource();
-//$$         }
-//$$         DelayingMultiBufferSource captureSource = state.customBufferSource;
-//$$
-//$$         return renderType -> {
-//$$             VertexConsumer orig = original.getBuffer(renderType);
-//$$             // RenderType.getName() is final on vanilla types but modded types could
-//$$             // hand back null; Set.of(...).contains(null) throws NPE so guard explicitly.
-//$$             String name = renderType.getName();
-//$$             if (name != null && GLINT_LAYER_NAMES.contains(name)) {
-//$$                 return orig;
+//$$             if (state.customBufferSource == null) {
+//$$                 state.customBufferSource = new DelayingMultiBufferSource();
 //$$             }
-//$$             state.capturedThisFrame = true;
-//$$             VertexConsumer cap = captureSource.getBuffer(renderType);
-//$$             return VertexMultiConsumer.create(orig, cap);
-//$$         };
+//$$             DelayingMultiBufferSource captureSource = state.customBufferSource;
+//$$
+//$$             ReusableTeeMultiBufferSource tee = state.reusableTee;
+//$$             if (tee == null) {
+//$$                 tee = new ReusableTeeMultiBufferSource();
+//$$                 state.reusableTee = tee;
+//$$             }
+//$$             tee.reset(original, captureSource, state);
+//$$             return tee;
+//$$         } catch (RuntimeException | Error e) {
+//$$             GlowCaptureManager.cancelItemCaptureScope();
+//$$             throw e;
+//$$         }
 //$$     }
 //$$
 //$$     /**
@@ -502,20 +738,136 @@ public final class CaptureSites {
 //$$                                                        MultiBufferSource original,
 //$$                                                        GlowOutlineConfig.Toggle featureFlag,
 //$$                                                        boolean firstPerson) {
-//$$         if (!GlowOutlineConfig.isEnabled()) return original;
-//$$         if (!featureFlag.get()) return original;
-//$$         if (IrisCompat.isShadowPass()) return original;
-//$$         if (stack == null || stack.isEmpty()) return original;
-//$$         if (!GlowCaptureManager.beginItemCapture(stack, firstPerson)) return original;
+//$$         GlowCaptureManager.beginItemCaptureScope();
+//$$         try {
+//$$             if (!GlowOutlineConfig.isEnabled()) return original;
+//$$             if (!featureFlag.get()) return original;
+//$$             if (IrisCompat.isShadowPass()) return original;
+//$$             if (stack == null || stack.isEmpty()) return original;
+//$$             if (!GlowCaptureManager.beginItemCapture(stack, firstPerson)) return original;
+//$$             GlowCaptureManager.markItemCaptureScopeStarted();
 //$$
-//$$         GlowCaptureState state = GlowCaptureManager.currentCapture();
-//$$         if (state == null) return original;
-//$$         if (state.customBufferSource == null) {
-//$$             state.customBufferSource = new DelayingMultiBufferSource();
+//$$             GlowCaptureState state = GlowCaptureManager.currentCapture();
+//$$             if (state == null) return original;
+//$$             if (state.customBufferSource == null) {
+//$$                 state.customBufferSource = new DelayingMultiBufferSource();
+//$$             }
+//$$             DelayingMultiBufferSource captureSource = state.customBufferSource;
+//$$
+//$$             ReusableTeeMultiBufferSource tee = state.reusableTee;
+//$$             if (tee == null) {
+//$$                 tee = new ReusableTeeMultiBufferSource();
+//$$                 state.reusableTee = tee;
+//$$             }
+//$$             tee.reset(original, captureSource, state);
+//$$             return tee;
+//$$         } catch (RuntimeException | Error e) {
+//$$             GlowCaptureManager.cancelItemCaptureScope();
+//$$             throw e;
 //$$         }
-//$$         DelayingMultiBufferSource captureSource = state.customBufferSource;
+//$$     }
 //$$
-//$$         return renderType -> teeVertexConsumer(original, captureSource, renderType);
+//$$     public static final class ReusableTeeMultiBufferSource implements MultiBufferSource {
+//$$         private MultiBufferSource original;
+//$$         private DelayingMultiBufferSource capture;
+//$$         private GlowCaptureState state;
+//$$         private boolean captureEnabled;
+//$$         private final List<TeeVertexConsumer> consumers = new ArrayList<>();
+//$$
+//$$         public void reset(MultiBufferSource original, DelayingMultiBufferSource capture,
+//$$                           GlowCaptureState state) {
+//$$             this.original = original;
+//$$             this.capture = capture;
+//$$             this.state = state;
+//$$             this.captureEnabled = true;
+//$$         }
+//$$
+//$$         public void disableCapture() {
+//$$             captureEnabled = false;
+//$$             for (int i = 0; i < consumers.size(); i++) consumers.get(i).disableCapture();
+//$$         }
+//$$
+//$$         public void detach() {
+//$$             captureEnabled = false;
+//$$             original = null;
+//$$             capture = null;
+//$$             state = null;
+//$$             for (int i = 0; i < consumers.size(); i++) consumers.get(i).detach();
+//$$         }
+//$$
+//$$         @Override
+//$$         public VertexConsumer getBuffer(RenderType renderType) {
+//$$             if (original == null) {
+//$$                 throw new IllegalStateException("Detached capture buffer wrapper");
+//$$             }
+//$$             VertexConsumer orig = original.getBuffer(renderType);
+//$$             if (!captureEnabled) return orig;
+//$$             if (capture == null || state == null) {
+//$$                 throw new IllegalStateException("Detached capture buffer wrapper");
+//$$             }
+//$$             String name = renderType == null ? null : renderType.toString();
+//$$             if (name != null && name.contains("glint")) return orig;
+//$$             VertexConsumer cap = capture.getBuffer(renderType);
+//$$             for (int i = 0; i < consumers.size(); i++) {
+//$$                 TeeVertexConsumer consumer = consumers.get(i);
+//$$                 if (consumer.type == renderType) return consumer.reset(orig, cap, state);
+//$$             }
+//$$             TeeVertexConsumer consumer = new TeeVertexConsumer(renderType);
+//$$             consumers.add(consumer);
+//$$             return consumer.reset(orig, cap, state);
+//$$         }
+//$$
+//$$         private static final class TeeVertexConsumer implements VertexConsumer {
+//$$             private final RenderType type;
+//$$             private VertexConsumer original;
+//$$             private VertexConsumer capture;
+//$$             private GlowCaptureState state;
+//$$             private boolean marked;
+//$$             private boolean captureEnabled;
+//$$             private boolean mirrorCurrentVertex;
+//$$             private TeeVertexConsumer(RenderType type) { this.type = type; }
+//$$             private TeeVertexConsumer reset(VertexConsumer original, VertexConsumer capture,
+//$$                                             GlowCaptureState state) {
+//$$                 this.original = original; this.capture = capture; this.state = state;
+//$$                 this.marked = false; this.captureEnabled = true;
+//$$                 this.mirrorCurrentVertex = false; return this;
+//$$             }
+//$$             private void disableCapture() { captureEnabled = false; }
+//$$             private void detach() {
+//$$                 original = null; capture = null; state = null; marked = false;
+//$$                 captureEnabled = false; mirrorCurrentVertex = false;
+//$$             }
+//$$             private void mark() {
+//$$                 if (!marked) { GlowCaptureManager.markCaptured(state); marked = true; }
+//$$             }
+//$$             @Override public VertexConsumer addVertex(float x, float y, float z) {
+//$$                 original.addVertex(x, y, z);
+//$$                 mirrorCurrentVertex = captureEnabled && capture != null;
+//$$                 if (mirrorCurrentVertex) {
+//$$                     capture.addVertex(x, y, z); mark();
+//$$                 }
+//$$                 return this;
+//$$             }
+//$$             @Override public VertexConsumer setColor(int r, int g, int b, int a) {
+//$$                 original.setColor(r, g, b, a);
+//$$                 if (mirrorCurrentVertex) capture.setColor(r, g, b, a);
+//$$                 return this;
+//$$             }
+//$$             @Override public VertexConsumer setUv(float u, float v) {
+//$$                 original.setUv(u, v); if (mirrorCurrentVertex) capture.setUv(u, v); return this;
+//$$             }
+//$$             @Override public VertexConsumer setUv1(int u, int v) {
+//$$                 original.setUv1(u, v); if (mirrorCurrentVertex) capture.setUv1(u, v); return this;
+//$$             }
+//$$             @Override public VertexConsumer setUv2(int u, int v) {
+//$$                 original.setUv2(u, v); if (mirrorCurrentVertex) capture.setUv2(u, v); return this;
+//$$             }
+//$$             @Override public VertexConsumer setNormal(float x, float y, float z) {
+//$$                 original.setNormal(x, y, z);
+//$$                 if (mirrorCurrentVertex) capture.setNormal(x, y, z);
+//$$                 return this;
+//$$             }
+//$$         }
 //$$     }
 //$$
 //$$     // Substring match (rather than the exact-name Set used on 1.21.5+) because
@@ -532,8 +884,6 @@ public final class CaptureSites {
 //$$         VertexConsumer orig = original.getBuffer(renderType);
 //$$         String name = renderType.toString();
 //$$         if (name != null && name.contains("glint")) return orig;
-//$$         GlowCaptureState state = GlowCaptureManager.currentCapture();
-//$$         if (state != null) state.capturedThisFrame = true;
 //$$         return VertexMultiConsumer.create(orig, capture.getBuffer(renderType));
 //$$     }
 //$$
@@ -629,7 +979,8 @@ public final class CaptureSites {
 //$$
 //$$     public static MultiBufferSource teeGuiNonGlint(MultiBufferSource original,
 //$$                                                     DelayingMultiBufferSource capture) {
-//$$         return renderType -> teeVertexConsumer(original, capture, renderType);
+//$$         return renderType -> teeVertexConsumer(
+//$$                 original, capture, renderType);
 //$$     }
 //$$
 //$$     public static void end() {

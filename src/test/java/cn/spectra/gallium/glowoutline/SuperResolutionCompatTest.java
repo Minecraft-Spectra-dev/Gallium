@@ -1,5 +1,8 @@
 package cn.spectra.gallium.glowoutline;
 
+import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager.SceneDepthSnapshotStatus;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.CaptureMode;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.SnapshotSite;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -7,6 +10,19 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SuperResolutionCompatTest {
+
+    @Test
+    void cIrisUsesReachableInlineHandBoundaryOnMigratedVersions() {
+        assertTrue(SuperResolutionCompat.usesInlineHandCompletion(CaptureMode.A, true));
+        assertTrue(SuperResolutionCompat.usesInlineHandCompletion(CaptureMode.B, false));
+        assertFalse(SuperResolutionCompat.usesInlineHandCompletion(CaptureMode.C, false));
+        assertFalse(SuperResolutionCompat.usesInlineHandCompletion(CaptureMode.UNKNOWN, true));
+        //#if MC==1_21_11 || MC==1_26_01
+        assertTrue(SuperResolutionCompat.usesInlineHandCompletion(CaptureMode.C, true));
+        //#else
+        //$$ assertFalse(SuperResolutionCompat.usesInlineHandCompletion(CaptureMode.C, true));
+        //#endif
+    }
 
     @Test
     void renderingLayerBuildGateMatchesTheFourSupportedMinecraftLines() {
@@ -151,6 +167,78 @@ class SuperResolutionCompatTest {
                 false, false, true));
         assertFalse(SuperResolutionCompat.needsHandHook(
                 false, true, false));
+    }
+
+    @Test
+    void handSchedulingIsIndependentFromForegroundDepthCopy() {
+        var iris = SuperResolutionCompat.handHookDecision(true, true, true);
+        assertTrue(iris.scheduleFirstPerson());
+        assertFalse(iris.copyForeground());
+
+        var firstPersonOnly = SuperResolutionCompat.handHookDecision(false, true, false);
+        assertTrue(firstPersonOnly.scheduleFirstPerson());
+        assertFalse(firstPersonOnly.copyForeground());
+
+        var vanillaOcclusion = SuperResolutionCompat.handHookDecision(false, true, true);
+        assertTrue(vanillaOcclusion.scheduleFirstPerson());
+        assertTrue(vanillaOcclusion.copyForeground());
+    }
+
+    @Test
+    void upscaleCompletionBelongsOnlyToItsFrameEpoch() {
+        assertTrue(SuperResolutionCompat.completedUpscaleForEpoch(17L, 17L));
+        assertFalse(SuperResolutionCompat.completedUpscaleForEpoch(17L, 16L));
+        assertFalse(SuperResolutionCompat.completedUpscaleForEpoch(17L, -1L));
+    }
+
+    @Test
+    void firstPersonDomainCapabilityDoesNotDependOnForegroundCopyDemand() {
+        assertTrue(SuperResolutionCompat.missedFirstPersonDomainHook(true, false));
+        assertFalse(SuperResolutionCompat.missedFirstPersonDomainHook(false, false));
+        assertFalse(SuperResolutionCompat.missedFirstPersonDomainHook(true, true));
+    }
+
+    @Test
+    void authoritativeWorldCapabilityUsesOnlyTheModesRequiredSite() {
+        var emptyA = SuperResolutionCompat.worldHookDecision(
+                CaptureMode.A, SnapshotSite.VANILLA_PRE_HAND,
+                SceneDepthSnapshotStatus.NOT_REQUIRED);
+        var emptyC = SuperResolutionCompat.worldHookDecision(
+                CaptureMode.C, SnapshotSite.VANILLA_PRE_HAND,
+                SceneDepthSnapshotStatus.NOT_REQUIRED);
+        assertTrue(emptyA.authoritativeSite());
+        assertTrue(emptyC.authoritativeSite());
+        assertTrue(emptyA.closeDomain());
+        assertFalse(emptyA.abortWorldDomain());
+
+        var provisionalA = SuperResolutionCompat.worldHookDecision(
+                CaptureMode.A, SnapshotSite.SR_PRE_UPSCALE,
+                SceneDepthSnapshotStatus.READY);
+        var provisionalC = SuperResolutionCompat.worldHookDecision(
+                CaptureMode.C, SnapshotSite.SR_PRE_UPSCALE,
+                SceneDepthSnapshotStatus.READY);
+        assertFalse(provisionalA.authoritativeSite());
+        assertFalse(provisionalC.authoritativeSite());
+
+        var vanillaB = SuperResolutionCompat.worldHookDecision(
+                CaptureMode.B, SnapshotSite.VANILLA_PRE_HAND,
+                SceneDepthSnapshotStatus.READY);
+        var emptyAuthoritativeB = SuperResolutionCompat.worldHookDecision(
+                CaptureMode.B, SnapshotSite.SR_PRE_UPSCALE,
+                SceneDepthSnapshotStatus.NOT_REQUIRED);
+        assertFalse(vanillaB.authoritativeSite());
+        assertTrue(emptyAuthoritativeB.authoritativeSite());
+        assertTrue(emptyAuthoritativeB.closeDomain());
+    }
+
+    @Test
+    void failedWorldSnapshotAbortsOnlyItsDomainDecision() {
+        var failed = SuperResolutionCompat.worldHookDecision(
+                CaptureMode.A, SnapshotSite.VANILLA_PRE_HAND,
+                SceneDepthSnapshotStatus.FAILED);
+        assertTrue(failed.authoritativeSite());
+        assertTrue(failed.closeDomain());
+        assertTrue(failed.abortWorldDomain());
     }
 
     @Test

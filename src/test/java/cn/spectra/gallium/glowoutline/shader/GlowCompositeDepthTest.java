@@ -1,5 +1,6 @@
 package cn.spectra.gallium.glowoutline.shader;
 
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -7,6 +8,30 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GlowCompositeDepthTest {
+
+    @Test
+    void modeledHackStateSpecPreservesEveryCurrentSceneDepthRoute() {
+        // Exhaust all 32 combinations against the unchanged live depth selector.
+        for (int flags = 0; flags < 32; flags++) {
+            boolean hand = (flags & 1) != 0;
+            boolean iris = (flags & 2) != 0;
+            boolean display = (flags & 4) != 0;
+            boolean foreground = (flags & 8) != 0;
+            boolean firstPersonCamera = (flags & 16) != 0;
+            var spec = SrStreamingCoordinator.currentHackOutputStateSpec(
+                    hand ? SrStreamingCoordinator.CaptureDomain.FIRST_PERSON
+                            : SrStreamingCoordinator.CaptureDomain.WORLD,
+                    iris, display, foreground, firstPersonCamera);
+            assertEquals(GlowComposite.chooseSuperResolutionSceneDepth(
+                    hand, iris, display, foreground, firstPersonCamera).name(),
+                    spec.sceneDepthRoute().name());
+            assertEquals(hand ? SrStreamingCoordinator.MaskDepthStrategy.CLEAR_FAR
+                    : SrStreamingCoordinator.MaskDepthStrategy.RAW_DISPLAY_COPY,
+                    spec.maskDepthStrategy());
+            assertEquals(SrStreamingCoordinator.PackTransformPolicy.OUTPUT_FULL_EXTENT,
+                    spec.packTransformPolicy());
+        }
+    }
 
     @Test
     void firstPersonWorldMaskUsesLiveDepthWithoutIris() {

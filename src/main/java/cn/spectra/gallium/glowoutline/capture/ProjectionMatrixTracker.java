@@ -29,7 +29,17 @@ import org.jspecify.annotations.Nullable;
  */
 public final class ProjectionMatrixTracker {
 
-    private static final Map<GpuBufferSlice, Matrix4f> ASSOCIATIONS = new IdentityHashMap<>();
+    private static final class Association {
+        private final Matrix4f matrix;
+        private boolean valid;
+
+        private Association(Matrix4f matrix) {
+            this.matrix = new Matrix4f(matrix);
+            valid = true;
+        }
+    }
+
+    private static final Map<GpuBufferSlice, Association> ASSOCIATIONS = new IdentityHashMap<>();
 
     static {
         GlowResources.register(ProjectionMatrixTracker::clear);
@@ -41,33 +51,46 @@ public final class ProjectionMatrixTracker {
         RenderSystem.assertOnRenderThread();
         // Defensive copy: vanilla often reuses a stack-allocated Matrix4f across calls. Without
         // copying, a later upload would mutate the matrix already mapped to a different slice.
-        ASSOCIATIONS.put(slice, new Matrix4f(matrix));
+        Association stored = ASSOCIATIONS.get(slice);
+        if (stored == null) {
+            ASSOCIATIONS.put(slice, new Association(matrix));
+        } else {
+            stored.matrix.set(matrix);
+            stored.valid = true;
+        }
+    }
+
+    /** Revoke proof before a fallible upload, retaining CPU storage for the next successful write. */
+    public static void forget(GpuBufferSlice slice) {
+        RenderSystem.assertOnRenderThread();
+        Association stored = ASSOCIATIONS.get(slice);
+        if (stored != null) stored.valid = false;
     }
 
     /**
      * Returns a fresh copy of the matrix associated with {@code slice}, or {@code null} if no
-     * mixin has yet observed an upload to that slice. Callers should tolerate {@code null} by
+     * valid upload proof exists for that slice. Callers should tolerate {@code null} by
      * skipping the downscale-aware path and falling back to the unmodified slice.
      */
     public static @Nullable Matrix4f lookup(GpuBufferSlice slice) {
         RenderSystem.assertOnRenderThread();
         if (slice == null) return null;
-        Matrix4f stored = ASSOCIATIONS.get(slice);
-        return stored != null ? new Matrix4f(stored) : null;
+        Association stored = ASSOCIATIONS.get(slice);
+        return stored != null && stored.valid ? new Matrix4f(stored.matrix) : null;
     }
 
     /**
      * Variant that writes the matrix into the caller-provided {@code dest} and returns it.
      * Saves the per-call {@code Matrix4f} allocation when the caller already owns scratch
-     * space. Returns {@code null} (and leaves {@code dest} untouched) when no association
+     * space. Returns {@code null} (and leaves {@code dest} untouched) when no valid association
      * has been recorded for {@code slice}.
      */
     public static @Nullable Matrix4f lookupInto(GpuBufferSlice slice, Matrix4f dest) {
         RenderSystem.assertOnRenderThread();
         if (slice == null) return null;
-        Matrix4f stored = ASSOCIATIONS.get(slice);
-        if (stored == null) return null;
-        return dest.set(stored);
+        Association stored = ASSOCIATIONS.get(slice);
+        if (stored == null || !stored.valid) return null;
+        return dest.set(stored.matrix);
     }
 
     /** Drops every cached association. Invoked by {@link GlowResources} on resource reload. */

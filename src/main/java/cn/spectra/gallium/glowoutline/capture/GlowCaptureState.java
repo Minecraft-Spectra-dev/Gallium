@@ -1,6 +1,11 @@
 package cn.spectra.gallium.glowoutline.capture;
 
 import cn.spectra.gallium.glowoutline.ItemEffectConfig;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.CaptureDomain;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.CaptureLifecycle;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.CaptureStage;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.Eligibility;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.ReplayPlan;
 //#if MC>=1_21_02
 import com.mojang.blaze3d.ProjectionType;
 //#else
@@ -22,29 +27,44 @@ import org.jspecify.annotations.Nullable;
 
 public final class GlowCaptureState {
 
+    /** Authoritative for selected late frames; shadow lifecycle on the retained legacy paths. */
+    private final CaptureLifecycle streamingLifecycle = new CaptureLifecycle();
+    public long captureEpoch = -1L;
+    public CaptureDomain captureDomain = CaptureDomain.WORLD;
+    public long maskDepthSnapshotGeneration = -1L;
+    private boolean payloadDiscarded;
+    /** Actual dispatcher consumption, including ordinary paths with a shadow SR lifecycle. */
+    private boolean payloadReplayAttempted;
+    private boolean captureScopeActive;
+    private boolean deferredDiscardUntilScopeEnd;
+    //#if MC==1_21_11 || MC==1_26_01
+    /** Immutable pack transform frozen at the domain's old output-space prepare site. */
+    public cn.spectra.gallium.glowoutline.ShaderPackHint.@Nullable ProjectionTransform lateReplayProjection;
+    //#endif
+
     public @Nullable TextureTarget maskTarget;
     //#if MC>=1_21_09
     public @Nullable FeatureRenderDispatcher captureDispatcher;
+    /** Reused submit mirror; reset to the current vanilla storage for each capture. */
+    public @Nullable DuplicatingSubmitNodeStorage duplicatingStorage;
     //#endif
     //#if MC>=1_26_02
     //$$ // 26.2: FeatureRenderDispatcher no longer owns a SubmitNodeStorage — renderAllFeatures
     //$$ // takes it per call. Each capture state holds its own storage that the duplicating
     //$$ // wrapper mirrors into and that renderAllFeatures drains via drainPhases.
     //$$ public @Nullable SubmitNodeStorage captureStorage;
-    //$$ /** Forward-Z R32F color target holding {@code 1 - maskDepth} for native 26.2's
-    //$$  *  reverse-Z path. Iris 1.11.x shader packs already restore forward-Z and bind the raw
-    //$$  *  mask depth instead. Lazily allocated per state and resized with {@link #maskTarget}. */
-    //$$ public @Nullable TextureTarget maskDepthForwardZTarget;
+    //$$ /** True only when renderAllFeatures drained the storage, or it never received a node. */
+    //$$ public boolean captureStorageClean;
     //#endif
     // Pre-1.21.9 immediate-mode capture buffer. Retained across frames (its native buffers are
     // pooled by DelayingMultiBufferSource) and freed on release; see GlowCaptureManager.releaseState.
     //#if MC<1_21_09
     //$$ public CaptureSites.@Nullable DelayingMultiBufferSource customBufferSource;
+    //$$ public CaptureSites.@Nullable ReusableTeeMultiBufferSource reusableTee;
     //#endif
     public boolean capturedThisFrame;
-    /** The captured mesh has been replayed into {@link #maskTarget} for this frame.  Super
-     *  Resolution compatibility prepares masks before SR destroys/resizes its input target,
-     *  then composites them later against the full-size display target. */
+    /** The captured mesh has been replayed into its owned or borrowed mask for this frame.
+     * Legacy SR prepares before upscale; selected shared/late frames replay at final. */
     public boolean maskPreparedThisFrame;
     /** The prepared mask has already contributed to the display color.  World glow uses
      *  additive blending, so this flag is the guard against a second TAIL/compat callback
@@ -119,18 +139,163 @@ public final class GlowCaptureState {
     public float lastSceneOffsetX;
     public float lastSceneOffsetY;
 
+    public CaptureStage captureStage() {
+        return streamingLifecycle.stage();
+    }
+
+    public @Nullable Eligibility streamingEligibility() {
+        return streamingLifecycle.eligibility().orElse(null);
+    }
+
+    public @Nullable ReplayPlan streamingReplayPlan() {
+        return streamingLifecycle.replayPlan().orElse(null);
+    }
+
+    public void beginCaptureLifecycle(long epoch, boolean firstPersonCapture) {
+        streamingLifecycle.reset();
+        streamingLifecycle.beginCapture();
+        captureEpoch = epoch;
+        captureDomain = firstPersonCapture ? CaptureDomain.FIRST_PERSON : CaptureDomain.WORLD;
+        maskDepthSnapshotGeneration = -1L;
+        payloadDiscarded = false;
+        payloadReplayAttempted = false;
+        captureScopeActive = true;
+        deferredDiscardUntilScopeEnd = false;
+    }
+
+    /** Idempotent for the many submit calls emitted by one capture scope. */
+    public boolean markPayloadCaptured() {
+        if (payloadDiscarded || payloadReplayAttempted) return false;
+        CaptureStage stage = streamingLifecycle.stage();
+        if (stage == CaptureStage.CAPTURING) {
+            streamingLifecycle.markCaptured();
+            return true;
+        }
+        if (stage == CaptureStage.CAPTURED) {
+            return true;
+        }
+        return false;
+    }
+
+    public boolean markStreamingEligible(Eligibility eligibility) {
+        if (payloadReplayAttempted || eligibility == null || streamingLifecycle.stage() != CaptureStage.CAPTURED
+                || eligibility.epoch() != captureEpoch
+                || eligibility.domain() != captureDomain) return false;
+        streamingLifecycle.markEligible(eligibility);
+        return true;
+    }
+
+    public boolean hasOpenCaptureScope() {
+        return captureScopeActive;
+    }
+
+    /** The final hook schedules only closed, eligible payloads. */
+    public boolean scheduleStreamingReplay(ReplayPlan plan) {
+        if (payloadReplayAttempted || plan == null || captureScopeActive
+                || streamingLifecycle.stage() != CaptureStage.ELIGIBLE) return false;
+        streamingLifecycle.schedule(plan);
+        return true;
+    }
+
+    /** Must be called immediately before dispatcher/flush on the selected late path. */
+    public boolean beginStreamingReplayAttempt() {
+        if (payloadReplayAttempted || !streamingLifecycle.beginReplay()) return false;
+        payloadReplayAttempted = true;
+        return true;
+    }
+
+    public boolean hasPayloadReplayAttempted() {
+        return payloadReplayAttempted;
+    }
+
+    /** Ordinary replay has no SR plan; its shadow lifecycle retains CAPTURED/ELIGIBLE metadata. */
+    boolean canBeginOrdinaryReplay(long epoch) {
+        CaptureStage stage = streamingLifecycle.stage();
+        return epoch >= 0 && captureEpoch == epoch && !captureScopeActive && !payloadDiscarded && !payloadReplayAttempted
+                && capturedThisFrame && config != null && !maskPreparedThisFrame && !compositedThisFrame
+                && !superResolutionPrepared && streamingReplayPlan() == null
+                && (stage == CaptureStage.CAPTURED || stage == CaptureStage.ELIGIBLE);
+    }
+
+    /** Called immediately before ordinary dispatcher entry; failures retain the attempt guard. */
+    public boolean beginOrdinaryReplayAttempt(long epoch) {
+        if (!canBeginOrdinaryReplay(epoch)) return false;
+        payloadReplayAttempted = true;
+        return true;
+    }
+
+    public boolean markStreamingComposited() {
+        if (!payloadReplayAttempted || streamingLifecycle.stage() != CaptureStage.REPLAY_ATTEMPTED) return false;
+        streamingLifecycle.markComposited();
+        return true;
+    }
+
+    /** Version-specific, idempotent release of captured CPU payload references. */
+    public void discardPayload() {
+        if (!payloadDiscarded) {
+            //#if MC>=1_21_09
+            if (duplicatingStorage != null) duplicatingStorage.disableCapture();
+            //#else
+            //$$ if (reusableTee != null) reusableTee.disableCapture();
+            //#endif
+            if (captureScopeActive) deferredDiscardUntilScopeEnd = true;
+            else discardPayloadStorageNow();
+            payloadDiscarded = true;
+        }
+        streamingLifecycle.invalidate();
+    }
+
+    private void discardPayloadStorageNow() {
+        //#if MC>=1_21_09
+        //#if MC>=1_26_02
+        //$$ if (!captureStorageClean) {
+        //$$     captureStorage = null;
+        //$$     captureStorageClean = false;
+        //$$ }
+        //#else
+        if (captureDispatcher != null) captureDispatcher.getSubmitNodeStorage().clear();
+        //#endif
+        //#else
+        //$$ if (customBufferSource != null) customBufferSource.endFrame();
+        //#endif
+    }
+
+    /** Physical wrapper detach is legal only after the wrapped vanilla renderer returned. */
+    public void finishCaptureScope() {
+        captureScopeActive = false;
+        if (deferredDiscardUntilScopeEnd) discardPayloadStorageNow();
+        //#if MC>=1_21_09
+        if (duplicatingStorage != null) duplicatingStorage.detach();
+        //#else
+        //$$ if (reusableTee != null) reusableTee.detach();
+        //#endif
+        deferredDiscardUntilScopeEnd = false;
+    }
+
     /** Marks this capture unusable and drops any 26.2 submit nodes that can no longer be replayed. */
     public void invalidateCapture() {
+        discardPayload();
         capturedThisFrame = false;
         maskPreparedThisFrame = false;
         superResolutionPrepared = false;
         maskDepthPrepared = false;
         //#if MC>=1_26_02
-        //$$ captureStorage = null;
+        //$$ // A failed replay cannot prove that drainPhases emptied the storage. Drop dirty
+        //$$ // nodes immediately so models and closures do not remain retained in the pool.
+        //$$ if (!captureScopeActive && !captureStorageClean) captureStorage = null;
         //#endif
     }
 
     public void resetFrame() {
+        // Release any payload not consumed by the current legacy path before dropping metadata.
+        discardPayload();
+        finishCaptureScope();
+        streamingLifecycle.reset();
+        captureEpoch = -1L;
+        captureDomain = CaptureDomain.WORLD;
+        maskDepthSnapshotGeneration = -1L;
+        payloadDiscarded = false;
+        payloadReplayAttempted = false;
         capturedThisFrame = false;
         maskPreparedThisFrame = false;
         compositedThisFrame = false;
@@ -141,6 +306,9 @@ public final class GlowCaptureState {
         exactDepthAlignment = true;
         config = null;
         capturedModelViewMatrixValid = false;
+        //#if MC==1_21_11 || MC==1_26_01
+        lateReplayProjection = null;
+        //#endif
         //#if MC>=1_21_06
         capturedProjectionMatrix = null;
         // Keep the state-owned slice alive across frame resets. The backing UBO is retained
@@ -159,9 +327,9 @@ public final class GlowCaptureState {
         lastSceneOffsetX = 0.0f;
         lastSceneOffsetY = 0.0f;
         //#if MC>=1_26_02
-        //$$ // A failed/aborted replay may leave SubmitNodes undrained. Pooling the state must not
-        //$$ // retain those models, render states, or custom-geometry closures into later frames.
-        //$$ captureStorage = null;
+        //$$ // Preserve normally-drained storage for the next capture. A failed/aborted replay
+        //$$ // may retain SubmitNodes, so release only the dirty instance.
+        //$$ if (!captureStorageClean) captureStorage = null;
         //#endif
         // Pre-1.21.9: rewind any builder left open by an early-returned renderCapturedNodes
         // (see DelayingMultiBufferSource.endFrame). Native buffers are pooled, only released in releaseState.

@@ -109,9 +109,15 @@ public final class GuiGlowDispatcher {
         // Check the grid bound BEFORE acquiring so an overflowed item leaves no half-set
         // capture behind for renderMaskOnly to process. Realistic GUIs never approach the
         // cell count (840+ at 4K/guiScale 4).
-        int idx = GuiGlowCaptureManager.getActive().size();
+        int idx = GuiGlowCaptureManager.activeCount();
         if (idx >= cols * rows) {
             return;
+        }
+
+        // The first accepted capture starts a new GUI usage frame. Clear any marker left behind
+        // if a prior GuiRenderer frame aborted before prepareItemElements could update its UBOs.
+        if (idx == 0) {
+            GuiGlowElementPipeline.beginUsageFrame();
         }
 
         int sx = (idx % cols) * slotFbSize;
@@ -140,8 +146,9 @@ public final class GuiGlowDispatcher {
         int qx1 = itemX + ITEM_SLOT_SIZE + MASK_QUAD_MARGIN;
         int qy1 = itemY + ITEM_SLOT_SIZE + MASK_QUAD_MARGIN;
 
+        var pipeline = GuiGlowElementPipeline.getOrCreate(cfg);
         GuiGlowElementRenderState element = GuiGlowElementRenderState.create(
-                GuiGlowElementPipeline.getOrCreate(cfg),
+                pipeline,
                 texSetup,
                 pose,
                 qx0, qy0, qx1, qy1,
@@ -154,23 +161,38 @@ public final class GuiGlowDispatcher {
         //#else
         //$$ renderState.submitGlyphToCurrentLayer(element);
         //#endif
+        // Mark only after the element was successfully submitted. Resource-reload precompilation
+        // also calls getOrCreate(), but must not make an otherwise-unused pipeline write a UBO.
+        GuiGlowElementPipeline.markUsed(pipeline);
     }
 
     public static void onPrepareItemElements() {
-        if (GuiGlowCaptureManager.getActive().isEmpty()) return;
+        if (GuiGlowCaptureManager.activeCount() == 0) {
+            GuiGlowElementPipeline.discardFrameUsage();
+            return;
+        }
         Minecraft mc = Minecraft.getInstance();
         //#if MC>=1_26_02
         //$$ var mainTarget = mc.gameRenderer.mainRenderTarget();
         //#else
         var mainTarget = mc.getMainRenderTarget();
         //#endif
-        if (mainTarget == null) return;
+        if (mainTarget == null) {
+            GuiGlowElementPipeline.discardFrameUsage();
+            return;
+        }
 
         int screenW = mainTarget.width;
         int screenH = mainTarget.height;
 
-        GuiGlowRenderer.renderMaskOnly(screenW, screenH);
-        GuiGlowElementPipeline.updateAllForFrame(screenW, screenH, GlowTime.guiSecondsFloat());
+        try {
+            GuiGlowRenderer.renderMaskOnly(screenW, screenH);
+            GuiGlowElementPipeline.updateUsedForFrame(screenW, screenH, GlowTime.guiSecondsFloat());
+        } finally {
+            // updateUsedForFrame already clears on success/failure; this also covers a mask-copy
+            // exception before the update begins, so no pipeline leaks into the next GUI frame.
+            GuiGlowElementPipeline.discardFrameUsage();
+        }
     }
 }
 //#else

@@ -4,7 +4,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -74,5 +77,61 @@ class ItemConditionTest {
         ItemCondition andTrue = new ItemCondition.And(List.of(ALWAYS_TRUE, ALWAYS_TRUE));
         ItemCondition notAnd = new ItemCondition.Not(andTrue);
         assertFalse(notAnd.test(null));
+    }
+
+    @Test
+    void containsIdentifier_isPrecompiledAndInvalidInputKeepsStringFallback() {
+        ItemCondition.Path valid = ItemCondition.Path.compile(
+                null, ItemCondition.Path.CheckMode.CONTAINS,
+                "minecraft:sharpness", 0.0f, 0.0f);
+        assertNotNull(valid.containsId());
+
+        ItemCondition.Path invalid = ItemCondition.Path.compile(
+                null, ItemCondition.Path.CheckMode.CONTAINS,
+                "not an identifier", 0.0f, 0.0f);
+        assertNull(invalid.containsId());
+        // Invalid identifiers are false only for ItemEnchantments. Other component types retain
+        // the historical string-contains behaviour.
+        assertTrue(invalid.testContainsValue("prefix not an identifier suffix"));
+        assertFalse(invalid.testContainsValue("different text"));
+    }
+
+    @Test
+    void numericEqualsOperand_isPrecompiled() {
+        ItemCondition.Path numeric = ItemCondition.Path.compile(
+                null, ItemCondition.Path.CheckMode.EQUALS, "1.25", 0.0f, 0.0f);
+        assertEquals(1.25f, numeric.numericEqualsValue().floatValue());
+        assertTrue(numeric.testEqualsValue(1.2500005f));
+        assertFalse(numeric.testEqualsValue(1.251f));
+    }
+
+    @Test
+    void nonNumericEquals_keepsNumericStringFallback() {
+        ItemCondition.Path condition = ItemCondition.Path.compile(
+                null, ItemCondition.Path.CheckMode.EQUALS, "1", 0.0f, 0.0f);
+        // Numeric operand parses, so 1.0 and 1 compare numerically.
+        assertTrue(condition.testEqualsValue(1.0f));
+
+        ItemCondition.Path nonNumeric = ItemCondition.Path.compile(
+                null, ItemCondition.Path.CheckMode.EQUALS, "not-a-number", 0.0f, 0.0f);
+        assertNull(nonNumeric.numericEqualsValue());
+        assertTrue(nonNumeric.testEqualsValue(new Number() {
+            @Override public int intValue() { return 0; }
+            @Override public long longValue() { return 0; }
+            @Override public float floatValue() { return 0; }
+            @Override public double doubleValue() { return 0; }
+            @Override public String toString() { return "not-a-number"; }
+        }));
+        assertFalse(nonNumeric.testEqualsValue(1));
+    }
+
+    @Test
+    void equalsNull_keepsLiteralNullSemantics() {
+        ItemCondition.Path matches = ItemCondition.Path.compile(
+                null, ItemCondition.Path.CheckMode.EQUALS, "null", 0.0f, 0.0f);
+        ItemCondition.Path misses = ItemCondition.Path.compile(
+                null, ItemCondition.Path.CheckMode.EQUALS, "NULL", 0.0f, 0.0f);
+        assertTrue(matches.testEqualsValue(null));
+        assertFalse(misses.testEqualsValue(null));
     }
 }

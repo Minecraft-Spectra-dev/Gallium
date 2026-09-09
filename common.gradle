@@ -185,6 +185,9 @@ List<String> STUB_MIXIN_CLASSES_NON_SR_MAINLINE = [
 ]
 
 List<String> ACTIVE_STUB_MIXINS = []
+if (mcVersion != 1_21_11 && mcVersion != 1_26_01) {
+    ACTIVE_STUB_MIXINS += ["InternalDepthShaderSourceMixin"]
+}
 ACTIVE_STUB_MIXINS += unobfuscated ? STUB_MIXIN_CLASSES_FROM_1_26 : STUB_MIXIN_CLASSES_PRE_1_26
 if (mcVersion >= 1_21_11) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_FROM_1_21_11

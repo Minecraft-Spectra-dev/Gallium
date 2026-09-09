@@ -27,11 +27,13 @@ public class GlowUniformBuffer implements AutoCloseable {
     private static final int BUFFER_USAGE_FLAGS = GpuBuffer.USAGE_UNIFORM | GpuBuffer.USAGE_COPY_DST;
 
     private final GpuBuffer buffer;
+    private final GpuBufferSlice fullSlice;
     private boolean overflowLogged;
 
     public GlowUniformBuffer(String label) {
         Supplier<String> labelSupplier = () -> label;
         this.buffer = RenderSystem.getDevice().createBuffer(labelSupplier, BUFFER_USAGE_FLAGS, BUFFER_CAPACITY);
+        this.fullSlice = this.buffer.slice();
     }
     //#else
     //$$ // UBO-backed uniform buffers are only supported on 1.21.6+. On pre-1.21.6,
@@ -142,12 +144,12 @@ public class GlowUniformBuffer implements AutoCloseable {
                 }
                 return;
             }
-            encoder.writeToBuffer(this.buffer.slice(), data);
+            encoder.writeToBuffer(this.fullSlice, data);
         }
     }
 
     public GpuBufferSlice getSlice() {
-        return this.buffer.slice();
+        return this.fullSlice;
     }
     //#endif
 

@@ -25,6 +25,7 @@
 		"ProjectionMatrixBufferMixin",
 		"ArmedEntityRenderStateMixin",
 		"ShaderUboCompatMixin",
+		"InternalDepthShaderSourceMixin",
 		"SuperResolutionRenderHandlerMixin",
 		"RenderSystemFrameCleanupMixin",
 		"accessor.FeatureRenderDispatcherAccessor",

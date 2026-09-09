@@ -42,7 +42,8 @@ public final class GuiGlowRenderer {
     }
 
     public static TextureTarget renderMaskOnly(int screenW, int screenH) {
-        if (GuiGlowCaptureManager.getActive().isEmpty()) return null;
+        int limit = GuiGlowCaptureManager.activeCount();
+        if (limit == 0) return null;
         ensureMaskTarget(screenW, screenH);
 
         var encoder = RenderSystem.getDevice().createCommandEncoder();
@@ -56,7 +57,10 @@ public final class GuiGlowRenderer {
         int actualMaskW = maskTex.getWidth(0);
         int actualMaskH = maskTex.getHeight(0);
 
-        for (GuiGlowCapture c : GuiGlowCaptureManager.getActive()) {
+        // Fix the limit before iterating: captures acquired by a nested submission belong to a
+        // later pass, matching the old snapshot-list semantics without copying the active prefix.
+        for (int i = 0; i < limit; i++) {
+            GuiGlowCapture c = GuiGlowCaptureManager.activeAt(i);
             if (c.atlasTextureView == null) continue;
 
             GpuTexture atlasTex = c.atlasTextureView.texture();

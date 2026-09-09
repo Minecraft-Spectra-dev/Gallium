@@ -1,7 +1,6 @@
 package cn.spectra.gallium.glowoutline.capture;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 public final class GuiGlowCaptureManager {
@@ -20,22 +19,32 @@ public final class GuiGlowCaptureManager {
     private GuiGlowCaptureManager() {}
 
     public static GuiGlowCapture acquire() {
+        GuiGlowCapture capture;
         if (activeCount < pool.size()) {
-            return pool.get(activeCount++);
+            capture = pool.get(activeCount++);
+        } else {
+            capture = new GuiGlowCapture();
+            pool.add(capture);
+            activeCount++;
         }
-        GuiGlowCapture c = new GuiGlowCapture();
-        pool.add(c);
-        activeCount++;
-        return c;
+        return capture;
     }
 
-    public static List<GuiGlowCapture> getActive() {
-        // Defensive copy: subList is a live view backed by pool — if a nested emitGlow
-        // call appends to pool via acquire(), ConcurrentModificationException would fire
-        // during iteration of the outer getActive(). Copy is bounded by
-        // POOL_HIGH_WATER_MARK (256) so the allocation is negligible.
-        return activeCount == 0 ? Collections.emptyList()
-                : List.copyOf(pool.subList(0, activeCount));
+    /** Number of captures in the active prefix of {@link #pool}. */
+    public static int activeCount() {
+        return activeCount;
+    }
+
+    /**
+     * Returns one capture from the active prefix without allocating a snapshot list.
+     * Callers that need snapshot iteration semantics must save {@link #activeCount()} into a
+     * local limit before looping, so captures acquired by nested submissions are deferred.
+     */
+    public static GuiGlowCapture activeAt(int index) {
+        if (index < 0 || index >= activeCount) {
+            throw new IndexOutOfBoundsException(index);
+        }
+        return pool.get(index);
     }
 
     public static void clear() {

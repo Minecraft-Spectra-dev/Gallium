@@ -2,13 +2,42 @@ package cn.spectra.gallium.glowoutline;
 
 import cn.spectra.gallium.Gallium;
 import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
+import cn.spectra.gallium.glowoutline.capture.GlowCaptureState;
+//#if MC==1_21_11 || MC==1_26_01
+import cn.spectra.gallium.glowoutline.capture.OpenGlMaskOrdering;
+//#endif
+import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager.SceneDepthSnapshotStatus;
 import cn.spectra.gallium.glowoutline.shader.GlowComposite;
+import cn.spectra.gallium.glowoutline.shader.GlowResources;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.CapabilityTracker;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.CaptureDomain;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.CaptureMode;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.CaptureStage;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.DomainLifecycle;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.Eligibility;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.FrameIntent;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.FramePolicy;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.HandDomainSnapshot;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.HookCapabilityState;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.HookKind;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.ModeCapability;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.SceneDepthCapturePolicy;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.SnapshotAuthority;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.SnapshotSite;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.SnapshotUpdateDecision;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.SrFramePlan;
+import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.WorldDomainSnapshot;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 
 import java.lang.reflect.Method;
+import java.util.Optional;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Optional bridge for IReallyWantToSleep/Super Resolution's shader-interface and hack modes.
@@ -70,6 +99,26 @@ public final class SuperResolutionCompat {
     private static boolean hackWorldPrepareReady;
     private static boolean hackUpscaleFinishHookHit;
     private static boolean hackHandHookHit;
+    /** Fixed at renderLevel HEAD; never switch an in-flight payload back to legacy replay. */
+    private static boolean lateReplayFrame;
+    private static boolean lateReplayFinalConsumed;
+    private static boolean sharedMaskFrame;
+    //#if MC==1_21_11 || MC==1_26_01
+    private static OpenGlMaskOrdering.Stamp sharedMaskBackend;
+
+    public static OpenGlMaskOrdering.Stamp sharedMaskBackend() {
+        return sharedMaskBackend;
+    }
+    //#endif
+    /** Per-mode evidence; replay and mask ownership selection are frozen at HEAD. */
+    private static final CapabilityTracker streamingCapabilities = new CapabilityTracker();
+    private static final DomainLifecycle streamingDomains = new DomainLifecycle(0L);
+    private static SrFramePlan streamingFramePlan = legacyFramePlan(0L);
+    private static WorldDomainSnapshot worldDomainSnapshot;
+    private static HandDomainSnapshot handDomainSnapshot;
+    private static long upscaleCompletedEpoch = -1L;
+    private static boolean requiredAuthoritativeWorldHookObserved;
+    private static boolean worldObservedByClientRender;
     /**
      * Mainline builds deliberately defer world composition to the final pre-HUD call point from
      * their very first frame.  These flags turn a missing optional injector into a one-frame
@@ -78,6 +127,7 @@ public final class SuperResolutionCompat {
      */
     private static boolean worldFrameAwaitingFinalHook;
     private static boolean finalHookObservedThisFrame;
+    private static boolean finalHookObserved;
     private static boolean finalHookUnavailable;
     private static boolean finalHookFallbackWarningLogged;
     private static boolean hackHookFallbackWarningLogged;
@@ -90,7 +140,315 @@ public final class SuperResolutionCompat {
     private static Consumer<Object> dispatchStartListener;
     private static Consumer<Object> dispatchFinishListener;
 
+    static {
+        GlowResources.register(SuperResolutionCompat::resetStreamingAndCaptureResources);
+    }
+
     private SuperResolutionCompat() {}
+
+    /** Current render-level epoch used by the Phase 0 shadow capture lifecycle. */
+    public static long currentFrameEpoch() {
+        return frameEpoch;
+    }
+
+    public static SrFramePlan currentStreamingFramePlan() {
+        return streamingFramePlan;
+    }
+
+    static long upscaleCompletedEpoch() {
+        return upscaleCompletedEpoch;
+    }
+
+    private static SrFramePlan legacyFramePlan(long epoch) {
+        return new SrFramePlan(epoch, new FramePolicy(
+                SrStreamingCoordinator.FrameIntent.LEGACY,
+                SrStreamingCoordinator.StreamingCapability.UNKNOWN,
+                SrStreamingCoordinator.MaskOwnershipMode.PER_STATE,
+                SceneDepthCapturePolicy.SNAPSHOT_AND_PREFILL),
+                CaptureMode.UNKNOWN, 0, 0, 0, 0,
+                false, false, 0, 0);
+    }
+
+    private static SrFramePlan buildStreamingFramePlan() {
+        boolean hackConfigured = isHackConfigured();
+        CaptureMode mode = hackConfigured ? streamingMode(captureMode()) : CaptureMode.UNKNOWN;
+        Minecraft minecraft = Minecraft.getInstance();
+        boolean firstPerson = minecraft.options.getCameraType().isFirstPerson();
+        Object handler = hackConfigured ? currentHandler() : null;
+        int handlerFingerprint = handler == null ? 0
+                : System.identityHashCode(handler.getClass());
+        int algorithmFingerprint = eventAlgorithm == null ? 0 : eventAlgorithm.hashCode();
+
+        streamingCapabilities.observeHandlerAbiFingerprint(mode, handlerFingerprint);
+        if (mode != CaptureMode.UNKNOWN) {
+            ModeCapability capability = streamingCapabilities.capability(mode);
+            if (capability.backendOrdering() == HookCapabilityState.UNKNOWN) {
+                streamingCapabilities.update(
+                        mode, HookKind.BACKEND_ORDERING, HookCapabilityState.PROBING);
+            }
+            if (finalHookUnavailable) {
+                streamingCapabilities.update(mode, HookKind.FINAL, HookCapabilityState.DISABLED);
+            }
+        }
+        ModeCapability capability = streamingCapabilities.capability(mode);
+        lateReplayFrame = selectsLateReplayAtHead(
+                isActive(), mode, firstPerson, capability);
+        sharedMaskFrame = false;
+        //#if MC==1_21_11 || MC==1_26_01
+        sharedMaskBackend = lateReplayFrame ? OpenGlMaskOrdering.observe() : null;
+        if (sharedMaskBackend != null) {
+            markCapability(mode, HookKind.BACKEND_ORDERING, HookCapabilityState.ENABLED);
+            sharedMaskFrame = SrStreamingCoordinator.sharedReuseReadiness(
+                    streamingCapabilities.capability(mode), firstPerson)
+                    == SrStreamingCoordinator.StreamingCapability.ENABLED;
+        }
+        //#endif
+        FramePolicy policy = SrStreamingCoordinator.derivePhaseOnePolicy(
+                usesDeferredFinalHookBuild(), hackConfigured, mode, firstPerson, capability);
+        if (lateReplayFrame) {
+            policy = new FramePolicy(FrameIntent.HACK_STREAMING_CANDIDATE,
+                    SrStreamingCoordinator.StreamingCapability.ENABLED,
+                    sharedMaskFrame ? SrStreamingCoordinator.MaskOwnershipMode.STREAMING_SHARED
+                            : SrStreamingCoordinator.MaskOwnershipMode.PER_STATE,
+                    SceneDepthCapturePolicy.SNAPSHOT_ONLY);
+        }
+        return new SrFramePlan(frameEpoch, policy, mode,
+                eventRenderWidth, eventRenderHeight, eventScreenWidth, eventScreenHeight,
+                IrisCompat.isShaderActive(), firstPerson,
+                handlerFingerprint, algorithmFingerprint);
+    }
+
+    /** Resource reload/world teardown invalidates metadata before any later capture can use it. */
+    public static void resetStreamingMetadata() {
+        frameEpoch++;
+        lateReplayFrame = false;
+        lateReplayFinalConsumed = false;
+        sharedMaskFrame = false;
+        for (var state : GlowCaptureManager.getActiveStates()) {
+            CaptureStage stage = state.captureStage();
+            if (stage != CaptureStage.IDLE && stage != CaptureStage.INVALID
+                    && stage != CaptureStage.COMPOSITED) {
+                state.invalidateCapture();
+            }
+        }
+        streamingCapabilities.reset();
+        streamingDomains.reset(frameEpoch);
+        streamingFramePlan = legacyFramePlan(frameEpoch);
+        worldDomainSnapshot = null;
+        handDomainSnapshot = null;
+        upscaleCompletedEpoch = -1L;
+        requiredAuthoritativeWorldHookObserved = false;
+    }
+
+    /** One render-thread transaction: epoch/discard first, then release every owned resource. */
+    private static void resetStreamingAndCaptureResources() {
+        resetStreamingMetadata();
+        GlowCaptureManager.clearAll();
+    }
+
+    /** Vanilla's pre-hand hook; authority and capture policy come from the HEAD frame plan. */
+    public static void captureVanillaSceneDepth(RenderTarget source) {
+        captureWorldDepth(source, SnapshotSite.VANILLA_PRE_HAND);
+    }
+
+    /** Candidate frames reject captures that begin after their matching domain hook closed. */
+    public static boolean canBeginStreamingCapture(boolean firstPerson) {
+        return canAcceptStreamingCapture(frameEpoch, firstPerson);
+    }
+
+    /** Also rejects a capture that crossed the domain closure before its first real submit. */
+    public static boolean canAcceptStreamingCapture(long captureEpoch, boolean firstPerson) {
+        if (streamingFramePlan.policy().intent() != FrameIntent.HACK_STREAMING_CANDIDATE) {
+            return true;
+        }
+        CaptureDomain domain = firstPerson
+                ? CaptureDomain.FIRST_PERSON : CaptureDomain.WORLD;
+        return streamingDomains.canBeginCapture(captureEpoch, domain);
+    }
+
+    record WorldHookDecision(
+            boolean authoritativeSite,
+            boolean closeDomain,
+            boolean abortWorldDomain) {}
+
+    static WorldHookDecision worldHookDecision(
+            CaptureMode mode, SnapshotSite site, SceneDepthSnapshotStatus status) {
+        if (mode == null || site == null || status == null) {
+            throw new IllegalArgumentException("mode/site/status");
+        }
+        SnapshotAuthority authority = mode == CaptureMode.UNKNOWN
+                ? (site == SnapshotSite.VANILLA_PRE_HAND
+                ? SnapshotAuthority.AUTHORITATIVE : SnapshotAuthority.PROVISIONAL)
+                : SrStreamingCoordinator.worldSnapshotAuthority(mode, site);
+        boolean authoritative = mode != CaptureMode.UNKNOWN
+                && authority == SnapshotAuthority.AUTHORITATIVE;
+        return new WorldHookDecision(
+                authoritative,
+                SrStreamingCoordinator.shouldCloseWorldDomain(
+                        site, authority, status == SceneDepthSnapshotStatus.READY),
+                status == SceneDepthSnapshotStatus.FAILED);
+    }
+
+    private static void captureWorldDepth(RenderTarget source, SnapshotSite site) {
+        SrFramePlan plan = streamingFramePlan;
+        CaptureMode mode = plan.captureMode();
+        SnapshotAuthority incoming = mode == CaptureMode.UNKNOWN
+                ? SnapshotAuthority.AUTHORITATIVE
+                : SrStreamingCoordinator.worldSnapshotAuthority(mode, site);
+        boolean authoritativeSite = mode != CaptureMode.UNKNOWN
+                && incoming == SnapshotAuthority.AUTHORITATIVE;
+        if (authoritativeSite) {
+            requiredAuthoritativeWorldHookObserved = true;
+            markCapability(mode, HookKind.WORLD, HookCapabilityState.ENABLED);
+        }
+        Optional<SnapshotAuthority> existing = worldDomainSnapshot != null
+                && worldDomainSnapshot.epoch() == frameEpoch
+                && worldDomainSnapshot.snapshotSucceeded()
+                ? Optional.of(worldDomainSnapshot.authority()) : Optional.empty();
+        SnapshotUpdateDecision decision =
+                SrStreamingCoordinator.decideSnapshotUpdate(existing, incoming);
+        GlowCaptureManager.SceneDepthSnapshotResult result;
+        if (decision == SnapshotUpdateDecision.VALIDATE_ONLY) {
+            WorldDomainSnapshot frozen = worldDomainSnapshot;
+            if (!GlowCaptureManager.needsSceneDepthCapture()) {
+                result = GlowCaptureManager.SceneDepthSnapshotResult.notRequired(
+                        GlowCaptureManager.getSceneDepthGeneration());
+            } else if (frozen != null && GlowCaptureManager.isSceneDepthSnapshotCurrent(
+                    frozen.depthGeneration(), frozen.width(), frozen.height())) {
+                result = GlowCaptureManager.SceneDepthSnapshotResult.ready(
+                        false, frozen.depthGeneration(), frozen.width(), frozen.height());
+            } else {
+                result = GlowCaptureManager.SceneDepthSnapshotResult.failed(
+                        false, GlowCaptureManager.getSceneDepthGeneration(),
+                        frozen == null ? 0 : frozen.width(),
+                        frozen == null ? 0 : frozen.height());
+            }
+        } else {
+            result = GlowCaptureManager.captureSceneDepth(source,
+                    plan.policy().sceneDepthCapturePolicy(),
+                    decision == SnapshotUpdateDecision.REPLACE);
+        }
+
+        if (decision != SnapshotUpdateDecision.VALIDATE_ONLY && result.ready()) {
+            WorldDomainSnapshot candidate = new WorldDomainSnapshot(
+                    frameEpoch, true, site, incoming, true,
+                    result.width(), result.height(), result.generation(),
+                    source == null ? 0 : System.identityHashCode(source), depthIdentity(source));
+            worldDomainSnapshot = SrStreamingCoordinator.selectFrozenWorldSnapshot(
+                    worldDomainSnapshot, candidate);
+        }
+
+        WorldHookDecision hookDecision = worldHookDecision(mode, site, result.status());
+        if (hookDecision.abortWorldDomain()) {
+            GlowCaptureManager.abortPayloadsInDomain(CaptureDomain.WORLD);
+        }
+        if (hookDecision.closeDomain()) {
+            closeWorldDomain(result.status(), incoming);
+        }
+    }
+
+    private static void closeWorldDomain(
+            SceneDepthSnapshotStatus status, SnapshotAuthority fallbackAuthority) {
+        if (status == SceneDepthSnapshotStatus.NOT_REQUIRED
+                || status == SceneDepthSnapshotStatus.FAILED) {
+            closeDomainAndMarkEligible(CaptureDomain.WORLD, -1L, fallbackAuthority);
+            return;
+        }
+        WorldDomainSnapshot usable = worldDomainSnapshot;
+        if (usable == null || !usable.snapshotSucceeded()
+                || !GlowCaptureManager.isSceneDepthSnapshotCurrent(
+                usable.depthGeneration(), usable.width(), usable.height())) {
+            GlowCaptureManager.abortPayloadsInDomain(CaptureDomain.WORLD);
+            closeDomainAndMarkEligible(CaptureDomain.WORLD, -1L, fallbackAuthority);
+            return;
+        }
+        closeDomainAndMarkEligible(
+                CaptureDomain.WORLD, usable.depthGeneration(), usable.authority());
+    }
+
+    private static int closeDomainAndMarkEligible(
+            CaptureDomain domain, long generation, SnapshotAuthority authority) {
+        if (!streamingDomains.close(frameEpoch, domain)) return 0;
+        int scheduled = 0;
+        for (var state : GlowCaptureManager.getActiveStates()) {
+            if (state.captureDomain != domain) continue;
+            Optional<Eligibility> eligibility = streamingDomains.eligibilityFor(
+                    state.captureEpoch, domain, state.captureStage(), generation, authority);
+            if (eligibility.isPresent() && state.markStreamingEligible(eligibility.get())) {
+                scheduled++;
+            }
+        }
+        return scheduled;
+    }
+
+    record HandHookDecision(boolean scheduleFirstPerson, boolean copyForeground) {}
+
+    static HandHookDecision handHookDecision(
+            boolean irisShaderActive, boolean firstPersonCamera,
+            boolean hasPendingWorldCapture) {
+        return new HandHookDecision(true, needsHandHook(
+                irisShaderActive, firstPersonCamera, hasPendingWorldCapture));
+    }
+
+    private static int closeHandDomain(CaptureMode mode) {
+        markCapability(mode, HookKind.FIRST_PERSON, HookCapabilityState.ENABLED);
+        return closeDomainAndMarkEligible(
+                CaptureDomain.FIRST_PERSON, -1L, SnapshotAuthority.AUTHORITATIVE);
+    }
+
+    private static void freezeHandSnapshot(
+            RenderTarget source, SnapshotSite site, int scheduled) {
+        Minecraft minecraft = Minecraft.getInstance();
+        HandHookDecision decision = handHookDecision(
+                IrisCompat.isShaderActive(),
+                minecraft.options.getCameraType().isFirstPerson(),
+                hasPendingWorldCapture());
+        long before = GlowCaptureManager.getForegroundDepthGeneration();
+        if (decision.copyForeground() && source != null) {
+            try {
+                GlowCaptureManager.captureForegroundDepth(source);
+            } catch (RuntimeException | Error failure) {
+                GlowCaptureManager.abortPendingPayloads();
+                throw failure;
+            }
+        }
+        long after = GlowCaptureManager.getForegroundDepthGeneration();
+        boolean foregroundReady = !decision.copyForeground()
+                || GlowCaptureManager.getForegroundDepthTarget() != null;
+        handDomainSnapshot = new HandDomainSnapshot(
+                frameEpoch, true, site, decision.scheduleFirstPerson(), scheduled,
+                decision.copyForeground(), foregroundReady,
+                !decision.copyForeground() ? -1L : foregroundReady ? after : before,
+                source == null ? 0 : source.width,
+                source == null ? 0 : source.height);
+    }
+
+    private static void markCapability(
+            CaptureMode mode, HookKind hook, HookCapabilityState state) {
+        if (mode != CaptureMode.UNKNOWN) streamingCapabilities.update(mode, hook, state);
+    }
+
+    private static CaptureMode streamingMode(Mode mode) {
+        return switch (mode) {
+            case A -> CaptureMode.A;
+            case B -> CaptureMode.B;
+            case C -> CaptureMode.C;
+            case UNKNOWN -> CaptureMode.UNKNOWN;
+        };
+    }
+
+    private static int depthIdentity(RenderTarget target) {
+        if (target == null) return 0;
+        //#if MC>=1_21_05
+        return System.identityHashCode(target.getDepthTexture());
+        //#else
+        //$$ return target.getDepthTextureId();
+        //#endif
+    }
+
+    static boolean completedUpscaleForEpoch(long expectedEpoch, long completedEpoch) {
+        return expectedEpoch == completedEpoch;
+    }
 
     /** Reset scheduling flags together with Gallium's capture pool at GameRenderer.renderLevel HEAD. */
     public static void beginFrame() {
@@ -101,6 +459,9 @@ public final class SuperResolutionCompat {
         // world frame is observed; waiting for the hack-mode TAIL query would miss that dispatch.
         initializeBridge();
         frameEpoch++;
+        lateReplayFrame = false;
+        lateReplayFinalConsumed = false;
+        sharedMaskFrame = false;
         compatFrame = false;
         upscaleFinished = false;
         hackWorldPrepareHookHit = false;
@@ -120,6 +481,56 @@ public final class SuperResolutionCompat {
         dispatchEpoch = -1L;
         dispatchAlgorithmIdentity = null;
         if (bridgeAvailable) refreshRuntimeSnapshot();
+        upscaleCompletedEpoch = -1L;
+        worldDomainSnapshot = null;
+        handDomainSnapshot = null;
+        requiredAuthoritativeWorldHookObserved = false;
+        streamingDomains.reset(frameEpoch);
+        streamingFramePlan = buildStreamingFramePlan();
+    }
+
+    static boolean selectsLateReplayAtHead(
+            boolean active, CaptureMode mode, boolean firstPerson, ModeCapability capability) {
+        //#if MC==1_21_11 || MC==1_26_01
+        return active && (mode == CaptureMode.A || mode == CaptureMode.C)
+                && SrStreamingCoordinator.lateReplayReadiness(capability, firstPerson)
+                == SrStreamingCoordinator.StreamingCapability.ENABLED;
+        //#else
+        //$$ return false;
+        //#endif
+    }
+
+    public static boolean ownsLateReplayFrame() {
+        return lateReplayFrame;
+    }
+
+    public static boolean ownsSharedMaskFrame() {
+        return sharedMaskFrame;
+    }
+
+    /** Evidence about the vanilla final call point, independent of SR capabilities and modes. */
+    public static boolean sequentialFinalHookAvailable() {
+        return finalHookObserved && shouldDeferLegacyCompositeAtTail();
+    }
+
+    public static boolean sequentialFinalHookCurrent() {
+        return sequentialFinalHookAvailable() && finalHookObservedThisFrame;
+    }
+
+    /** Freeze the pack transform at the former prepare site, before SR changes its live state. */
+    private static void freezeLateReplayInputs(boolean firstPerson) {
+        //#if MC==1_21_11 || MC==1_26_01
+        if (!lateReplayFrame) return;
+        ShaderPackHint.ProjectionTransform transform = IrisCompat.getShaderProjectionTransform(
+                streamingFramePlan.expectedDisplayWidth(), streamingFramePlan.expectedDisplayHeight());
+        for (var state : GlowCaptureManager.getActiveStates()) {
+            if (state.firstPerson == firstPerson && state.captureEpoch == frameEpoch
+                    && state.captureStage() == CaptureStage.ELIGIBLE
+                    && state.lateReplayProjection == null) {
+                state.lateReplayProjection = transform;
+            }
+        }
+        //#endif
     }
 
     /** Runs once per GameRenderer frame, including title/loading/GUI-only frames. */
@@ -128,6 +539,8 @@ public final class SuperResolutionCompat {
                 usesDeferredFinalHookBuild(), clientRenderFrameSeen,
                 worldFrameAwaitingFinalHook, finalHookObservedThisFrame)) {
             finalHookUnavailable = true;
+            markCapability(streamingFramePlan.captureMode(),
+                    HookKind.FINAL, HookCapabilityState.DISABLED);
             if (!finalHookFallbackWarningLogged) {
                 finalHookFallbackWarningLogged = true;
                 Gallium.LOGGER.warn(
@@ -139,6 +552,13 @@ public final class SuperResolutionCompat {
         finalHookObservedThisFrame = false;
         initializeBridge();
         repairSkippedVulkanPresentationCleanup();
+        boolean worldPresent = Minecraft.getInstance().level != null;
+        if (worldObservedByClientRender && !worldPresent) {
+            // Runs on the render thread. Invalidate epochs before releasing capture resources so
+            // no stale payload can be observed between the two teardown steps.
+            resetStreamingAndCaptureResources();
+        }
+        worldObservedByClientRender = worldPresent;
         clientRenderFrameSeen = true;
         renderSystemFrameCleanupObserved = false;
     }
@@ -279,17 +699,27 @@ public final class SuperResolutionCompat {
         hackWorldPrepareHookHit = true;
         refreshRuntimeSnapshot();
         RenderTarget source = scaledTarget(handler);
-        if (!hackBridgeAvailable) return;
+        if (!hackBridgeAvailable) {
+            captureWorldDepth(null, SnapshotSite.SR_PRE_UPSCALE);
+            return;
+        }
         if (source == null) source = currentMainTarget();
-        if (source == null) return;
+        if (source == null) {
+            captureWorldDepth(null, SnapshotSite.SR_PRE_UPSCALE);
+            return;
+        }
 
         compatFrame = true;
-        // Mode B reaches this point before vanilla's normal pre-hand depth hook.  Calling the
-        // idempotent snapshot method here covers B while remaining a no-op for A/C.
-        GlowCaptureManager.captureSceneDepth(source);
+        // Mode B replaces the provisional vanilla snapshot here. A/C retain their authoritative
+        // pre-hand snapshot and use this callback only as validation.
+        captureWorldDepth(source, SnapshotSite.SR_PRE_UPSCALE);
         int width = screenWidth();
         int height = screenHeight();
         if (!hackBridgeAvailable) return;
+        if (lateReplayFrame) {
+            freezeLateReplayInputs(false);
+            return;
+        }
         GlowCaptureManager.prepareSuperResolutionMasks(
                 Minecraft.getInstance(), width, height, false);
         hackWorldPrepareReady = true;
@@ -299,11 +729,19 @@ public final class SuperResolutionCompat {
     public static void beforeSeparatedHandRestore(Object handler) {
         if (!isActive() || captureMode() != Mode.C) return;
         hackHandHookHit = true;
+        int scheduled = closeHandDomain(CaptureMode.C);
         refreshRuntimeSnapshot();
         RenderTarget source = handTarget(handler);
-        if (!hackBridgeAvailable) return;
+        if (!hackBridgeAvailable) {
+            freezeHandSnapshot(null, SnapshotSite.SR_SEPARATED_HAND_PRE_RESTORE, scheduled);
+            return;
+        }
         if (source == null) source = currentMainTarget();
-        if (source != null) GlowCaptureManager.captureForegroundDepth(source);
+        freezeHandSnapshot(source, SnapshotSite.SR_SEPARATED_HAND_PRE_RESTORE, scheduled);
+        if (lateReplayFrame) {
+            freezeLateReplayInputs(true);
+            return;
+        }
         int width = screenWidth();
         int height = screenHeight();
         if (!hackBridgeAvailable) return;
@@ -311,17 +749,39 @@ public final class SuperResolutionCompat {
                 Minecraft.getInstance(), width, height, true);
     }
 
-    /** Called at vanilla renderItemInHand TAIL.  A/B still have their matching source target here. */
+    static boolean usesInlineHandCompletion(CaptureMode mode, boolean irisActive) {
+        if (mode == CaptureMode.A || mode == CaptureMode.B) return true;
+        //#if MC==1_21_11 || MC==1_26_01
+        // SR skips its separated-hand path when Iris renders the hand inside renderLevel.
+        // The subsequent vanilla hand TAIL is still reached, after both Iris hand phases.
+        return mode == CaptureMode.C && irisActive;
+        //#else
+        //$$ return false;
+        //#endif
+    }
+
+    /** Called at the actual vanilla renderItemInHand TAIL, after Iris's inline hand rendering. */
     public static void afterInlineHandRender() {
         if (!isActive()) return;
         Mode mode = captureMode();
-        if (mode != Mode.A && mode != Mode.B) return;
+        if (!usesInlineHandCompletion(streamingMode(mode), IrisCompat.isShaderActive())) return;
         hackHandHookHit = true;
+        CaptureMode captureMode = streamingMode(mode);
+        int scheduled = closeHandDomain(captureMode);
         refreshRuntimeSnapshot();
         RenderTarget source = mode == Mode.A ? scaledTarget(currentHandler()) : currentMainTarget();
-        if (!hackBridgeAvailable) return;
+        if (!hackBridgeAvailable) {
+            freezeHandSnapshot(null, SnapshotSite.INLINE_HAND_TAIL, scheduled);
+            return;
+        }
         if (source == null) source = currentMainTarget();
-        if (source != null) GlowCaptureManager.captureForegroundDepth(source);
+        freezeHandSnapshot(source, SnapshotSite.INLINE_HAND_TAIL, scheduled);
+        if (lateReplayFrame) {
+            freezeLateReplayInputs(true);
+            return;
+        }
+        // Probe/legacy C+Iris retains its original final fallback replay.
+        if (mode == Mode.C) return;
         int width = screenWidth();
         int height = screenHeight();
         if (!hackBridgeAvailable) return;
@@ -334,12 +794,16 @@ public final class SuperResolutionCompat {
         if (!isActive()) return;
         hackUpscaleFinishHookHit = true;
         upscaleFinished = true;
+        upscaleCompletedEpoch = frameEpoch;
+        markCapability(streamingFramePlan.captureMode(),
+                HookKind.UPSCALE_FINISH, HookCapabilityState.ENABLED);
     }
 
     /** True while the SR-specific prepare/composite scheduler owns world glow for this frame. */
     public static boolean ownsWorldComposite() {
         return compatFrame && hackWorldPrepareReady
-                && hackUpscaleFinishHookHit && upscaleFinished && isActive();
+                && hackUpscaleFinishHookHit && upscaleFinished
+                && completedUpscaleForEpoch(frameEpoch, upscaleCompletedEpoch) && isActive();
     }
 
     /**
@@ -416,9 +880,24 @@ public final class SuperResolutionCompat {
         // Mark this before any optional reflection: the scheduling watchdog is about the vanilla
         // call point itself, not whether SR happened to be installed or enabled this frame.
         finalHookObservedThisFrame = true;
+        finalHookObserved = true;
         worldFrameAwaitingFinalHook = false;
+        markCapability(streamingFramePlan.captureMode(),
+                HookKind.FINAL, HookCapabilityState.ENABLED);
         Minecraft minecraft = Minecraft.getInstance();
         RenderTarget display = currentMainTarget();
+        //#if MC==1_21_11 || MC==1_26_01
+        // Ownership was frozen at HEAD. Even a mode/backend change must not send a shared
+        // ordinary payload through an SR prepare or a null per-state fallback this frame.
+        if (GlowCaptureManager.ownsSequentialSharedMaskFrame()) {
+            GlowComposite.composite(minecraft, display);
+            return true;
+        }
+        if (lateReplayFrame) {
+            compositeLateReplayFrame(minecraft, display);
+            return true;
+        }
+        //#endif
         boolean hackConfigured = isHackConfigured();
 
         if (!hackConfigured) {
@@ -438,16 +917,32 @@ public final class SuperResolutionCompat {
         if (display == null || !GlowComposite.hasAnyValidCapture()) return true;
 
         boolean hasUnpreparedCapture = hasUnpreparedCapture();
+        boolean pendingFirstPersonCapture = hasPendingFirstPersonCapture();
         boolean handHookRequired = needsHandHook(
                 IrisCompat.isShaderActive(),
                 minecraft.options.getCameraType().isFirstPerson(),
                 hasPendingWorldCapture());
         HackCompositeDecision decision = decideHackComposite(
-                true, isActive() && compatFrame && hackWorldPrepareReady,
-                hackUpscaleFinishHookHit && upscaleFinished, hackHandHookHit,
+                true, isActive() && compatFrame && hackWorldPrepareReady
+                        && requiredAuthoritativeWorldHookObserved,
+                hackUpscaleFinishHookHit && upscaleFinished
+                        && completedUpscaleForEpoch(frameEpoch, upscaleCompletedEpoch),
+                hackHandHookHit,
                 handHookRequired, hasUnpreparedCapture);
 
         if (decision == HackCompositeDecision.FALLBACK) {
+            CaptureMode mode = streamingFramePlan.captureMode();
+            if (!requiredAuthoritativeWorldHookObserved) {
+                markCapability(mode, HookKind.WORLD, HookCapabilityState.DISABLED);
+            }
+            if (!hackUpscaleFinishHookHit
+                    || !completedUpscaleForEpoch(frameEpoch, upscaleCompletedEpoch)) {
+                markCapability(mode, HookKind.UPSCALE_FINISH, HookCapabilityState.DISABLED);
+            }
+            if (missedFirstPersonDomainHook(
+                    pendingFirstPersonCapture, hackHandHookHit)) {
+                markCapability(mode, HookKind.FIRST_PERSON, HookCapabilityState.DISABLED);
+            }
             warnHackHookFallback(hasUnpreparedCapture, handHookRequired);
             compositeLegacyFallbackAtRenderCallPoint(
                     minecraft, display, handHookRequired);
@@ -474,12 +969,198 @@ public final class SuperResolutionCompat {
         return false;
     }
 
+    /** Execute the live per-state sequence. Failure is terminal for the frame, never a retry. */
+    static boolean replayPreparedStates(List<GlowCaptureState> states,
+                                       Predicate<GlowCaptureState> replay,
+                                       Predicate<GlowCaptureState> composite,
+                                       Runnable abort) {
+        boolean complete = false;
+        try {
+            for (GlowCaptureState state : states) {
+                if (state.captureStage() != CaptureStage.SCHEDULED
+                        || !replay.test(state)
+                        || state.captureStage() != CaptureStage.REPLAY_ATTEMPTED
+                        || !composite.test(state)
+                        || state.captureStage() != CaptureStage.COMPOSITED) return false;
+            }
+            complete = true;
+            return true;
+        } finally {
+            if (!complete) abort.run();
+        }
+    }
+
+    //#if MC==1_21_11 || MC==1_26_01
+    private static boolean lateFrameEvidenceCurrent(SrFramePlan plan, Minecraft minecraft,
+                                                    RenderTarget display) {
+        if (!lateReplayFrame || plan.epoch() != frameEpoch || !isActive()
+                || (sharedMaskFrame && (sharedMaskBackend == null || !sharedMaskBackend.current()))
+                || plan.captureMode() != streamingMode(captureMode())
+                || plan.irisActive() != IrisCompat.isShaderActive()
+                || plan.cameraFirstPerson() != minecraft.options.getCameraType().isFirstPerson()
+                || display == null || display != currentMainTarget()
+                || display.width != plan.expectedDisplayWidth()
+                || display.height != plan.expectedDisplayHeight()
+                || eventRenderWidth != plan.expectedRenderWidth()
+                || eventRenderHeight != plan.expectedRenderHeight()
+                || eventScreenWidth != plan.expectedDisplayWidth()
+                || eventScreenHeight != plan.expectedDisplayHeight()
+                || eventAlgorithm.hashCode() != plan.algorithmFingerprint()
+                || !finalHookObservedThisFrame || !hackWorldPrepareHookHit
+                || !requiredAuthoritativeWorldHookObserved
+                || !streamingDomains.isClosed(CaptureDomain.WORLD)
+                || !hackUpscaleFinishHookHit || !upscaleFinished
+                || upscaleCompletedEpoch != frameEpoch) return false;
+        Object handler = currentHandler();
+        if (handler == null || System.identityHashCode(handler.getClass()) != plan.handlerAbiFingerprint()) return false;
+        if (plan.cameraFirstPerson() && (!hackHandHookHit || handDomainSnapshot == null
+                || handDomainSnapshot.epoch() != frameEpoch || !handDomainSnapshot.ready()
+                || !streamingDomains.isClosed(CaptureDomain.FIRST_PERSON))) return false;
+        return true;
+    }
+
+    private static boolean lateEligibilityCurrent(GlowCaptureState state) {
+        Eligibility eligibility = state.streamingEligibility();
+        if (eligibility == null || state.captureEpoch != frameEpoch
+                || eligibility.epoch() != frameEpoch || eligibility.domain() != state.captureDomain
+                || state.captureStage() != CaptureStage.ELIGIBLE
+                || !streamingDomains.isClosed(state.captureDomain)
+                || !GlowCaptureManager.lateReplayPayloadReady(state)) return false;
+        if (state.captureDomain == CaptureDomain.FIRST_PERSON) {
+            return hackHandHookHit && handDomainSnapshot != null
+                    && handDomainSnapshot.epoch() == frameEpoch && handDomainSnapshot.ready();
+        }
+        return worldDomainSnapshot != null && worldDomainSnapshot.epoch() == frameEpoch
+                && worldDomainSnapshot.authority() == SnapshotAuthority.AUTHORITATIVE
+                && eligibility.snapshotGeneration() == worldDomainSnapshot.depthGeneration()
+                && eligibility.snapshotAuthority() == worldDomainSnapshot.authority()
+                && GlowCaptureManager.isSceneDepthSnapshotCurrent(worldDomainSnapshot.depthGeneration(),
+                worldDomainSnapshot.width(), worldDomainSnapshot.height());
+    }
+
+    /** Complete one HEAD-selected late frame; any failure drops it without invoking legacy. */
+    private static void compositeLateReplayFrame(Minecraft minecraft, RenderTarget display) {
+        if (lateReplayFinalConsumed) return;
+        lateReplayFinalConsumed = true;
+        boolean complete = false;
+        try {
+            SrFramePlan head = streamingFramePlan;
+            refreshRuntimeSnapshot();
+            if (!lateFrameEvidenceCurrent(head, minecraft, display)) {
+                // A genuinely missing callback disables late replay on the NEXT frame. A resize
+                // or stale extent alone is just a dropped transition frame, not a missing ABI.
+                if (head.epoch() == frameEpoch && head.captureMode() == streamingMode(captureMode())) {
+                    if (!requiredAuthoritativeWorldHookObserved) {
+                        markCapability(head.captureMode(), HookKind.WORLD, HookCapabilityState.DISABLED);
+                    }
+                    if (!hackUpscaleFinishHookHit) {
+                        markCapability(head.captureMode(), HookKind.UPSCALE_FINISH, HookCapabilityState.DISABLED);
+                    }
+                    if (head.cameraFirstPerson() && !hackHandHookHit) {
+                        markCapability(head.captureMode(), HookKind.FIRST_PERSON, HookCapabilityState.DISABLED);
+                    }
+                }
+                return;
+            }
+            List<GlowCaptureState> states = new ArrayList<>();
+            List<Eligibility> eligibility = new ArrayList<>();
+            for (var state : GlowCaptureManager.getActiveStates()) {
+                if (!state.capturedThisFrame || state.compositedThisFrame) continue;
+                if (!lateEligibilityCurrent(state)) return;
+                states.add(state);
+                eligibility.add(state.streamingEligibility());
+            }
+            if (states.isEmpty()) {
+                complete = true;
+                return;
+            }
+            var factory = new SrStreamingCoordinator.PreparedFramePlanFactory(frameEpoch, upscaleCompletedEpoch);
+            if (!factory.eligibilityPreflight(eligibility, true)) return;
+            // These are facts from this frame, not the historical capability used for HEAD selection.
+            var observed = new ModeCapability(HookCapabilityState.ENABLED,
+                    hackHandHookHit ? HookCapabilityState.ENABLED : HookCapabilityState.UNKNOWN,
+                    HookCapabilityState.ENABLED, HookCapabilityState.ENABLED,
+                    streamingCapabilities.capability(head.captureMode()).backendOrdering());
+            if (!factory.selectHackExecutionMode(sharedMaskFrame
+                    ? SrStreamingCoordinator.FrameExecutionMode.HACK_SHARED_OUTPUT
+                    : SrStreamingCoordinator.FrameExecutionMode.HACK_PER_STATE_OUTPUT,
+                    observed, head.cameraFirstPerson())) return;
+            int width = head.expectedDisplayWidth(), height = head.expectedDisplayHeight();
+            boolean hasWorld = states.stream().anyMatch(state -> !state.firstPerson);
+            if (!GlowCaptureManager.prepareLateReplayTargets(states, width, height)) return;
+            try (var masks = sharedMaskFrame ? GlowCaptureManager.prepareSharedMaskFrame() : null;
+                 var composite = GlowComposite.prepareLateCompositeFrame(minecraft, display)) {
+                if (composite == null || (sharedMaskFrame && masks == null)) return;
+                boolean foreground = GlowCaptureManager.getForegroundDepthTarget() != null;
+                boolean displayDepth = GlowCaptureManager.getSuperResolutionDisplaySceneDepthTarget() != null;
+                var resources = new SrStreamingCoordinator.PreparedFrameResources(
+                        sharedMaskFrame ? SrStreamingCoordinator.ReplayTargetMode.SHARED_MASK
+                                : SrStreamingCoordinator.ReplayTargetMode.STATE_MASK,
+                        hasWorld ? worldDomainSnapshot.depthGeneration() : -1L,
+                        foreground ? GlowCaptureManager.getForegroundDepthGeneration() : -1L,
+                        -1L, width, height);
+                if (!factory.prepareFrameResources(resources, true)) return;
+                refreshRuntimeSnapshot();
+                boolean valid = lateFrameEvidenceCurrent(head, minecraft, display) && composite.valid();
+                for (var state : states) {
+                    var mask = sharedMaskFrame ? masks.target() : state.maskTarget;
+                    valid &= lateEligibilityCurrent(state) && composite.canComposite(state, mask)
+                            && GlowCaptureManager.lateReplayTargetMatches(mask, width, height);
+                }
+                if (!factory.validateFinalResources(valid)) return;
+                var prepared = factory.createFramePlan();
+                if (prepared.isEmpty()) return;
+                var frame = prepared.get();
+                var plans = frame.replayPlanFactory();
+                for (var state : states) {
+                    var spec = SrStreamingCoordinator.currentHackOutputStateSpec(state.captureDomain,
+                            head.irisActive(), displayDepth, foreground, head.cameraFirstPerson());
+                    var plan = plans.createPlan(state.streamingEligibility(), spec);
+                    if (plan.isEmpty() || !state.scheduleStreamingReplay(plan.get())) return;
+                }
+                complete = replayPreparedStates(states,
+                        state -> lateFrameEvidenceCurrent(head, minecraft, display)
+                                && state.streamingReplayPlan().preparedFramePlan() == frame
+                                && (!sharedMaskFrame || masks.beginState(state))
+                                && GlowCaptureManager.replayScheduledMask(state, minecraft,
+                                sharedMaskFrame ? masks.targetFor(state) : state.maskTarget),
+                        state -> lateFrameEvidenceCurrent(head, minecraft, display)
+                                && composite.compositePreparedState(state,
+                                sharedMaskFrame ? masks.targetFor(state) : state.maskTarget)
+                                && (!sharedMaskFrame || masks.finishState(state)),
+                        GlowCaptureManager::abortPendingPayloads);
+            }
+        } finally {
+            if (!complete) {
+                try {
+                    GlowCaptureManager.abortPendingPayloads();
+                } finally {
+                    if (sharedMaskFrame) GlowCaptureManager.abortSharedMaskFrame();
+                }
+            }
+        }
+    }
+    //#endif
+
     private static boolean hasPendingWorldCapture() {
         for (var state : GlowCaptureManager.getActiveStates()) {
             if (state.capturedThisFrame && !state.compositedThisFrame
                     && !state.firstPerson) return true;
         }
         return false;
+    }
+
+    private static boolean hasPendingFirstPersonCapture() {
+        for (var state : GlowCaptureManager.getActiveStates()) {
+            if (state.capturedThisFrame && !state.compositedThisFrame
+                    && state.firstPerson) return true;
+        }
+        return false;
+    }
+
+    static boolean missedFirstPersonDomainHook(
+            boolean hasPendingFirstPersonCapture, boolean handHookHit) {
+        return hasPendingFirstPersonCapture && !handHookHit;
     }
 
     private static boolean hasUnpreparedCaptureAtDifferentSize(int width, int height) {
