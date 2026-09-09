@@ -3,6 +3,7 @@ package cn.spectra.gallium.glowoutline.mixin;
 //#if MC==1_21_11 || MC==1_26_01
 import cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline;
 import cn.spectra.gallium.glowoutline.shader.DepthResamplePipeline;
+import cn.spectra.gallium.glowoutline.shader.WorldMaskOcclusionPipeline;
 import com.mojang.blaze3d.shaders.ShaderType;
 //#if MC>=1_21_11
 import net.minecraft.resources.Identifier;
@@ -31,6 +32,7 @@ public class InternalDepthShaderSourceMixin {
             ShaderType type, CallbackInfoReturnable<String> callback) {
         String source = DepthResamplePipeline.shaderSource(id, type);
         if (source == null) source = DepthMinPoolPipeline.shaderSource(id, type);
+        if (source == null) source = WorldMaskOcclusionPipeline.shaderSource(id, type);
         if (source != null) callback.setReturnValue(source);
     }
 }

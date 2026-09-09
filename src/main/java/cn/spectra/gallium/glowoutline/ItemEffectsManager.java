@@ -156,6 +156,7 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
         // Output-space SR masks may be screen-sized while their world-depth snapshot remains at
         // render size.  Compile the normalized nearest-depth transfer pass alongside the pool.
         cn.spectra.gallium.glowoutline.shader.DepthResamplePipeline.precompile();
+        cn.spectra.gallium.glowoutline.shader.WorldMaskOcclusionPipeline.precompile();
         GlowPipeline.retainOnly(shaders);
         //#if MC<1_21_06
         //$$ // 1.21.5 also has a per-config pipeline cache (statically declares per-param

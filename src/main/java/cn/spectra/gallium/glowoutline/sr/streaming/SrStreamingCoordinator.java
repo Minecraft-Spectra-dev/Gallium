@@ -121,10 +121,10 @@ public final class SrStreamingCoordinator {
         OUTPUT_FULL_EXTENT
     }
 
-    /** Phase 0 names only the already-existing depth behaviours. */
+    /** Depth preparation used by each replay domain. */
     public enum MaskDepthStrategy {
         CURRENT_NATIVE,
-        RAW_DISPLAY_COPY,
+        SOURCE_VISIBLE_NATIVE,
         CLEAR_FAR
     }
 
@@ -723,8 +723,8 @@ public final class SrStreamingCoordinator {
     }
 
     /**
-     * Model of the current hack output path, not a new depth algorithm. WORLD keeps its raw
-     * display-depth prefill; FIRST_PERSON clears to far depth and self-compares. The scene route
+     * WORLD uses source-grid self visibility to depth-test independent native mesh copies,
+     * retaining native alpha coverage. FIRST_PERSON still clears to far and self-compares. The scene route
      * mirrors GlowComposite.chooseSuperResolutionSceneDepth and is checked against it in tests.
      */
     public static StateReplayPlanSpec currentHackOutputStateSpec(
@@ -745,7 +745,7 @@ public final class SrStreamingCoordinator {
             route = cameraFirstPerson ? SceneDepthRoute.NONE : SceneDepthRoute.MASK;
         }
         return new StateReplayPlanSpec(
-                PackTransformPolicy.OUTPUT_FULL_EXTENT, MaskDepthStrategy.RAW_DISPLAY_COPY, route);
+                PackTransformPolicy.OUTPUT_FULL_EXTENT, MaskDepthStrategy.SOURCE_VISIBLE_NATIVE, route);
     }
 
     /** Immutable per-state plan derived from the frame-global prepared plan. */
@@ -842,7 +842,7 @@ public final class SrStreamingCoordinator {
                 && eligibility.snapshotGeneration() != resources.worldSnapshotGeneration()) {
             return false;
         }
-        if ((stateSpec.maskDepthStrategy() == MaskDepthStrategy.RAW_DISPLAY_COPY
+        if ((stateSpec.maskDepthStrategy() == MaskDepthStrategy.SOURCE_VISIBLE_NATIVE
                 || stateSpec.sceneDepthRoute() == SceneDepthRoute.DISPLAY_SCENE)
                 && resources.worldSnapshotGeneration() < 0L) {
             return false;

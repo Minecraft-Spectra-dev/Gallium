@@ -179,7 +179,7 @@ class SrStreamingCoordinatorTest {
         ReplayPlan handPlan = factory.createPlan(hand,
                 currentHackOutputStateSpec(CaptureDomain.FIRST_PERSON, true, true, false, true)).orElseThrow();
         assertSame(worldPlan.preparedFramePlan(), handPlan.preparedFramePlan());
-        assertEquals(MaskDepthStrategy.RAW_DISPLAY_COPY, worldPlan.maskDepthStrategy());
+        assertEquals(MaskDepthStrategy.SOURCE_VISIBLE_NATIVE, worldPlan.maskDepthStrategy());
         assertEquals(SceneDepthRoute.DISPLAY_SCENE, worldPlan.sceneDepthRoute());
         assertEquals(MaskDepthStrategy.CLEAR_FAR, handPlan.maskDepthStrategy());
         assertEquals(SceneDepthRoute.MASK, handPlan.sceneDepthRoute());
@@ -418,7 +418,7 @@ class SrStreamingCoordinatorTest {
         ReplayPlanFactory statePlans = framePlan.replayPlanFactory();
         StateReplayPlanSpec worldSpec = new StateReplayPlanSpec(
                 PackTransformPolicy.OUTPUT_FULL_EXTENT,
-                MaskDepthStrategy.RAW_DISPLAY_COPY,
+                MaskDepthStrategy.SOURCE_VISIBLE_NATIVE,
                 SceneDepthRoute.DISPLAY_SCENE);
         StateReplayPlanSpec handSpec = new StateReplayPlanSpec(
                 PackTransformPolicy.NATIVE_INTERNAL,
@@ -443,7 +443,7 @@ class SrStreamingCoordinatorTest {
         assertSame(handSpec, handPlan.stateSpec());
         assertEquals(SceneDepthRoute.DISPLAY_SCENE, worldPlan.sceneDepthRoute());
         assertEquals(SceneDepthRoute.MASK, handPlan.sceneDepthRoute());
-        assertEquals(MaskDepthStrategy.RAW_DISPLAY_COPY, worldPlan.maskDepthStrategy());
+        assertEquals(MaskDepthStrategy.SOURCE_VISIBLE_NATIVE, worldPlan.maskDepthStrategy());
         assertEquals(MaskDepthStrategy.CLEAR_FAR, handPlan.maskDepthStrategy());
         assertTrue(statePlans.createPlan(eligibility(14L), stateSpec()).isEmpty());
     }
@@ -515,7 +515,7 @@ class SrStreamingCoordinatorTest {
                 19L, List.of(displayHand), noWorldDepth).replayPlanFactory();
         assertTrue(noWorldDepthFactory.createPlan(displayHand, new StateReplayPlanSpec(
                 PackTransformPolicy.NATIVE_INTERNAL,
-                MaskDepthStrategy.RAW_DISPLAY_COPY,
+                MaskDepthStrategy.SOURCE_VISIBLE_NATIVE,
                 SceneDepthRoute.MASK)).isEmpty());
         assertTrue(noWorldDepthFactory.createPlan(displayHand, new StateReplayPlanSpec(
                 PackTransformPolicy.NATIVE_INTERNAL,
@@ -623,7 +623,7 @@ class SrStreamingCoordinatorTest {
     private static StateReplayPlanSpec stateSpec() {
         return new StateReplayPlanSpec(
                 PackTransformPolicy.OUTPUT_FULL_EXTENT,
-                MaskDepthStrategy.RAW_DISPLAY_COPY,
+                MaskDepthStrategy.SOURCE_VISIBLE_NATIVE,
                 SceneDepthRoute.MASK);
     }
 

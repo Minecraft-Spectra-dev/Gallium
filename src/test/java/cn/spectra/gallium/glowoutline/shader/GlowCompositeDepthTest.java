@@ -26,7 +26,7 @@ class GlowCompositeDepthTest {
                     hand, iris, display, foreground, firstPersonCamera).name(),
                     spec.sceneDepthRoute().name());
             assertEquals(hand ? SrStreamingCoordinator.MaskDepthStrategy.CLEAR_FAR
-                    : SrStreamingCoordinator.MaskDepthStrategy.RAW_DISPLAY_COPY,
+                    : SrStreamingCoordinator.MaskDepthStrategy.SOURCE_VISIBLE_NATIVE,
                     spec.maskDepthStrategy());
             assertEquals(SrStreamingCoordinator.PackTransformPolicy.OUTPUT_FULL_EXTENT,
                     spec.packTransformPolicy());
