@@ -1,7 +1,7 @@
 package cn.spectra.gallium.compat.sodium;
 
 //#if MC>=1_21_11 || MC==1_21_01
-// On 1.21.1 this class is compiled against Sodium 0.8.12-beta.1 but NOT declared as a
+// On 1.21.1 this class is compiled against Sodium 0.8.13 but NOT declared as a
 // fabric.mod.json entrypoint (see common.gradle). Instead, Gallium.onInitializeClient()
 // reflectively calls ConfigManager.registerConfigEntryPoint() with this class name.
 // This keeps the 0.8 config path working while avoiding NoClassDefFoundError when
