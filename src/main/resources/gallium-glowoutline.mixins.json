@@ -2,7 +2,10 @@
 	"required": true,
 	"package": "cn.spectra.gallium.glowoutline.mixin",
 	"compatibilityLevel": "{{COMPATIBILITY_LEVEL}}",
-	"client": [
+  "client": [
+    "CachedOrthoProjectionMatrixBufferMixin",
+    "GuiEntityPreviewMixin",
+    "InventoryEntityPreviewMixin",
 		"GameRendererMixin",
 		"ItemInHandRendererMixin",
 		"ItemInHandLayerMixin",

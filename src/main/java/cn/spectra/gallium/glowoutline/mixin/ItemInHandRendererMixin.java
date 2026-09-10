@@ -29,7 +29,7 @@ public class ItemInHandRendererMixin {
                                        PoseStack ps, SubmitNodeCollector col, int l) {
         ItemCaptureMode mode = ItemCaptureMode.resolve(type, mob != null,
                 mob instanceof net.minecraft.world.entity.player.Player,
-                false);
+                GlowCaptureManager.isGuiEntityCaptureActive());
         SubmitNodeCollector wrapped = CaptureSites.beginIfCapturable(
                 itemStack, collector, mode.toggle(), mode.firstPerson());
         try {
@@ -90,7 +90,7 @@ public class ItemInHandRendererMixin {
 //$$     private void galliumWrapItemSubmit(ItemRenderer renderer, LivingEntity livingEntity, ItemStack itemStack, ItemDisplayContext itemDisplayContext, PoseStack poseStack, MultiBufferSource multiBufferSource, net.minecraft.world.level.Level level, int light, int overlay, int seed, Operation<Void> original, LivingEntity le, ItemStack stack, ItemDisplayContext ctx, PoseStack ps, MultiBufferSource mbs, int i) {
 //$$         ItemCaptureMode mode = ItemCaptureMode.resolve(itemDisplayContext, livingEntity != null,
 //$$                 livingEntity instanceof net.minecraft.world.entity.player.Player,
-//$$                 false);
+//$$                 GlowCaptureManager.isGuiEntityCaptureActive());
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
 //$$                 itemStack, multiBufferSource, mode.toggle(), mode.firstPerson());
 //$$         try {
@@ -155,7 +155,7 @@ public class ItemInHandRendererMixin {
 //$$     private void galliumWrapItemSubmit(ItemRenderer renderer, LivingEntity livingEntity, ItemStack itemStack, ItemDisplayContext itemDisplayContext, boolean leftHand, PoseStack poseStack, MultiBufferSource multiBufferSource, net.minecraft.world.level.Level level, int light, int overlay, int seed, Operation<Void> original, LivingEntity le, ItemStack stack, ItemDisplayContext ctx, boolean lh, PoseStack ps, MultiBufferSource mbs, int i) {
 //$$         ItemCaptureMode mode = ItemCaptureMode.resolve(itemDisplayContext, livingEntity != null,
 //$$                 livingEntity instanceof net.minecraft.world.entity.player.Player,
-//$$                 false);
+//$$                 GlowCaptureManager.isGuiEntityCaptureActive());
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
 //$$                 itemStack, multiBufferSource, mode.toggle(), mode.firstPerson());
 //$$         try {

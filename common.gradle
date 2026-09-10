@@ -104,6 +104,7 @@ List<String> STUB_MIXIN_CLASSES_PRE_1_26 = [
 // Mirror image: mixin classes that only carry a real @Mixin on <1_26_00. On
 // 26.1+ they collapse to empty stubs and would similarly break the loader.
 List<String> STUB_MIXIN_CLASSES_FROM_1_26 = [
+        "CachedOrthoProjectionMatrixBufferMixin",
         "GuiGraphicsItemMixin",
         "PerspectiveProjectionMatrixBufferMixin",
         "CachedPerspectiveProjectionMatrixBufferMixin",
@@ -142,6 +143,8 @@ List<String> STUB_MIXIN_CLASSES_PRE_1_21_09 = [
 // GuiGraphicsExtractorMixin on the deferred render-state.
 List<String> STUB_MIXIN_CLASSES_PRE_1_21_06 = [
         "InternalDepthShaderSourceMixin",
+        "CachedOrthoProjectionMatrixBufferMixin",
+        "GuiEntityPreviewMixin",
         "accessor.GuiRendererAccessor",
         "GuiRendererMixin",
         "GuiItemRenderStateMixin",
@@ -153,6 +156,7 @@ List<String> STUB_MIXIN_CLASSES_PRE_1_21_06 = [
 // Mixins that are real on 1.21.5 and collapse to stubs from 1.21.6 onwards.
 // Used for UBO compatibility shims; MC 鈮?.21.6 supports UBOs natively.
 List<String> STUB_MIXIN_CLASSES_FROM_1_21_06 = [
+        "InventoryEntityPreviewMixin",
         "ShaderUboCompatMixin"
 ]
 
@@ -240,6 +244,16 @@ loom {
 }
 
 processResources {
+    // ShaderManager preprocesses even unused shaders on older releases, whose vanilla
+    // resources do not yet contain dynamictransforms.glsl. They use the legacy blit instead.
+    if (mcVersion < 1_21_06) {
+        final String modernPreviewShader = 'assets/gallium/shaders/core/internal/entity_preview_blit_gui.fsh'
+        exclude modernPreviewShader
+        doFirst {
+            // Remove only our obsolete generated file after an incremental version switch.
+            new File(destinationDir, modernPreviewShader).delete()
+        }
+    }
     inputs.property "version", project.mod_version
     // Declare the stub list as an input so changes to it (or to the mcVersion
     // gating that picks the list) invalidate the task and re-run the strip.

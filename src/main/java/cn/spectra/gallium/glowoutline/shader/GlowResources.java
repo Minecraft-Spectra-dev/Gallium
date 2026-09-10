@@ -41,6 +41,9 @@ public final class GlowResources {
     public static void eagerInit() {
         // Reference each class so its static initializer runs and registers a disposer.
         Class<?>[] classes = {
+            cn.spectra.gallium.glowoutline.shader.GuiEntityBlitPipeline.class,
+            cn.spectra.gallium.glowoutline.capture.GuiEntityGlowCapture.class,
+            cn.spectra.gallium.glowoutline.capture.LegacyEntityPreview.class,
             cn.spectra.gallium.glowoutline.shader.GlowComposite.class,
             cn.spectra.gallium.glowoutline.shader.GlowPipeline.class,
             cn.spectra.gallium.glowoutline.shader.GuiGlowElementPipeline.class,

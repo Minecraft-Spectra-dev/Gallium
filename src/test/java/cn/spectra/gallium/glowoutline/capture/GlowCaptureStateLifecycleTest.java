@@ -368,7 +368,7 @@ class GlowCaptureStateLifecycleTest {
                 "src/main/java/cn/spectra/gallium/glowoutline/capture/GlowCaptureManager.java"));
         String allocator = between(source,
                 "private static GlowCaptureState allocateState()",
-                "private static void releaseState");
+                "static void releaseState");
 
         assertTrue(allocator.contains("int index = activeStates.size();"));
         assertTrue(allocator.contains("pool.get(index)"));

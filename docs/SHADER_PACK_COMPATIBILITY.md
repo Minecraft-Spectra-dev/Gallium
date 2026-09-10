@@ -373,7 +373,7 @@ path uses post-clear main depth; SR uses its selected foreground snapshot. Nativ
 No resource-pack shader edits are required. Private world shader aliases wrap the
 loaded vertex/fragment entry points after resolving resource imports, adding an
 independent screen UV and foreground sampler. Resource files and normal GUI shader
-programs stay unchanged. First-person effects and Iris world
+programs stay unchanged. First-person effects, GUI entity previews, and Iris world
 effects bind a shared one-pixel far texture to leave their output unchanged. The
 adapter uses nearest foreground coverage at the source texture's actual size and
 adds no screen-size target or extra full-screen render pass.

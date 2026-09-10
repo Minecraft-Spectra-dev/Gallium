@@ -279,7 +279,7 @@ public final class GlowCaptureManager {
      */
     static void markCaptured(GlowCaptureState state) {
         if (state == null) return;
-        if (!SuperResolutionCompat.canAcceptStreamingCapture(
+        if (state.guiEntity == null && !SuperResolutionCompat.canAcceptStreamingCapture(
                 state.captureEpoch, state.firstPerson)) {
             invalidateCapture(state);
             return;
@@ -288,7 +288,7 @@ public final class GlowCaptureManager {
         if (!state.capturedThisFrame) {
             state.capturedThisFrame = true;
         }
-        if (!state.firstPerson) worldCaptureSeenThisFrame = true;
+        if (state.guiEntity == null && !state.firstPerson) worldCaptureSeenThisFrame = true;
     }
 
     /** Marks storage dirty before a submit can partially mutate it and throw. */
@@ -1342,7 +1342,59 @@ public final class GlowCaptureManager {
         return beginItemCapture(stack, false);
     }
 
+    public static boolean isGuiEntityCaptureActive() { return GuiEntityGlowCapture.current() != null; }
+
+    private static boolean beginGuiEntityCapture(ItemStack stack) {
+        if (stack.isEmpty() || !ItemEffectsManager.isActive()) return false;
+        ItemEffectConfig cfg = ItemEffectsManager.getConfig(stack);
+        if (cfg == null || cfg.shader().isEmpty()) return false;
+        GuiEntityGlowCapture preview = GuiEntityGlowCapture.current();
+        if (preview == null) return false;
+        GlowCaptureState state = preview.acquire(cfg);
+        if (state == null) return false;
+        try {
+            if (state.capturedModelViewMatrix == null) state.capturedModelViewMatrix = new Matrix4f();
+            //#if MC>=1_26_02
+            //$$ state.capturedModelViewMatrix.set(RenderSystem.getModelViewMatrixCopy());
+            //#else
+            state.capturedModelViewMatrix.set(RenderSystem.getModelViewMatrix());
+            //#endif
+            state.capturedModelViewMatrixValid = true;
+            //#if MC>=1_21_06
+            state.capturedProjectionMatrix = RenderSystem.getProjectionMatrixBuffer();
+            state.capturedProjectionType = RenderSystem.getProjectionType();
+            state.capturedProjectionMatrix4fValid = ProjectionMatrixTracker.lookupInto(
+                    state.capturedProjectionMatrix, state.capturedProjectionMatrix4f) != null;
+            //#else
+            //$$ state.capturedProjectionMatrix4f.set(RenderSystem.getProjectionMatrix());
+            //$$ state.capturedProjectionMatrix4fValid = true;
+            //#if MC>=1_21_02
+            //$$ state.capturedProjectionType = RenderSystem.getProjectionType();
+            //#else
+            //$$ state.capturedProjectionType = RenderSystem.getVertexSorting();
+            //#endif
+            //#endif
+            state.previewReverseDepth = state.capturedProjectionMatrix4fValid
+                    && PreviewGeometry.reverseDepth(state.capturedProjectionMatrix4f);
+            //#if MC>=1_21_09
+            prepareDispatcher(state, Minecraft.getInstance(), preview.buffers());
+            //#endif
+            currentCapture = state;
+            return true;
+        } catch (RuntimeException failure) {
+            state.invalidateCapture();
+            state.finishCaptureScope();
+            cn.spectra.gallium.Gallium.LOGGER.warn("Unable to capture entity preview equipment", failure);
+            return false;
+        }
+    }
+
+    public static void renderGuiEntityMask(GlowCaptureState state, Minecraft mc, @Nullable TextureTarget scene) {
+        GuiEntityMaskRenderer.render(state, scene);
+    }
+
     public static boolean beginItemCapture(ItemStack stack, boolean firstPerson) {
+        if (isGuiEntityCaptureActive()) return beginGuiEntityCapture(stack);
         //#if MC<1_21_05
         //$$ if (stack.isEmpty()) return false;
         //$$ if (!ItemEffectsManager.isActive()) return false;
@@ -1505,10 +1557,24 @@ public final class GlowCaptureManager {
         }
 
         //#if MC>=1_21_09
-        if (sharedCaptureBuffers == null) {
-            sharedCaptureBuffers = new RenderBuffers(1);
-        }
+        if (sharedCaptureBuffers == null) sharedCaptureBuffers = new RenderBuffers(1);
+        prepareDispatcher(state, mc, sharedCaptureBuffers);
+        //#endif
 
+        activeStates.add(state);
+        currentCapture = state;
+        return true;
+        } catch (RuntimeException | Error e) {
+            // The prefix slot is not committed until activeStates.add above. Any constructor,
+            // resize, or dispatcher failure before then must leave it reusable and evictable.
+            state.resetFrame();
+            throw e;
+        }
+        //#endif
+    }
+
+    //#if MC>=1_21_09
+    static void prepareDispatcher(GlowCaptureState state, Minecraft mc, RenderBuffers buffers) {
         //#if MC>=1_26_02
         //$$ // 26.2: FeatureRenderDispatcher no longer takes a SubmitNodeStorage/BufferSources —
         //$$ // its ctor is (RenderBuffers, ModelManager, AtlasManager, Font, GameRenderState) and
@@ -1519,7 +1585,7 @@ public final class GlowCaptureManager {
         //$$     var accessor = (FeatureRenderDispatcherAccessor) mc.gameRenderer.featureRenderDispatcher();
         //$$     var gameAccessor = (GameRendererAccessor) mc.gameRenderer;
         //$$     state.captureDispatcher = new FeatureRenderDispatcher(
-        //$$             sharedCaptureBuffers,
+        //$$             buffers,
         //$$             mc.getModelManager(),
         //$$             accessor.gallium$getAtlasManager(),
         //$$             mc.font,
@@ -1539,10 +1605,10 @@ public final class GlowCaptureManager {
             state.captureDispatcher = new FeatureRenderDispatcher(
                     new SubmitNodeStorage(),
                     mc.getModelManager(),
-                    sharedCaptureBuffers.bufferSource(),
+                    buffers.bufferSource(),
                     accessor.gallium$getAtlasManager(),
-                    sharedCaptureBuffers.outlineBufferSource(),
-                    sharedCaptureBuffers.crumblingBufferSource(),
+                    buffers.outlineBufferSource(),
+                    buffers.crumblingBufferSource(),
                     mc.font,
                     gameAccessor.gallium$getGameRenderState()
             );
@@ -1550,10 +1616,10 @@ public final class GlowCaptureManager {
             //$$ state.captureDispatcher = new FeatureRenderDispatcher(
             //$$         new SubmitNodeStorage(),
             //$$         mc.getBlockRenderer(),
-            //$$         sharedCaptureBuffers.bufferSource(),
+            //$$         buffers.bufferSource(),
             //$$         accessor.gallium$getAtlasManager(),
-            //$$         sharedCaptureBuffers.outlineBufferSource(),
-            //$$         sharedCaptureBuffers.crumblingBufferSource(),
+            //$$         buffers.outlineBufferSource(),
+            //$$         buffers.crumblingBufferSource(),
             //$$         mc.font
             //$$ );
             //#endif
@@ -1561,19 +1627,8 @@ public final class GlowCaptureManager {
             state.captureDispatcher.getSubmitNodeStorage().clear();
         }
         //#endif
-        //#endif
-
-        activeStates.add(state);
-        currentCapture = state;
-        return true;
-        } catch (RuntimeException | Error e) {
-            // The prefix slot is not committed until activeStates.add above. Any constructor,
-            // resize, or dispatcher failure before then must leave it reusable and evictable.
-            state.resetFrame();
-            throw e;
-        }
-        //#endif
     }
+    //#endif
 
     static void beginItemCaptureScope() {
         if (captureScopeDepth == captureScopeParents.length) {
@@ -1652,6 +1707,7 @@ public final class GlowCaptureManager {
     public static void captureItemView(com.mojang.blaze3d.vertex.PoseStack poseStack) {
         if (captureScopeDepth <= 0 || !captureScopeStarted[captureScopeDepth - 1]
                 || currentCapture == null || suppressDepth > 0) return;
+        if (currentCapture.guiEntity != null) return;
         currentCapture.itemDistance = itemDistance(poseStack.last().pose(), currentCapture.firstPerson);
         currentCapture.itemWorldToUv.zero();
         if (!currentCapture.firstPerson && currentCapture.capturedProjectionMatrix4fValid
@@ -1690,6 +1746,10 @@ public final class GlowCaptureManager {
     //#endif
 
     public static void renderCapturedNodes(GlowCaptureState state, Minecraft mc) {
+        if (state.guiEntity != null) {
+            renderGuiEntityMask(state, mc, state.guiEntity.scene());
+            return;
+        }
         renderCapturedNodes(state, mc, false);
     }
 
@@ -2771,6 +2831,8 @@ public final class GlowCaptureManager {
         return state;
     }
 
+    static void releaseGuiEntityState(GlowCaptureState state) { releaseState(state); }
+
     private static void releaseState(GlowCaptureState state) {
         releaseCaptureTargets(state);
         state.resetFrame();
@@ -2997,6 +3059,51 @@ public final class GlowCaptureManager {
             cn.spectra.gallium.Gallium.LOGGER.warn("Failed to close shared capture buffers: {}", cleanupFailure.toString());
         }
     }
+    //#endif
+
+    //#if MC>=1_21_09
+    static void releasePreviewBuffers(@Nullable RenderBuffers buffers) {
+        //#if MC>=1_26_02
+        //$$ closeOwnedResource(buffers);
+        //#else
+        var visited = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Object, Boolean>());
+        closePreviewBufferGraph(buffers, visited);
+        //#endif
+    }
+
+    //#if MC<1_26_02
+    private static void closePreviewBufferGraph(Object owned, java.util.Set<Object> visited) {
+        if (owned == null || !visited.add(owned)) return;
+        if (owned instanceof com.mojang.blaze3d.vertex.ByteBufferBuilder bytes) {
+            bytes.close();
+        } else if (owned instanceof java.util.Map<?, ?> map) {
+            for (Object value : map.values()) closePreviewBufferGraph(value, visited);
+        } else if (owned instanceof Iterable<?> values) {
+            for (Object value : values) closePreviewBufferGraph(value, visited);
+        } else {
+            Class<?> owner;
+            if (owned instanceof RenderBuffers) owner = RenderBuffers.class;
+            else if (owned instanceof net.minecraft.client.renderer.MultiBufferSource.BufferSource)
+                owner = net.minecraft.client.renderer.MultiBufferSource.BufferSource.class;
+            else if (owned instanceof net.minecraft.client.renderer.OutlineBufferSource)
+                owner = net.minecraft.client.renderer.OutlineBufferSource.class;
+            else if (owned instanceof net.minecraft.client.renderer.SectionBufferBuilderPack)
+                owner = net.minecraft.client.renderer.SectionBufferBuilderPack.class;
+            else if (owned instanceof net.minecraft.client.renderer.SectionBufferBuilderPool)
+                owner = net.minecraft.client.renderer.SectionBufferBuilderPool.class;
+            else return;
+            for (var field : owner.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) continue;
+                try {
+                    field.setAccessible(true);
+                    closePreviewBufferGraph(field.get(owned), visited);
+                } catch (ReflectiveOperationException failure) {
+                    cn.spectra.gallium.Gallium.LOGGER.warn("Unable to release preview buffer", failure);
+                }
+            }
+        }
+    }
+    //#endif
     //#endif
 
     /** Closes one Gallium-owned resource without letting teardown failure escape a reload. */

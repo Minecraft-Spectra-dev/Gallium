@@ -33,10 +33,12 @@ import net.minecraft.resources.Identifier;
 public final class GlowPipeline {
 
     private static final Map<String, RenderPipeline> REGISTRY = new HashMap<>();
+    private static final Map<String, RenderPipeline> PREVIEW_REGISTRY = new HashMap<>();
     //#if MC<1_21_06
     //$$ // 1.21.5: keyed by ItemEffectConfig because per-config uniforms are baked into the
     //$$ // pipeline (no UBO). REGISTRY above is unused on this version. See getOrCreate(cfg).
     //$$ private static final Map<ItemEffectConfig, RenderPipeline> BY_CONFIG = new HashMap<>();
+    //$$ private static final Map<ItemEffectConfig, RenderPipeline> PREVIEW_BY_CONFIG = new HashMap<>();
     //$$ private static int worldLocationCounter;
     //#endif
 
@@ -49,8 +51,10 @@ public final class GlowPipeline {
     /** Drops every cached pipeline on full teardown. */
     public static void clearAll() {
         REGISTRY.clear();
+        PREVIEW_REGISTRY.clear();
         //#if MC<1_21_06
         //$$ BY_CONFIG.clear();
+        //$$ PREVIEW_BY_CONFIG.clear();
         //$$ worldLocationCounter = 0;
         //#endif
     }
@@ -58,6 +62,7 @@ public final class GlowPipeline {
     /** Drop pipelines whose shader name is no longer referenced (1.21.6+ key). */
     public static void retainOnly(Set<String> liveShaders) {
         REGISTRY.keySet().removeIf(name -> !liveShaders.contains(name));
+        PREVIEW_REGISTRY.keySet().removeIf(name -> !liveShaders.contains(name));
     }
 
     //#if MC<1_21_06
@@ -68,6 +73,7 @@ public final class GlowPipeline {
     //$$  *  same would otherwise leak the stale pre-reload pipeline forever. */
     //$$ public static void retainOnlyConfigs(Set<ItemEffectConfig> liveConfigs) {
     //$$     BY_CONFIG.keySet().removeIf(cfg -> !liveConfigs.contains(cfg));
+    //$$     PREVIEW_BY_CONFIG.keySet().removeIf(cfg -> !liveConfigs.contains(cfg));
     //$$     if (BY_CONFIG.isEmpty()) {
     //$$         worldLocationCounter = 0;
     //$$     }
@@ -91,12 +97,15 @@ public final class GlowPipeline {
     //$$  * honours the individual {@code glUniform*} calls.
     //$$  */
     //$$ public static RenderPipeline getOrCreate(ItemEffectConfig cfg) {
+    //$$     return getOrCreate(cfg, false);
+    //$$ }
+    //$$ private static RenderPipeline getOrCreate(ItemEffectConfig cfg, boolean preview) {
     //$$     if (cfg.shader().isEmpty()) return null;
-    //$$     return BY_CONFIG.computeIfAbsent(cfg, c -> {
+    //$$     return (preview ? PREVIEW_BY_CONFIG : BY_CONFIG).computeIfAbsent(cfg, c -> {
     //$$         String shaderName = c.shader();
     //$$         int variant = worldLocationCounter++;
     //$$         var builder = RenderPipeline.builder()
-    //$$                 .withLocation("pipeline/gallium_glow/" + shaderName + "_" + variant)
+    //$$                 .withLocation((preview ? "pipeline/gallium_preview/" : "pipeline/gallium_glow/") + shaderName + "_" + variant)
     //$$                 .withVertexShader(ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(shaderName)))
     //$$                 .withFragmentShader(ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(shaderName)))
     //$$                 .withSampler("DiffuseSampler")
@@ -122,6 +131,7 @@ public final class GlowPipeline {
     //$$                 shaderName, variant, c.params().size());
     //$$         return builder
     //$$                 .withBlend(BlendFunction.ADDITIVE)
+                    //$$ .withColorWrite(true, !preview)
     //$$                 .withCull(false)
     //$$                 .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
     //$$                 .withDepthWrite(false)
@@ -131,16 +141,28 @@ public final class GlowPipeline {
     //$$ }
     //#endif
 
+    public static RenderPipeline getPreview(ItemEffectConfig cfg) {
+        //#if MC>=1_21_06
+        return getOrCreate(cfg.shader(), true);
+        //#else
+        //$$ return getOrCreate(cfg, true);
+        //#endif
+    }
+
     public static RenderPipeline getOrCreate(String shaderName) {
+        return getOrCreate(shaderName, false);
+    }
+
+    private static RenderPipeline getOrCreate(String shaderName, boolean preview) {
         if (shaderName.isEmpty()) return null;
-        return REGISTRY.computeIfAbsent(shaderName, name -> {
+        return (preview ? PREVIEW_REGISTRY : REGISTRY).computeIfAbsent(shaderName, name -> {
             //#if MC>=1_26_02
             //$$ // 26.2: samplers/uniforms moved onto a BindGroupLayout attached to the pipeline,
             //$$ // and VertexFormat.Mode became the top-level PrimitiveTopology enum. An
             //$$ // attribute-less full-screen triangle pipeline is expressed by omitting
             //$$ // withVertexBinding entirely (vanilla POST_PROCESSING_SNIPPET does the same).
             //$$ RenderPipeline pipeline = RenderPipeline.builder()
-            //$$         .withLocation("pipeline/gallium_glow/" + name)
+            //$$         .withLocation((preview ? "pipeline/gallium_preview/" : "pipeline/gallium_glow/") + name)
             //$$         .withVertexShader(Identifier.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
             //$$         .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
             //$$         .withBindGroupLayout(BindGroupLayout.builder()
@@ -151,14 +173,14 @@ public final class GlowPipeline {
             //$$                 .withSampler(WorldGlowShader.FOREGROUND_SAMPLER)
             //$$                 .withUniform("GlowUniforms", UniformType.UNIFORM_BUFFER)
             //$$                 .build())
-            //$$         .withColorTargetState(new ColorTargetState(BlendFunction.ADDITIVE))
+            //$$         .withColorTargetState(preview ? previewColorState() : new ColorTargetState(BlendFunction.ADDITIVE))
             //$$         .withCull(false)
             //$$         .withDepthStencilState(Optional.empty())
             //$$         .withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
             //$$         .build();
             //#else
             RenderPipeline pipeline = RenderPipeline.builder()
-                    .withLocation("pipeline/gallium_glow/" + name)
+                    .withLocation((preview ? "pipeline/gallium_preview/" : "pipeline/gallium_glow/") + name)
                     //#if MC>=1_21_09
                     .withVertexShader(Identifier.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
                     .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
@@ -175,9 +197,10 @@ public final class GlowPipeline {
                     .withUniform("GlowUniforms", UniformType.UNIFORM_BUFFER)
                     //#endif
                     //#if MC>=1_26_00
-                    .withColorTargetState(new ColorTargetState(BlendFunction.ADDITIVE))
+                    .withColorTargetState(preview ? previewColorState() : new ColorTargetState(BlendFunction.ADDITIVE))
                     //#else
                     //$$ .withBlend(BlendFunction.ADDITIVE)
+                    //$$ .withColorWrite(true, !preview)
                     //#endif
                     .withCull(false)
                     //#if MC>=1_26_00
@@ -210,6 +233,16 @@ public final class GlowPipeline {
     //$$ public static RenderPipeline get(ItemEffectConfig cfg) {
     //$$     return BY_CONFIG.get(cfg);
     //$$ }
+    //#endif
+
+    //#if MC>=1_26_00
+    private static ColorTargetState previewColorState() {
+        return new ColorTargetState(Optional.of(BlendFunction.ADDITIVE),
+                //#if MC>=1_26_02
+                //$$ com.mojang.blaze3d.GpuFormat.RGBA8_UNORM,
+                //#endif
+                ColorTargetState.WRITE_COLOR);
+    }
     //#endif
 
     public static void init() {}

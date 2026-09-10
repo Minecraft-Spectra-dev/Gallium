@@ -74,6 +74,9 @@ public final class GlowCaptureState {
     public boolean superResolutionPrepared;
     public boolean active;
     public boolean firstPerson;
+    /** Non-null only for a GUI entity's isolated capture queue. Never participates in SR. */
+    public @Nullable GuiEntityGlowCapture guiEntity;
+    public boolean previewReverseDepth;
     /** Camera-relative item-origin distance in blocks; zero for hands or unavailable metadata. */
     public float itemDistance;
     /** Final-output UV units per view-plane block; zero disables world-size styling. */
@@ -309,6 +312,8 @@ public final class GlowCaptureState {
         superResolutionPrepared = false;
         active = false;
         firstPerson = false;
+        guiEntity = null;
+        previewReverseDepth = false;
         itemDistance = 0.0f;
         itemWorldToUv.zero();
         maskDepthPrepared = false;
