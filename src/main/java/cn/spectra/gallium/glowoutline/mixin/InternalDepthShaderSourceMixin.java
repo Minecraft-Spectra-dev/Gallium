@@ -1,9 +1,13 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
-//#if MC==1_21_11 || MC==1_26_01
+//#if MC>=1_21_06
 import cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline;
 import cn.spectra.gallium.glowoutline.shader.DepthResamplePipeline;
+//#if MC==1_21_11 || MC==1_26_01
 import cn.spectra.gallium.glowoutline.shader.WorldMaskOcclusionPipeline;
+//#elseif MC>=1_26_02
+//$$ import cn.spectra.gallium.glowoutline.shader.DepthFlipPipeline;
+//#endif
 import com.mojang.blaze3d.shaders.ShaderType;
 //#if MC>=1_21_11
 import net.minecraft.resources.Identifier;
@@ -17,7 +21,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Both reload precompilation and ordinary cache-miss draws resolve sources through this cache.
- * They must find both private inline shaders even before the item-effect listener precompiles;
+ * They must find the private depth shaders even before the item-effect listener precompiles;
  * otherwise the device retains an invalid program that its computeIfAbsent cannot replace.
  */
 @Mixin(targets = "net.minecraft.client.renderer.ShaderManager$CompilationCache")
@@ -32,7 +36,11 @@ public class InternalDepthShaderSourceMixin {
             ShaderType type, CallbackInfoReturnable<String> callback) {
         String source = DepthResamplePipeline.shaderSource(id, type);
         if (source == null) source = DepthMinPoolPipeline.shaderSource(id, type);
+        //#if MC==1_21_11 || MC==1_26_01
         if (source == null) source = WorldMaskOcclusionPipeline.shaderSource(id, type);
+        //#elseif MC>=1_26_02
+        //$$ if (source == null) source = DepthFlipPipeline.shaderSource(id, type);
+        //#endif
         if (source != null) callback.setReturnValue(source);
     }
 }

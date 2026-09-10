@@ -3,6 +3,7 @@ package cn.spectra.gallium.glowoutline.mixin;
 //#if MC>=1_21_09
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 import cn.spectra.gallium.glowoutline.capture.ShelfRenderStateAccessor;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -52,6 +53,7 @@ public class ShelfRendererMixin {
         SubmitNodeCollector wrapped = CaptureSites.beginIfCapturable(
                 itemStack, collector, GlowOutlineConfig.Toggle.OTHER_ENTITIES);
         try {
+            GlowCaptureManager.captureItemView(poseStack);
             original.call(renderState, poseStack, wrapped, light, overlay, outlineColor);
         } finally {
             CaptureSites.end();

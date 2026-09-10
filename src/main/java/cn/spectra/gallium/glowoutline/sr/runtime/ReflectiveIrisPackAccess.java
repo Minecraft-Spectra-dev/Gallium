@@ -1,30 +1,14 @@
 package cn.spectra.gallium.glowoutline.sr.runtime;
 
 import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /** Reads Iris's already-preprocessed per-dimension texture-size directives without linking Iris. */
 final class ReflectiveIrisPackAccess {
 
-    private static final Pattern FSR_AFFINE_PROJECTION = Pattern.compile(
-            "(?s)\\A\\s*void\\s+FsrScaleVS\\s*\\(\\s*inout\\s+vec4\\s+position"
-                    + "\\s*,\\s*(?:in\\s+)?vec2\\s+jitter\\s*\\)\\s*\\{\\s*"
-                    + "position\\.xy\\s*/=\\s*position\\.w\\s*;\\s*"
-                    + "position\\.xy\\s*=\\s*position\\.xy\\s*\\*\\s*fsrRenderScale"
-                    + "\\s*\\+\\s*fsrRenderScale\\s*-\\s*1(?:\\.0)?\\s*;"
-                    + "\\s*position\\.xy\\s*\\+=\\s*jitter\\s*;"
-                    + "\\s*position\\.xy\\s*\\*=\\s*position\\.w\\s*;"
-                    + "\\s*\\}\\s*\\z");
-    private static final Pattern FSR_AFFINE_CALL = Pattern.compile(
-            "FsrScaleVS\\s*\\(\\s*gl_Position\\s*,");
-    private static final Pattern FSR_FUNCTION_START = Pattern.compile(
-            "\\bvoid\\s+FsrScaleVS\\s*\\([^)]*\\)\\s*\\{");
     private static final String[] CAPTURE_PROGRAMS = {
             "Entities", "EntitiesTrans", "EntitiesGlowing",
             "Item", "Block", "BlockTrans", "ArmorGlint", "Hand", "HandWater"
@@ -38,8 +22,8 @@ final class ReflectiveIrisPackAccess {
             "DhTerrain", "DhWater", "DhGeneric"
     };
 
-    private Object cachedProofProgramSet;
-    private ProjectionAnalysis cachedProjectionAnalysis = ProjectionAnalysis.rejected();
+    private Object cachedProgramSet;
+    private Optional<InlineViewportProjectionAnalyzer.Analysis> cachedProjection = Optional.empty();
 
     Optional<int[]> textureExtent(
             Object irisPack, String textureSource, int screenWidth, int screenHeight) {
@@ -62,121 +46,76 @@ final class ReflectiveIrisPackAccess {
         }
     }
 
-    /** Proves the restricted affine projection form before a target extent may drive replay. */
-    boolean hasFsrAffineProjection(Object irisPack) {
-        return projectionAnalysis(irisPack).affine();
-    }
-
-    /** Returns the call-site consensus only after every capture program proves the same affine form. */
-    FsrTemporalJitterAnalyzer.Analysis fsrTemporalJitter(Object irisPack) {
-        return projectionAnalysis(irisPack).temporalJitter();
-    }
-
-    private ProjectionAnalysis projectionAnalysis(Object irisPack) {
-        if (irisPack == null) return ProjectionAnalysis.rejected();
+    Optional<InlineViewportProjectionAnalyzer.Analysis> viewportProjection(Object irisPack) {
+        if (irisPack == null) return Optional.empty();
         try {
-            Object programSet = currentProgramSet(irisPack);
-            if (programSet == null) return ProjectionAnalysis.rejected();
-            if (programSet == cachedProofProgramSet) return cachedProjectionAnalysis;
-            ClassLoader loader = ReflectiveIrisPackAccess.class.getClassLoader();
-            Class<?> programId = Class.forName(
-                    "net.irisshaders.iris.shaderpack.loading.ProgramId", false, loader);
-            // If Iris changes the directive ABI, assume Weather may write depth and require it;
-            // losing exact replay is safer than treating rain depth as aligned without proof.
-            boolean rainDepth = rainDepthEnabled(programSet).orElse(true);
-            ProjectionAnalysis proof = analyzeProjectionPrograms(
-                    programSet, programId, rainDepth);
-            cachedProofProgramSet = programSet;
-            cachedProjectionAnalysis = proof;
-            return cachedProjectionAnalysis;
+            Object programs = currentProgramSet(irisPack);
+            if (programs == null) return Optional.empty();
+            if (programs == cachedProgramSet) return cachedProjection;
+            Class<?> programId = Class.forName("net.irisshaders.iris.shaderpack.loading.ProgramId",
+                    false, ReflectiveIrisPackAccess.class.getClassLoader());
+            Optional<InlineViewportProjectionAnalyzer.Analysis> proof = analyzeProjectionPrograms(
+                    programs, programId, rainDepthEnabled(programs).orElse(true));
+            cachedProgramSet = programs;
+            cachedProjection = proof;
+            return proof;
         } catch (Throwable ignored) {
-            return ProjectionAnalysis.rejected();
+            return Optional.empty();
         }
     }
 
-    /** Mirrors Iris's ProgramFallbackResolver and requires every capture domain to resolve. */
-    static boolean allCaptureProgramsHaveFsrAffineProjection(
-            Object programSet, Class<?> programId) {
-        return analyzeCapturePrograms(programSet, programId).affine();
-    }
-
-    /** Resolves, proves, and analyzes every effective source used by Gallium capture domains. */
-    static ProjectionAnalysis analyzeCapturePrograms(Object programSet, Class<?> programId) {
-        return analyzePrograms(programSet, programId, CAPTURE_PROGRAMS);
-    }
-
-    /** Scale is capture-local; exact jitter additionally requires every scene-depth producer. */
-    static ProjectionAnalysis analyzeProjectionPrograms(Object programSet, Class<?> programId) {
-        return analyzeProjectionPrograms(programSet, programId, false);
-    }
-
-    static ProjectionAnalysis analyzeProjectionPrograms(
-            Object programSet, Class<?> programId, boolean rainDepth) {
-        ProjectionAnalysis capture = analyzeCapturePrograms(programSet, programId);
-        if (!capture.affine()) return capture;
-        String[] temporalPrograms = GLOBAL_TEMPORAL_PROGRAMS;
+    static Optional<InlineViewportProjectionAnalyzer.Analysis> analyzeProjectionPrograms(
+            Object programs, Class<?> programId, boolean rainDepth) {
+        Optional<InlineViewportProjectionAnalyzer.Analysis> capture =
+                analyzePrograms(programs, programId, CAPTURE_PROGRAMS);
+        if (capture.isEmpty()) return Optional.empty();
+        String[] globalPrograms = GLOBAL_TEMPORAL_PROGRAMS;
         if (rainDepth) {
-            temporalPrograms = java.util.Arrays.copyOf(
-                    GLOBAL_TEMPORAL_PROGRAMS, GLOBAL_TEMPORAL_PROGRAMS.length + 1);
-            temporalPrograms[temporalPrograms.length - 1] = "Weather";
+            globalPrograms = java.util.Arrays.copyOf(globalPrograms, globalPrograms.length + 1);
+            globalPrograms[globalPrograms.length - 1] = "Weather";
         }
-        ProjectionAnalysis global = analyzePrograms(
-                programSet, programId, temporalPrograms);
-        return new ProjectionAnalysis(
-                true, global.affine() ? global.temporalJitter() : noTemporalJitter());
+        Optional<InlineViewportProjectionAnalyzer.Analysis> global =
+                analyzePrograms(programs, programId, globalPrograms);
+        var result = capture.get();
+        return Optional.of(global.isPresent() && result.sameViewport(global.get())
+                && result.sameTemporalTransform(global.get()) ? result : result.withoutTemporalJitter());
     }
 
-    private static ProjectionAnalysis analyzePrograms(
-            Object programSet, Class<?> programId, String[] programNames) {
-        if (programSet == null || programId == null || !programId.isEnum()) {
-            return ProjectionAnalysis.rejected();
-        }
+    private static Optional<InlineViewportProjectionAnalyzer.Analysis> analyzePrograms(
+            Object programs, Class<?> programId, String[] names) {
+        if (programs == null || programId == null || !programId.isEnum()) return Optional.empty();
         try {
-            Method get = programSet.getClass().getMethod("get", programId);
+            Method get = programs.getClass().getMethod("get", programId);
             Method getFallback = programId.getMethod("getFallback");
-            Set<Object> analyzedSources = Collections.newSetFromMap(new IdentityHashMap<>());
-            List<String> vertexSources = new ArrayList<>();
-            for (String name : programNames) {
+            Set<Object> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+            InlineViewportProjectionAnalyzer.Analysis agreed = null;
+            for (String name : names) {
                 @SuppressWarnings({"unchecked", "rawtypes"})
-                Object id = Enum.valueOf(
-                        (Class<? extends Enum>) programId.asSubclass(Enum.class), name);
-                Optional<?> source = resolveEffectiveProgramSource(
-                        programSet, get, getFallback, id);
-                if (source.isEmpty()) return ProjectionAnalysis.rejected();
-                Object vertexOptional = source.get().getClass()
-                        .getMethod("getVertexSource").invoke(source.get());
-                if (!(vertexOptional instanceof Optional<?> vertex) || vertex.isEmpty()
-                        || !isFsrAffineProjectionSource(vertex.get().toString())) {
-                    return ProjectionAnalysis.rejected();
+                Object id = Enum.valueOf((Class<? extends Enum>) programId.asSubclass(Enum.class), name);
+                Optional<?> resolved = resolveEffectiveProgramSource(programs, get, getFallback, id);
+                if (resolved.isEmpty()) return Optional.empty();
+                Object source = resolved.get();
+                if (!visited.add(source)) continue;
+                // A later programmable stage could replace the vertex projection entirely.
+                for (String stage : new String[]{"getGeometrySource", "getTessControlSource", "getTessEvalSource"}) {
+                    Object value = source.getClass().getMethod(stage).invoke(source);
+                    if (!(value instanceof Optional<?> optional) || optional.isPresent()) return Optional.empty();
                 }
-                if (analyzedSources.add(source.get())) {
-                    vertexSources.add(vertex.get().toString());
-                }
+                Object vertex = source.getClass().getMethod("getVertexSource").invoke(source);
+                Object fragment = source.getClass().getMethod("getFragmentSource").invoke(source);
+                if (!(vertex instanceof Optional<?> vs) || vs.isEmpty()
+                        || !(fragment instanceof Optional<?> fs) || fs.isEmpty()) return Optional.empty();
+                Optional<InlineViewportProjectionAnalyzer.Analysis> analysis =
+                        InlineViewportProjectionAnalyzer.analyze(vs.get().toString(), fs.get().toString());
+                if (analysis.isEmpty()) return Optional.empty();
+                if (agreed == null) agreed = analysis.get();
+                else if (!agreed.sameViewport(analysis.get())) return Optional.empty();
+                else if (!agreed.sameTemporalTransform(analysis.get())) agreed = agreed.withoutTemporalJitter();
             }
-            return new ProjectionAnalysis(
-                    true, FsrTemporalJitterAnalyzer.consensusSources(vertexSources));
+            return Optional.ofNullable(agreed);
         } catch (Throwable ignored) {
-            return ProjectionAnalysis.rejected();
+            return Optional.empty();
         }
-    }
-
-    record ProjectionAnalysis(
-            boolean affine, FsrTemporalJitterAnalyzer.Analysis temporalJitter) {
-        ProjectionAnalysis {
-            temporalJitter = temporalJitter == null
-                    ? new FsrTemporalJitterAnalyzer.Analysis(
-                    FsrTemporalJitterAnalyzer.Kind.NONE, "", 0)
-                    : temporalJitter;
-        }
-
-        private static ProjectionAnalysis rejected() {
-            return new ProjectionAnalysis(false, noTemporalJitter());
-        }
-    }
-
-    private static FsrTemporalJitterAnalyzer.Analysis noTemporalJitter() {
-        return new FsrTemporalJitterAnalyzer.Analysis(
-                FsrTemporalJitterAnalyzer.Kind.NONE, "", 0);
     }
 
     /** Resolves one ProgramId through its complete fallback chain, failing closed on cycles. */
@@ -198,36 +137,6 @@ final class ReflectiveIrisPackAccess {
             current = fallback.orElse(null);
         }
         return Optional.empty();
-    }
-
-    static boolean isFsrAffineProjectionSource(String source) {
-        if (source == null) return false;
-        String code = source
-                .replaceAll("(?s)/\\*.*?\\*/", "")
-                .replaceAll("(?m)//.*$", "");
-        String function = extractFsrScaleFunction(code);
-        if (function == null) return false;
-        // The signature and complete body are anchored. This deliberately rejects helpers,
-        // conditionals, shadowing locals, and any fifth statement even when they do not write
-        // position directly: only the four protocol statements establish the affine proof.
-        return FSR_AFFINE_PROJECTION.matcher(function).matches()
-                && FSR_AFFINE_CALL.matcher(code).find();
-    }
-
-    private static String extractFsrScaleFunction(String code) {
-        java.util.regex.Matcher start = FSR_FUNCTION_START.matcher(code);
-        if (!start.find()) return null;
-        int openingBrace = start.end() - 1;
-        int depth = 0;
-        for (int cursor = openingBrace; cursor < code.length(); cursor++) {
-            char value = code.charAt(cursor);
-            if (value == '{') {
-                depth++;
-            } else if (value == '}' && --depth == 0) {
-                return code.substring(start.start(), cursor + 1);
-            }
-        }
-        return null;
     }
 
     private static Object currentProgramSet(Object irisPack) throws ReflectiveOperationException {

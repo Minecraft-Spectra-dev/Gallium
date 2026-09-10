@@ -11,16 +11,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReflectiveIrisPackAccessTest {
 
-    private static final String AFFINE_SOURCE = """
-            void FsrScaleVS(inout vec4 position, vec2 jitter) {
-                position.xy /= position.w;
-                position.xy = position.xy * fsrRenderScale + fsrRenderScale - 1.0;
-                position.xy += jitter;
-                position.xy *= position.w;
-            }
-            void main() { FsrScaleVS(gl_Position, taaJitter); }
-            """;
-
     @Test
     void parsesEverySrColorTargetAliasWithoutGuessingDepthNames() {
         assertEquals(0, ReflectiveIrisPackAccess.colorTargetIndex("colortex0"));
@@ -32,136 +22,53 @@ class ReflectiveIrisPackAccessTest {
     }
 
     @Test
-    void acceptsOnlyTheSimpleAfterScaleFsrProjectionFormula() {
-        String customResolution = AFFINE_SOURCE.replace(
-                "position.xy += jitter;", "position.xy += jitter * fsrRenderScale;");
-        String definitionOnly = AFFINE_SOURCE.replace(
-                "void main() { FsrScaleVS(gl_Position, taaJitter); }", "");
-        String extraVectorWrite = AFFINE_SOURCE.replace(
-                "position.xy += jitter;",
-                "position.xy += jitter;\n    position.xy += vec2(0.01);");
-        String extraComponentWrite = AFFINE_SOURCE.replace(
-                "position.xy += jitter;",
-                "position.xy += jitter;\n    position.x += 0.01;");
-
-        assertTrue(ReflectiveIrisPackAccess.isFsrAffineProjectionSource(AFFINE_SOURCE));
-        assertFalse(ReflectiveIrisPackAccess.isFsrAffineProjectionSource(customResolution));
-        assertFalse(ReflectiveIrisPackAccess.isFsrAffineProjectionSource(definitionOnly));
-        assertFalse(ReflectiveIrisPackAccess.isFsrAffineProjectionSource(extraVectorWrite));
-        assertFalse(ReflectiveIrisPackAccess.isFsrAffineProjectionSource(extraComponentWrite));
-    }
-
-    @Test
-    void affineProofRequiresTheExactParameterAndFourStatementBody() {
-        String byValuePosition = AFFINE_SOURCE.replace(
-                "inout vec4 position", "vec4 position");
-        String helper = AFFINE_SOURCE.replace(
-                "position.xy /= position.w;",
-                "adjustProjection(position);\n    position.xy /= position.w;");
-        String conditional = AFFINE_SOURCE.replace(
-                "position.xy += jitter;", "if (applyJitter) position.xy += jitter;");
-        String shadowingLocal = AFFINE_SOURCE.replace(
-                "position.xy /= position.w;",
-                "vec4 position = gl_Position;\n    position.xy /= position.w;");
-
-        assertFalse(ReflectiveIrisPackAccess.isFsrAffineProjectionSource(byValuePosition));
-        assertFalse(ReflectiveIrisPackAccess.isFsrAffineProjectionSource(helper));
-        assertFalse(ReflectiveIrisPackAccess.isFsrAffineProjectionSource(conditional));
-        assertFalse(ReflectiveIrisPackAccess.isFsrAffineProjectionSource(shadowingLocal));
-    }
-
-    @Test
-    void resolvesEveryCaptureProgramThroughItsEffectiveFallback() {
+    void inlineViewportUsesEffectiveFallbacksAndChecksAllDepthProducers() {
         FakeProgramSet programs = new FakeProgramSet(Map.of(
-                FakeProgramId.Textured, new FakeProgramSource(AFFINE_SOURCE)));
-
-        ReflectiveIrisPackAccess.ProjectionAnalysis analysis =
-                ReflectiveIrisPackAccess.analyzeCapturePrograms(
-                        programs, FakeProgramId.class);
-
-        assertTrue(analysis.affine());
-        assertEquals(FsrTemporalJitterAnalyzer.Kind.UNIFORM,
-                analysis.temporalJitter().kind());
-        assertEquals("taaJitter", analysis.temporalJitter().uniformName());
+                FakeProgramId.Textured, inlineSource(InlineViewportProjectionAnalyzerTest.VERTEX)));
+        var exact = ReflectiveIrisPackAccess.analyzeProjectionPrograms(
+                programs, FakeProgramId.class, true).orElseThrow();
+        assertEquals("viewportScale", exact.scaleUniform());
+        assertEquals("viewportSize", exact.extentUniform());
+        assertTrue(exact.exactJitter());
+        assertTrue(exact.jitterBeforeScale());
+        var noTerrainJitter = inlineSource(InlineViewportProjectionAnalyzerTest.VERTEX.replace(
+                "gl_Position.xy += sampleOffset * gl_Position.w;", ""));
+        FakeProgramSet mixed = new FakeProgramSet(Map.of(
+                FakeProgramId.Textured, inlineSource(InlineViewportProjectionAnalyzerTest.VERTEX),
+                FakeProgramId.Terrain, noTerrainJitter));
+        var conservative = ReflectiveIrisPackAccess.analyzeProjectionPrograms(
+                mixed, FakeProgramId.class, false).orElseThrow();
+        assertEquals("viewportScale", conservative.scaleUniform());
+        assertFalse(conservative.exactJitter());
     }
 
     @Test
-    void mixedEffectiveJitterCallsKeepScaleProofButDropExactJitter() {
-        String zeroJitter = AFFINE_SOURCE.replace(
-                "FsrScaleVS(gl_Position, taaJitter)",
-                "FsrScaleVS(gl_Position, vec2(0.0))");
+    void inlineViewportRejectsAMissingCaptureOrALaterProgrammableStage() {
+        assertTrue(ReflectiveIrisPackAccess.analyzeProjectionPrograms(
+                new FakeProgramSet(Map.of()), FakeProgramId.class, false).isEmpty());
+        FakeProgramSource geometry = inlineSource(InlineViewportProjectionAnalyzerTest.VERTEX);
+        geometry.geometrySource = "void main() { gl_Position = vec4(0); EmitVertex(); }";
+        assertTrue(ReflectiveIrisPackAccess.analyzeProjectionPrograms(new FakeProgramSet(Map.of(
+                FakeProgramId.Textured, inlineSource(InlineViewportProjectionAnalyzerTest.VERTEX),
+                FakeProgramId.Hand, geometry)), FakeProgramId.class, false).isEmpty());
+    }
+
+    @Test
+    void inlineWeatherJitterMattersOnlyWhenItWritesSceneDepth() {
         FakeProgramSet programs = new FakeProgramSet(Map.of(
-                FakeProgramId.Textured, new FakeProgramSource(AFFINE_SOURCE),
-                FakeProgramId.Hand, new FakeProgramSource(zeroJitter)));
-
-        ReflectiveIrisPackAccess.ProjectionAnalysis analysis =
-                ReflectiveIrisPackAccess.analyzeCapturePrograms(
-                        programs, FakeProgramId.class);
-
-        assertTrue(analysis.affine());
-        assertEquals(FsrTemporalJitterAnalyzer.Kind.AMBIGUOUS,
-                analysis.temporalJitter().kind());
+                FakeProgramId.Textured, inlineSource(InlineViewportProjectionAnalyzerTest.VERTEX),
+                FakeProgramId.Weather, inlineSource(InlineViewportProjectionAnalyzerTest.VERTEX.replace(
+                        "gl_Position.xy += sampleOffset * gl_Position.w;", ""))));
+        assertTrue(ReflectiveIrisPackAccess.analyzeProjectionPrograms(
+                programs, FakeProgramId.class, false).orElseThrow().exactJitter());
+        assertFalse(ReflectiveIrisPackAccess.analyzeProjectionPrograms(
+                programs, FakeProgramId.class, true).orElseThrow().exactJitter());
     }
 
-    @Test
-    void sceneDepthJitterMustAgreeBeforeProjectionIsGloballyExact() {
-        String zeroJitter = AFFINE_SOURCE.replace(
-                "FsrScaleVS(gl_Position, taaJitter)",
-                "FsrScaleVS(gl_Position, vec2(0.0))");
-        FakeProgramSet programs = new FakeProgramSet(Map.of(
-                FakeProgramId.Textured, new FakeProgramSource(AFFINE_SOURCE),
-                FakeProgramId.Terrain, new FakeProgramSource(zeroJitter)));
-
-        ReflectiveIrisPackAccess.ProjectionAnalysis capture =
-                ReflectiveIrisPackAccess.analyzeCapturePrograms(
-                        programs, FakeProgramId.class);
-        ReflectiveIrisPackAccess.ProjectionAnalysis global =
-                ReflectiveIrisPackAccess.analyzeProjectionPrograms(
-                        programs, FakeProgramId.class);
-
-        assertEquals(FsrTemporalJitterAnalyzer.Kind.UNIFORM,
-                capture.temporalJitter().kind());
-        assertTrue(global.affine());
-        assertEquals(FsrTemporalJitterAnalyzer.Kind.AMBIGUOUS,
-                global.temporalJitter().kind());
-    }
-
-    @Test
-    void weatherParticipatesInGlobalConsensusOnlyWhenRainWritesDepth() {
-        String zeroJitter = AFFINE_SOURCE.replace(
-                "FsrScaleVS(gl_Position, taaJitter)",
-                "FsrScaleVS(gl_Position, vec2(0.0))");
-        FakeProgramSet programs = new FakeProgramSet(Map.of(
-                FakeProgramId.Textured, new FakeProgramSource(AFFINE_SOURCE),
-                FakeProgramId.Weather, new FakeProgramSource(zeroJitter)));
-
-        ReflectiveIrisPackAccess.ProjectionAnalysis noRainDepth =
-                ReflectiveIrisPackAccess.analyzeProjectionPrograms(
-                        programs, FakeProgramId.class, false);
-        ReflectiveIrisPackAccess.ProjectionAnalysis rainDepth =
-                ReflectiveIrisPackAccess.analyzeProjectionPrograms(
-                        programs, FakeProgramId.class, true);
-
-        assertEquals(FsrTemporalJitterAnalyzer.Kind.UNIFORM,
-                noRainDepth.temporalJitter().kind());
-        assertEquals(FsrTemporalJitterAnalyzer.Kind.AMBIGUOUS,
-                rainDepth.temporalJitter().kind());
-    }
-
-    @Test
-    void rejectsWhenDirectProgramPassesButAnotherEffectiveFallbackDoesNot() {
-        FakeProgramSet programs = new FakeProgramSet(Map.of(
-                FakeProgramId.ArmorGlint, new FakeProgramSource(AFFINE_SOURCE),
-                FakeProgramId.Textured, new FakeProgramSource("void main() {}")));
-
-        assertFalse(ReflectiveIrisPackAccess.allCaptureProgramsHaveFsrAffineProjection(
-                programs, FakeProgramId.class));
-    }
-
-    @Test
-    void missingEntireFallbackChainFailsClosed() {
-        assertFalse(ReflectiveIrisPackAccess.allCaptureProgramsHaveFsrAffineProjection(
-                new FakeProgramSet(Map.of()), FakeProgramId.class));
+    private static FakeProgramSource inlineSource(String vertex) {
+        FakeProgramSource source = new FakeProgramSource(vertex);
+        source.fragmentSource = InlineViewportProjectionAnalyzerTest.FRAGMENT;
+        return source;
     }
 
     private enum FakeProgramId {
@@ -198,6 +105,8 @@ class ReflectiveIrisPackAccessTest {
 
     private static final class FakeProgramSource {
         private final String vertexSource;
+        private String fragmentSource;
+        private String geometrySource;
 
         private FakeProgramSource(String vertexSource) {
             this.vertexSource = vertexSource;
@@ -206,6 +115,10 @@ class ReflectiveIrisPackAccessTest {
         public Optional<String> getVertexSource() {
             return Optional.of(vertexSource);
         }
+        public Optional<String> getFragmentSource() { return Optional.ofNullable(fragmentSource); }
+        public Optional<String> getGeometrySource() { return Optional.ofNullable(geometrySource); }
+        public Optional<String> getTessControlSource() { return Optional.empty(); }
+        public Optional<String> getTessEvalSource() { return Optional.empty(); }
     }
 
     private static final class FakeProgramSet {

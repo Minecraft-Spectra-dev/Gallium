@@ -26,6 +26,7 @@
 		"ArmedEntityRenderStateMixin",
 		"ShaderUboCompatMixin",
 		"InternalDepthShaderSourceMixin",
+		"WorldGlowShaderSourceMixin",
 		"NativeMaskMeshReplayMixin",
 		"SuperResolutionRenderHandlerMixin",
 		"RenderSystemFrameCleanupMixin",

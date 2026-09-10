@@ -74,13 +74,18 @@ public final class GlowCaptureState {
     public boolean superResolutionPrepared;
     public boolean active;
     public boolean firstPerson;
+    /** Camera-relative item-origin distance in blocks; zero for hands or unavailable metadata. */
+    public float itemDistance;
+    /** Final-output UV units per view-plane block; zero disables world-size styling. */
+    public final org.joml.Vector2f itemWorldToUv = new org.joml.Vector2f();
     /** Whether captureSceneDepth populated mask depth for this state in the current frame. Exact
      *  Iris replay intentionally leaves this false; if enabling Iris bypass fails later, replay
      *  restores the scene snapshot before drawing instead of treating an empty depth target as
      *  trustworthy. */
     public boolean maskDepthPrepared;
-    /** Whether mask replay and scene depth share the exact same per-frame projection. False means
-     *  the fragment shader must retain its bounded temporal-mismatch fallback. */
+    /** Whether mask replay and scene depth share the same raster samples (or have already
+     *  resolved their visibility). A known jitter transform alone does not establish this for
+     *  a display-size mask against low-resolution depth. False requests the bounded fallback. */
     public boolean exactDepthAlignment = true;
     public @Nullable ItemEffectConfig config;
 
@@ -152,6 +157,8 @@ public final class GlowCaptureState {
     }
 
     public void beginCaptureLifecycle(long epoch, boolean firstPersonCapture) {
+        itemDistance = 0.0f;
+        itemWorldToUv.zero();
         streamingLifecycle.reset();
         streamingLifecycle.beginCapture();
         captureEpoch = epoch;
@@ -302,6 +309,8 @@ public final class GlowCaptureState {
         superResolutionPrepared = false;
         active = false;
         firstPerson = false;
+        itemDistance = 0.0f;
+        itemWorldToUv.zero();
         maskDepthPrepared = false;
         exactDepthAlignment = true;
         config = null;

@@ -107,6 +107,21 @@ public class GlowUniformBuffer implements AutoCloseable {
                                float maskUvOffsetX, float sceneUvOffsetX,
                                float maskUvOffsetY, float sceneUvOffsetY,
                                ItemEffectConfig cfg) {
+        writeToEncoder(encoder, frameTimeCounter, screenWidth, screenHeight,
+                maskUvFactorX, sceneUvFactorX, maskUvFactorY, sceneUvFactorY,
+                maskUvOffsetX, sceneUvOffsetX, maskUvOffsetY, sceneUvOffsetY, 0.0f, 0.0f, 0.0f, cfg);
+    }
+
+    /** Optional world metadata is appended after the established layout. Existing packs and
+     * GUI callers keep their original offsets; first-person/unavailable distance is zero. */
+    public void writeToEncoder(CommandEncoder encoder,
+                               float frameTimeCounter, int screenWidth, int screenHeight,
+                               float maskUvFactorX, float sceneUvFactorX,
+                               float maskUvFactorY, float sceneUvFactorY,
+                               float maskUvOffsetX, float sceneUvOffsetX,
+                               float maskUvOffsetY, float sceneUvOffsetY,
+                               float itemDistance, float worldToUvX, float worldToUvY,
+                               ItemEffectConfig cfg) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             Std140Builder builder = Std140Builder.onStack(stack, BUFFER_CAPACITY);
             ByteBuffer data;
@@ -114,6 +129,7 @@ public class GlowUniformBuffer implements AutoCloseable {
                 // Layout (std140):
                 //   float FrameTimeCounter; vec2 ScreenSize; <user params...>;
                 //   vec4 ShaderAlign; vec4 ShaderOffset;
+                //   float GalliumItemDistance; vec2 GalliumWorldToUv;
                 // ShaderAlign sits at the tail on purpose: packs that pre-date Iris alignment
                 // keep reading header + params at their original offsets.
                 //
@@ -134,6 +150,11 @@ public class GlowUniformBuffer implements AutoCloseable {
                 // GlowCaptureManager before it reaches this buffer.
                 builder.putVec4(maskUvOffsetX, sceneUvOffsetX,
                         maskUvOffsetY, sceneUvOffsetY);
+                builder.putFloat(itemDistance);
+                // vec2 starts eight bytes after ShaderOffset's end; the scalar retains
+                // its offset and the total tail size stays 16 bytes.
+                builder.putFloat(0.0f);
+                builder.putVec2(worldToUvX, worldToUvY);
                 data = builder.get();
             } catch (BufferOverflowException e) {
                 if (!overflowLogged) {

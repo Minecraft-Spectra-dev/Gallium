@@ -3,6 +3,7 @@ package cn.spectra.gallium.glowoutline.mixin;
 //#if MC>=1_21_09
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 //#if MC<1_21_11
 //$$ import cn.spectra.gallium.glowoutline.capture.ArmedEntityRenderStateAccessor;
 //#endif
@@ -51,6 +52,7 @@ public class ItemInHandLayerMixin {
                 : GlowOutlineConfig.Toggle.OTHER_ENTITIES;
         SubmitNodeCollector wrapped = CaptureSites.beginIfCapturable(itemStack, collector, flag);
         try {
+            GlowCaptureManager.captureItemView(poseStack);
             original.call(renderState, poseStack, wrapped, light, overlay, outlineColor);
         } finally {
             CaptureSites.end();
@@ -72,6 +74,7 @@ public class ItemInHandLayerMixin {
     //$$     ItemStack itemStack = ((ArmedEntityRenderStateAccessor) (Object) state).gallium$getHandStack(arm);
     //$$     SubmitNodeCollector wrapped = CaptureSites.beginIfCapturable(itemStack, collector, flag);
     //$$     try {
+    //$$         GlowCaptureManager.captureItemView(poseStack);
     //$$         original.call(renderState, poseStack, wrapped, light, overlay, outlineColor);
     //$$     } finally {
     //$$         CaptureSites.end();
@@ -83,6 +86,7 @@ public class ItemInHandLayerMixin {
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 //$$ import cn.spectra.gallium.glowoutline.capture.ArmedEntityRenderStateAccessor;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 //$$ import com.mojang.blaze3d.vertex.PoseStack;
@@ -113,6 +117,7 @@ public class ItemInHandLayerMixin {
 //$$         ItemStack itemStack = ((ArmedEntityRenderStateAccessor) (Object) state).gallium$getHandStack(arm);
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(itemStack, bufferSource, flag);
 //$$         try {
+//$$             GlowCaptureManager.captureItemView(poseStack);
 //$$             original.call(renderState, poseStack, wrapped, light, overlay);
 //$$         } finally {
 //$$             CaptureSites.end();
@@ -125,6 +130,7 @@ public class ItemInHandLayerMixin {
 //$$ // player-vs-other-mob third-person held item rendering.
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 //$$ import com.mojang.blaze3d.vertex.PoseStack;
@@ -165,6 +171,7 @@ public class ItemInHandLayerMixin {
 //$$         }
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(itemStack, bufferSource, flag);
 //$$         try {
+//$$             GlowCaptureManager.captureItemView(poseStack);
 //$$             original.call(renderState, poseStack, wrapped, light, overlay);
 //$$         } finally {
 //$$             CaptureSites.end();
@@ -179,6 +186,7 @@ public class ItemInHandLayerMixin {
 //$$ // method's parameters; no side-channel accessor needed.
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 //$$ import com.mojang.blaze3d.vertex.PoseStack;
@@ -210,6 +218,7 @@ public class ItemInHandLayerMixin {
 //$$                 : GlowOutlineConfig.Toggle.OTHER_ENTITIES;
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(itemStack, bufferSource, flag);
 //$$         try {
+//$$             GlowCaptureManager.captureItemView(poseStack);
 //$$             original.call(renderer, itemStack, ctx, leftHand, poseStack, wrapped, light, overlay, bakedModel);
 //$$         } finally {
 //$$             CaptureSites.end();

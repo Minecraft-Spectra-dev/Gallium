@@ -136,12 +136,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$             // Re-seed the cache on every resource reload. ShaderManager.apply() clears the
 //$$             // device pipeline cache, while this internal shader has no resource-pack source
 //$$             // for the default ShaderSource to find later during setPipeline().
-//$$             var compiled = RenderSystem.getDevice().precompilePipeline(pipeline, (id, type) -> {
-//$$                 if (!SHADER_ID.equals(id)) return null;
-//$$                 return type == ShaderType.VERTEX ? VERTEX_SHADER
-//$$                      : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER
-//$$                      : null;
-//$$             });
+//$$             var compiled = RenderSystem.getDevice().precompilePipeline(pipeline, DepthFlipPipeline::shaderSource);
 //$$             if (!compiled.isValid()) {
 //$$                 throw new IllegalStateException("Depth-flip pipeline compilation failed");
 //$$             }
@@ -154,6 +149,13 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$             pipeline = null;
 //$$             ready = false;
 //$$         }
+//$$     }
+//$$
+//$$     /** Also serves vanilla cache misses while a resource reload is in flight. */
+//$$     public static @Nullable String shaderSource(Identifier id, ShaderType type) {
+//$$         if (!SHADER_ID.equals(id)) return null;
+//$$         return type == ShaderType.VERTEX ? VERTEX_SHADER
+//$$                 : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER : null;
 //$$     }
 //$$
 //$$     /** Returns true if the pipeline is compiled and ready to dispatch. */

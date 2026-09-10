@@ -7,151 +7,85 @@ import cn.spectra.gallium.glowoutline.sr.definition.SrDefinition.Region;
 import cn.spectra.gallium.glowoutline.sr.definition.SrDefinition.RegionValueKind;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 
-/**
- * Registry of runtime-declared shader-pack projection conventions that do not require a
- * {@code gallium.json}. Each adapter must validate a coherent set of live values before it may
- * return a transform; a single suggestive uniform name is never sufficient.
- */
+/** Resolves source-proven native viewport semantics against live Iris values and SR inputs. */
 public final class ShaderPackProjectionResolver {
-
     private final SrRuntimeAccess runtime;
-    private final List<Adapter> adapters;
     private final TextureExtentAccess textureExtentAccess;
-    private final java.util.function.Predicate<Object> affineProjectionProof;
-    private final java.util.function.Function<Object, FsrTemporalJitterAnalyzer.Analysis>
-            temporalJitterProof;
+    private final Function<Object, Optional<InlineViewportProjectionAnalyzer.Analysis>> viewportProof;
 
     public ShaderPackProjectionResolver(SrRuntimeAccess runtime) {
-        this(runtime, List.of(ShaderPackProjectionResolver::resolveFsrViewport),
-                new ReflectiveIrisPackAccess());
+        this(runtime, new ReflectiveIrisPackAccess());
     }
 
-    ShaderPackProjectionResolver(SrRuntimeAccess runtime, List<Adapter> adapters) {
-        this(runtime, adapters, new ReflectiveIrisPackAccess());
+    private ShaderPackProjectionResolver(SrRuntimeAccess runtime, ReflectiveIrisPackAccess iris) {
+        this(runtime, iris::textureExtent, iris::viewportProjection);
     }
 
-    ShaderPackProjectionResolver(
-            SrRuntimeAccess runtime, List<Adapter> adapters,
-            TextureExtentAccess textureExtentAccess) {
-        this(runtime, adapters, textureExtentAccess, ignored -> true,
-                ignored -> noTemporalJitterProof());
-    }
-
-    private ShaderPackProjectionResolver(
-            SrRuntimeAccess runtime, List<Adapter> adapters,
-            ReflectiveIrisPackAccess irisPackAccess) {
-        this(runtime, adapters, irisPackAccess::textureExtent,
-                irisPackAccess::hasFsrAffineProjection,
-                irisPackAccess::fsrTemporalJitter);
-    }
-
-    ShaderPackProjectionResolver(
-            SrRuntimeAccess runtime, List<Adapter> adapters,
-            TextureExtentAccess textureExtentAccess,
-            java.util.function.Predicate<Object> affineProjectionProof) {
-        this(runtime, adapters, textureExtentAccess, affineProjectionProof,
-                ignored -> noTemporalJitterProof());
-    }
-
-    ShaderPackProjectionResolver(
-            SrRuntimeAccess runtime, List<Adapter> adapters,
-            TextureExtentAccess textureExtentAccess,
-            java.util.function.Predicate<Object> affineProjectionProof,
-            java.util.function.Function<Object, FsrTemporalJitterAnalyzer.Analysis>
-                    temporalJitterProof) {
+    ShaderPackProjectionResolver(SrRuntimeAccess runtime, TextureExtentAccess textureExtentAccess,
+            Function<Object, Optional<InlineViewportProjectionAnalyzer.Analysis>> viewportProof) {
         if (runtime == null) throw new IllegalArgumentException("runtime");
         if (textureExtentAccess == null) throw new IllegalArgumentException("textureExtentAccess");
-        if (affineProjectionProof == null) throw new IllegalArgumentException("affineProjectionProof");
-        if (temporalJitterProof == null) throw new IllegalArgumentException("temporalJitterProof");
+        if (viewportProof == null) throw new IllegalArgumentException("viewportProof");
         this.runtime = runtime;
-        this.adapters = adapters == null ? List.of() : List.copyOf(adapters);
         this.textureExtentAccess = textureExtentAccess;
-        this.affineProjectionProof = affineProjectionProof;
-        this.temporalJitterProof = temporalJitterProof;
+        this.viewportProof = viewportProof;
     }
 
-    public Optional<ProjectionResolution> resolve(int screenWidth, int screenHeight) {
-        if (screenWidth <= 0 || screenHeight <= 0) return Optional.empty();
-        for (Adapter adapter : adapters) {
-            Optional<ProjectionResolution> value = adapter.resolve(
-                    runtime, screenWidth, screenHeight);
-            if (value.isPresent()) return value;
-        }
-        return Optional.empty();
-    }
-
-    /** Resolves the semantic render-size input named by the selected universal SR profile. */
+    /** External SR owns its live projection; this resolver supplies only the native pack path. */
     public Optional<ProjectionResolution> resolve(
             Profile profile, Object irisPack, int screenWidth, int screenHeight) {
         if (profile == null || !profile.enabled() || !profile.upscale().enabled()
-                || screenWidth <= 0 || screenHeight <= 0) {
-            return Optional.empty();
-        }
-        Optional<ProjectionResolution> runtimeValue = resolve(screenWidth, screenHeight);
-        if (runtimeValue.isEmpty()) return Optional.empty();
-        if (!affineProjectionProof.test(irisPack)) return Optional.empty();
+                || screenWidth <= 0 || screenHeight <= 0
+                || runtime.upscaleActive().orElse(false)) return Optional.empty();
+        Optional<InlineViewportProjectionAnalyzer.Analysis> proof = viewportProof.apply(irisPack);
+        if (proof.isEmpty()) return Optional.empty();
+        var declaration = proof.get();
+        Optional<float[]> scale = runtime.shaderValue(SourceKind.UNIFORM, declaration.scaleUniform())
+                .flatMap(ShaderPackProjectionResolver::finiteVector2);
+        Optional<int[]> extent = runtime.shaderValue(SourceKind.UNIFORM, declaration.extentUniform())
+                .flatMap(ShaderPackProjectionResolver::positiveIntegerVector2);
+        if (scale.isEmpty() || extent.isEmpty()) return Optional.empty();
+        float[] declaredScale = scale.get();
+        int width = extent.get()[0], height = extent.get()[1];
+        if (width > screenWidth || height > screenHeight
+                || declaredScale[0] <= 0 || declaredScale[0] > 1
+                || declaredScale[1] <= 0 || declaredScale[1] > 1
+                || Math.round(declaredScale[0] * screenWidth) != width
+                || Math.round(declaredScale[1] * screenHeight) != height) return Optional.empty();
+        boolean hasMatchingInput = false;
         for (String inputName : List.of("motion_vectors", "color", "depth")) {
             InputTexture input = profile.upscale().inputs().get(inputName);
             if (input == null || !input.enabled() || !isFullRenderRegion(input.region())) continue;
-            Optional<int[]> extent = textureExtentAccess.textureExtent(
+            Optional<int[]> physical = textureExtentAccess.textureExtent(
                     irisPack, input.sourceName(), screenWidth, screenHeight);
-            if (extent.isEmpty()) continue;
-            int[] value = extent.get();
-            if (value[0] > screenWidth || value[1] > screenHeight) continue;
-            if (value[0] == screenWidth && value[1] == screenHeight) continue;
-            float scaleX = value[0] / (float) screenWidth;
-            float scaleY = value[1] / (float) screenHeight;
-            if (!Float.isFinite(scaleX) || !Float.isFinite(scaleY)
-                    || scaleX <= 0.0f || scaleX > 1.0f
-                    || scaleY <= 0.0f || scaleY > 1.0f) {
-                continue;
+            if (physical.isEmpty()) continue;
+            int[] size = physical.get();
+            if ((size[0] == screenWidth && size[1] == screenHeight)
+                    || (size[0] == width && size[1] == height)) {
+                hasMatchingInput = true;
+                break;
             }
-
-            // Both independent sources are required: the SR profile provides semantic meaning,
-            // PackDirectives provides exact integer rounding, and the live uniforms prove that
-            // this target size is also the geometry projection viewport rather than an effect
-            // buffer that merely happens to be half-resolution.
-            int runtimeWidth = Math.round(runtimeValue.get().scaleX() * screenWidth);
-            int runtimeHeight = Math.round(runtimeValue.get().scaleY() * screenHeight);
-            if (runtimeWidth != value[0] || runtimeHeight != value[1]) {
-                continue;
+        }
+        if (!hasMatchingInput) return Optional.empty();
+        float scaleX = width / (float) screenWidth, scaleY = height / (float) screenHeight;
+        float jitterX = 0, jitterY = 0;
+        boolean exactJitter = declaration.exactJitter();
+        if (exactJitter && !declaration.jitterUniform().isEmpty()) {
+            Optional<float[]> jitter = runtime.shaderValue(SourceKind.UNIFORM, declaration.jitterUniform())
+                    .flatMap(ShaderPackProjectionResolver::finiteVector2);
+            if (jitter.isEmpty()) exactJitter = false;
+            else {
+                jitterX = jitter.get()[0] * (declaration.jitterBeforeScale() ? declaredScale[0] : 1.0f);
+                jitterY = jitter.get()[1] * (declaration.jitterBeforeScale() ? declaredScale[1] : 1.0f);
             }
-            TemporalJitter temporal = resolveTemporalJitter(irisPack);
-            return Optional.of(new ProjectionResolution(
-                    scaleX, scaleY, 0.0f, 0.0f,
-                    temporal.x(), temporal.y(), temporal.exact(),
-                    "sr-input:" + inputName + ":" + input.sourceName()));
         }
-        return Optional.empty();
+        return Optional.of(new ProjectionResolution(scaleX, scaleY, 0, 0,
+                jitterX, jitterY, exactJitter,
+                "iris:viewport:" + declaration.scaleUniform() + "+" + declaration.extentUniform()));
     }
 
-    /** Reads only a call-site-proven shader-facing NDC offset; a name alone is never trusted. */
-    private TemporalJitter resolveTemporalJitter(Object irisPack) {
-        FsrTemporalJitterAnalyzer.Analysis analysis;
-        try {
-            analysis = temporalJitterProof.apply(irisPack);
-        } catch (Throwable ignored) {
-            return TemporalJitter.CONSERVATIVE;
-        }
-        if (analysis == null) return TemporalJitter.CONSERVATIVE;
-        if (analysis.kind() == FsrTemporalJitterAnalyzer.Kind.ZERO) {
-            return new TemporalJitter(0.0f, 0.0f, true);
-        }
-        if (analysis.kind() != FsrTemporalJitterAnalyzer.Kind.UNIFORM) {
-            return TemporalJitter.CONSERVATIVE;
-        }
-        Optional<float[]> value = runtime.shaderValue(
-                        SourceKind.UNIFORM, analysis.uniformName())
-                .flatMap(ShaderPackProjectionResolver::finiteVector2);
-        if (value.isEmpty()) return TemporalJitter.CONSERVATIVE;
-        return new TemporalJitter(value.get()[0], value.get()[1], true);
-    }
-
-    private static FsrTemporalJitterAnalyzer.Analysis noTemporalJitterProof() {
-        return new FsrTemporalJitterAnalyzer.Analysis(
-                FsrTemporalJitterAnalyzer.Kind.NONE, "", 0);
-    }
 
     private static boolean isFullRenderRegion(Region region) {
         return region != null
@@ -161,42 +95,6 @@ public final class ShaderPackProjectionResolver {
                 && region.height().kind() == RegionValueKind.RENDER_SIZE;
     }
 
-    /**
-     * iterationRP-style FSR paths expose both the integer viewport and its normalized scale.
-     * Requiring both values to agree within one output pixel prevents unrelated half-resolution
-     * effect buffers from being mistaken for the geometry projection viewport.
-     */
-    private static Optional<ProjectionResolution> resolveFsrViewport(
-            SrRuntimeAccess runtime, int screenWidth, int screenHeight) {
-        Optional<SrRuntimeAccess.NumericValue> scaleValue = runtime.shaderValue(
-                SourceKind.UNIFORM, "fsrRenderScale");
-        Optional<SrRuntimeAccess.NumericValue> extentValue = runtime.shaderValue(
-                SourceKind.UNIFORM, "fsrScreenSize");
-        if (scaleValue.isEmpty() || extentValue.isEmpty()) return Optional.empty();
-
-        Optional<float[]> declaredScale = finiteVector2(scaleValue.get());
-        Optional<int[]> renderExtent = positiveIntegerVector2(extentValue.get());
-        if (declaredScale.isEmpty() || renderExtent.isEmpty()) return Optional.empty();
-
-        float[] scale = declaredScale.get();
-        int[] extent = renderExtent.get();
-        if (extent[0] > screenWidth || extent[1] > screenHeight
-                || (extent[0] == screenWidth && extent[1] == screenHeight)
-                || scale[0] <= 0.0f || scale[0] > 1.0f
-                || scale[1] <= 0.0f || scale[1] > 1.0f) {
-            return Optional.empty();
-        }
-        float exactX = extent[0] / (float) screenWidth;
-        float exactY = extent[1] / (float) screenHeight;
-        if (Math.round(scale[0] * screenWidth) != extent[0]
-                || Math.round(scale[1] * screenHeight) != extent[1]) {
-            return Optional.empty();
-        }
-        return Optional.of(new ProjectionResolution(
-                exactX, exactY, 0.0f, 0.0f,
-                0.0f, 0.0f, false,
-                "iris:fsrRenderScale+fsrScreenSize"));
-    }
 
     private static Optional<float[]> finiteVector2(SrRuntimeAccess.NumericValue value) {
         if (value == null || value.size() != 2) return Optional.empty();
@@ -222,11 +120,6 @@ public final class ShaderPackProjectionResolver {
         return Optional.of(new int[]{(int) Math.rint(x), (int) Math.rint(y)});
     }
 
-    @FunctionalInterface
-    interface Adapter {
-        Optional<ProjectionResolution> resolve(
-                SrRuntimeAccess runtime, int screenWidth, int screenHeight);
-    }
 
     @FunctionalInterface
     interface TextureExtentAccess {
@@ -234,10 +127,6 @@ public final class ShaderPackProjectionResolver {
                 Object irisPack, String source, int screenWidth, int screenHeight);
     }
 
-    private record TemporalJitter(float x, float y, boolean exact) {
-        private static final TemporalJitter CONSERVATIVE =
-                new TemporalJitter(0.0f, 0.0f, false);
-    }
 
     public record ProjectionResolution(
             float scaleX, float scaleY,

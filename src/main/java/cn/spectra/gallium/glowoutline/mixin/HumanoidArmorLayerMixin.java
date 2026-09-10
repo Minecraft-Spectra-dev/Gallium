@@ -3,6 +3,7 @@ package cn.spectra.gallium.glowoutline.mixin;
 //#if MC>=1_21_09
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -35,6 +36,7 @@ public class HumanoidArmorLayerMixin {
         SubmitNodeCollector wrapped = CaptureSites.beginIfCapturable(
                 itemStack, collector, GlowOutlineConfig.Toggle.ARMOR);
         try {
+            GlowCaptureManager.captureItemView(poseStack);
             original.call(renderer, layerType, equipmentAssetId, model, state, itemStack, poseStack, wrapped, lightCoords, outlineColor);
         } finally {
             CaptureSites.end();
@@ -44,6 +46,7 @@ public class HumanoidArmorLayerMixin {
 //#elseif MC>=1_21_04
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 //$$ import com.mojang.blaze3d.vertex.PoseStack;
@@ -66,6 +69,7 @@ public class HumanoidArmorLayerMixin {
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
 //$$                 itemStack, bufferSource, GlowOutlineConfig.Toggle.ARMOR);
 //$$         try {
+//$$             GlowCaptureManager.captureItemView(poseStack);
 //$$             original.call(renderer, layerType, assetId, model, itemStack, poseStack, wrapped, light);
 //$$         } finally {
 //$$             CaptureSites.end();
@@ -78,6 +82,7 @@ public class HumanoidArmorLayerMixin {
 //$$ // Same wrap shape, just with the older type names in the descriptor and signature.
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 //$$ import com.mojang.blaze3d.vertex.PoseStack;
@@ -100,6 +105,7 @@ public class HumanoidArmorLayerMixin {
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
 //$$                 itemStack, bufferSource, GlowOutlineConfig.Toggle.ARMOR);
 //$$         try {
+//$$             GlowCaptureManager.captureItemView(poseStack);
 //$$             original.call(renderer, layerType, assetId, model, itemStack, poseStack, wrapped, light);
 //$$         } finally {
 //$$             CaptureSites.end();
@@ -120,6 +126,7 @@ public class HumanoidArmorLayerMixin {
 //$$ // no extra outline because it shares the base mesh.
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 //$$ import com.mojang.blaze3d.vertex.PoseStack;
@@ -147,6 +154,7 @@ public class HumanoidArmorLayerMixin {
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
 //$$                 itemStack, multiBufferSource, GlowOutlineConfig.Toggle.ARMOR);
 //$$         try {
+//$$             GlowCaptureManager.captureItemView(poseStack);
 //$$             original.call(self, poseStack, wrapped, light, model, color, texture);
 //$$         } finally {
 //$$             CaptureSites.end();

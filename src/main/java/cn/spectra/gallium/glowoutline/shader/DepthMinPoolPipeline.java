@@ -124,7 +124,13 @@ import org.jspecify.annotations.Nullable;
 //$$         GlowResources.registerPipeline(DepthMinPoolPipeline::dispose);
 //$$     }
 //$$
-//$$     private DepthMinPoolPipeline() {}
+//$$     private DepthMinPoolPipeline() {}//$$
+//$$     public static @Nullable String shaderSource(Identifier id, ShaderType type) {
+//$$         if (!SHADER_ID.equals(id)) return null;
+//$$         return type == ShaderType.VERTEX ? VERTEX_SHADER
+//$$                 : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER : null;
+//$$     }
+
 //$$
 //$$     public static void precompile() {
 //$$         try {
@@ -144,12 +150,7 @@ import org.jspecify.annotations.Nullable;
 //$$
 //$$             // ShaderManager clears the device cache on every resource reload. Always seed
 //$$             // it again with the in-memory source even when our pipeline object is unchanged.
-//$$             var compiled = RenderSystem.getDevice().precompilePipeline(pipeline, (id, type) -> {
-//$$                 if (!SHADER_ID.equals(id)) return null;
-//$$                 return type == ShaderType.VERTEX ? VERTEX_SHADER
-//$$                      : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER
-//$$                      : null;
-//$$             });
+//$$             var compiled = RenderSystem.getDevice().precompilePipeline(pipeline, DepthMinPoolPipeline::shaderSource);
 //$$             if (!compiled.isValid()) {
 //$$                 throw new IllegalStateException("Depth-min-pool pipeline compilation failed");
 //$$             }
@@ -393,15 +394,19 @@ public final class DepthMinPoolPipeline {
 //$$
 //$$     private DepthMinPoolPipeline() {}
 //$$
-//#if MC==1_21_11
 //$$     /** Independent of pipeline readiness, including the default resolver's reload cache misses. */
-//$$     public static @Nullable String shaderSource(Identifier id, ShaderType type) {
+//$$     public static @Nullable String shaderSource(
+//#if MC>=1_21_11
+//$$             Identifier id,
+//#else
+//$$             ResourceLocation id,
+//#endif
+//$$             ShaderType type) {
 //$$         if (!SHADER_ID.equals(id)) return null;
 //$$         return type == ShaderType.VERTEX ? VERTEX_SHADER
 //$$                 : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER : null;
 //$$     }
 //$$
-//#endif
 //$$     public static void precompile() {
 //$$         try {
 //$$             if (pipeline == null) {

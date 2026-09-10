@@ -360,6 +360,56 @@ NDC jitter is divided by two before it is written here, so add the corresponding
 converting a final output UV to an internal texel. Keep the mask and scene offsets separate when a
 mask projection replay falls back.
 
+## First-person foreground priority
+
+Without an active Iris shader pack, vanilla clears world depth before drawing the
+first-person arm and held items. That later layer always covers world effects; its
+raw Z must not compete with a world item's Z. Gallium applies an internal foreground
+coverage test before running a world effect fragment. Any non-clear foreground texel
+discards the fragment, including world geometry at the near clip plane. The ordinary
+path uses post-clear main depth; SR uses its selected foreground snapshot. Native
+26.2 depth is normalized to forward Z before this test.
+
+No resource-pack shader edits are required. Private world shader aliases wrap the
+loaded vertex/fragment entry points after resolving resource imports, adding an
+independent screen UV and foreground sampler. Resource files and normal GUI shader
+programs stay unchanged. First-person effects and Iris world
+effects bind a shared one-pixel far texture to leave their output unchanged. The
+adapter uses nearest foreground coverage at the source texture's actual size and
+adds no screen-size target or extra full-screen render pass.
+
+## Optional item distance
+
+World shaders may append `float GalliumItemDistance;` immediately after `ShaderOffset`
+in `GlowUniforms`. Gallium writes the camera-relative item-origin distance in blocks,
+captured before deferred replay. First-person items and captures without valid metadata
+receive zero. This is a built-in value, not an entry in `item_effects.json`'s `params`.
+This is approximate origin distance,
+not per-fragment depth or projected item size; no depth linearization is needed to use it.
+
+The field is appended to preserve all existing header/parameter/alignment offsets. Older
+resource packs can ignore it. Minecraft 1.21.1–1.21.5 receives the same value as an individual
+uniform. A shader declaring this field requires a Gallium build that supplies it; older
+binaries cannot be assumed to initialize the UBO tail to zero.
+
+World shaders may additionally append `vec2 GalliumWorldToUv;` after
+`GalliumItemDistance`. std140 leaves four bytes of padding after the scalar before
+this vec2; both values together use one 16-byte tail after `ShaderOffset`. The old
+distance offset is unchanged. Minecraft 1.21.1–1.21.5 receives a vec2 uniform instead.
+
+`GalliumWorldToUv` gives final-output UV units per block along the camera's view
+plane at the captured item origin. For a standard camera projection it is
+`abs(vec2(P[0][0], P[1][1])) / (2 * clipW)`, where `clipW` is computed from the
+captured projection, model-view, and item pose. It therefore follows depth, FOV,
+zoom, and aspect ratio without depending on a guessed near plane or on the internal
+render target's pixel count. First-person captures, missing matrices, invalid
+scales, and origins behind the camera receive `(0, 0)` to select a pack's fallback.
+This is an origin approximation, not a per-fragment surface offset or model scale.
+
+Resource packs can multiply this scale by a world-space radius to obtain an outline
+width in UV coordinates. Radius, subpixel coverage, and fallback pixel sizing remain
+resource-pack choices; the mod imposes no radius or distance cutoff.
+
 ## Reload behavior
 
 Gallium reads the hint and resolves options once per Iris pack reload. Per-frame projection results

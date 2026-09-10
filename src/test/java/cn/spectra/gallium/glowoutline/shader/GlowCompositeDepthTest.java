@@ -10,6 +10,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class GlowCompositeDepthTest {
 
     @Test
+    void foregroundPriorityMatchesTheSelectedDepthDomainAcrossAllRoutes() {
+        for (int flags = 0; flags < 32; flags++) {
+            boolean hand = (flags & 1) != 0;
+            boolean iris = (flags & 2) != 0;
+            boolean prepared = (flags & 4) != 0;
+            boolean foreground = (flags & 8) != 0;
+            boolean cameraFirstPerson = (flags & 16) != 0;
+            boolean expected = prepared
+                    ? GlowComposite.chooseSuperResolutionSceneDepth(hand, iris, true,
+                            foreground, cameraFirstPerson) == GlowComposite.SuperResolutionSceneDepth.FOREGROUND
+                    : GlowComposite.usesLiveMainDepth(hand, cameraFirstPerson, iris);
+            assertEquals(expected, GlowComposite.usesForegroundOcclusion(
+                    hand, iris, prepared, foreground, cameraFirstPerson), "flags=" + flags);
+        }
+    }
+
+    @Test
     void modeledHackStateSpecPreservesEveryCurrentSceneDepthRoute() {
         // Exhaust all 32 combinations against the unchanged live depth selector.
         for (int flags = 0; flags < 32; flags++) {

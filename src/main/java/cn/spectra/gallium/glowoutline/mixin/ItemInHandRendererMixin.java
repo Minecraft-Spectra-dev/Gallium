@@ -30,6 +30,7 @@ public class ItemInHandRendererMixin {
         SubmitNodeCollector wrapped = CaptureSites.beginIfCapturable(
                 itemStack, collector, GlowOutlineConfig.Toggle.FIRST_PERSON, true);
         try {
+            GlowCaptureManager.captureItemView(poseStack);
             original.call(renderState, poseStack, wrapped, light, overlay, outlineColor);
         } finally {
             CaptureSites.end();
@@ -87,6 +88,7 @@ public class ItemInHandRendererMixin {
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
 //$$                 itemStack, multiBufferSource, GlowOutlineConfig.Toggle.FIRST_PERSON, true);
 //$$         try {
+//$$             GlowCaptureManager.captureItemView(poseStack);
 //$$             original.call(renderer, livingEntity, itemStack, itemDisplayContext, poseStack, wrapped, level, light, overlay, seed);
 //$$         } finally {
 //$$             CaptureSites.end();
@@ -149,6 +151,7 @@ public class ItemInHandRendererMixin {
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
 //$$                 itemStack, multiBufferSource, GlowOutlineConfig.Toggle.FIRST_PERSON, true);
 //$$         try {
+//$$             GlowCaptureManager.captureItemView(poseStack);
 //$$             original.call(renderer, livingEntity, itemStack, itemDisplayContext, leftHand, poseStack, wrapped, level, light, overlay, seed);
 //$$         } finally {
 //$$             CaptureSites.end();
@@ -176,6 +179,7 @@ public class ItemInHandRendererMixin {
 //$$         }
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(itemStack, multiBufferSource, flag, firstPersonCtx);
 //$$         try {
+//$$             GlowCaptureManager.captureItemView(poseStack);
 //$$             original.call(renderer, livingEntity, itemStack, itemDisplayContext, leftHand, poseStack, wrapped, level, light, overlay, seed);
 //$$         } finally {
 //$$             CaptureSites.end();

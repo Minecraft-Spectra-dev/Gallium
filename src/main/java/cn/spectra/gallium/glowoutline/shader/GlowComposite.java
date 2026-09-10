@@ -14,7 +14,7 @@ import com.mojang.blaze3d.pipeline.TextureTarget;
 //#if MC>=1_21_05
 import com.mojang.blaze3d.systems.RenderPass;
 //#endif
-//#if MC>=1_21_06
+//#if MC>=1_21_05
 import com.mojang.blaze3d.systems.CommandEncoder;
 //#endif
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -419,6 +419,10 @@ public final class GlowComposite {
         com.mojang.blaze3d.textures.GpuTextureView sceneDepthView = selectSceneDepthView(
                 state, mask, mainTarget, minecraft);
         if (sceneDepthView == null) return;
+        boolean foregroundScene = usesForegroundOcclusion(state.firstPerson,
+                IrisCompat.isShaderActive(), state.superResolutionPrepared,
+                GlowCaptureManager.getForegroundDepthTarget() != null,
+                minecraft.options.getCameraType().isFirstPerson());
         // The fragment shader maps all three depth/color inputs to one integer texel. Linear
         // filtering here would blend neighboring item silhouettes before that mapping and create
         // a one-pixel halo/penetration at internal-resolution boundaries.
@@ -508,6 +512,14 @@ public final class GlowComposite {
         //$$ }
         //#endif
 
+        com.mojang.blaze3d.textures.GpuTextureView foregroundView = foregroundScene
+                //#if MC>=1_26_02
+                //$$ ? sceneDepthViewToBind
+                //#else
+                ? sceneDepthView
+                //#endif
+                : ForegroundOcclusion.farTarget(encoder).getColorTextureView();
+
         // Use ONE CommandEncoder for both the UBO write and the RenderPass so the
         // write is guaranteed to complete before the shader reads GlowUniforms,
         // even on deferred-backend drivers that reorder independent encoders.
@@ -516,7 +528,8 @@ public final class GlowComposite {
         // outlines overlap in screen space would each sample the other item's params.
         uniformBuffer.writeToEncoder(encoder, GlowTime.worldSecondsFloat(), w, h,
                 maskScaleX, sceneScaleX, maskScaleY, encodedSceneScaleY,
-                maskOffsetX, sceneOffsetX, maskOffsetY, sceneOffsetY, state.config);
+                maskOffsetX, sceneOffsetX, maskOffsetY, sceneOffsetY,
+                state.itemDistance, state.itemWorldToUv.x, state.itemWorldToUv.y, state.config);
 
         try (RenderPass pass = encoder.createRenderPass(() -> "Glow", mainTarget.getColorTextureView(),
                 //#if MC>=1_26_02
@@ -527,6 +540,8 @@ public final class GlowComposite {
         )) {
             pass.setPipeline(pipeline);
             pass.setUniform("GlowUniforms", uniformBuffer.getSlice());
+            SamplerHelper.bindClampToEdge(pass, WorldGlowShader.FOREGROUND_SAMPLER,
+                    foregroundView, FilterMode.NEAREST);
             SamplerHelper.bindClampToEdge(pass, "DiffuseSampler",
                     tempColorTarget.getColorTextureView(), FilterMode.LINEAR);
             SamplerHelper.bindClampToEdge(pass, "MaskSampler",
@@ -633,14 +648,21 @@ public final class GlowComposite {
     //$$     sceneDepthTex.setTextureFilter(FilterMode.NEAREST, false);
     //$$     sceneDepthTex.setAddressMode(AddressMode.CLAMP_TO_EDGE, AddressMode.CLAMP_TO_EDGE);
     //$$
-    //$$     try (RenderPass pass = RenderSystem.getDevice()
-    //$$             .createCommandEncoder()
-    //$$             .createRenderPass(mainTarget.getColorTexture(), OptionalInt.empty())) {
+    //$$     CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+    //$$     GpuTexture foregroundTexture = usesForegroundOcclusion(state.firstPerson,
+    //$$             IrisCompat.isShaderActive(), state.superResolutionPrepared,
+    //$$             GlowCaptureManager.getForegroundDepthTarget() != null,
+    //$$             minecraft.options.getCameraType().isFirstPerson())
+    //$$             ? sceneDepthTex : ForegroundOcclusion.farTarget(encoder).getColorTexture();
+    //$$     foregroundTexture.setTextureFilter(FilterMode.NEAREST, false);
+    //$$     foregroundTexture.setAddressMode(AddressMode.CLAMP_TO_EDGE);
+    //$$     try (RenderPass pass = encoder.createRenderPass(mainTarget.getColorTexture(), OptionalInt.empty())) {
     //$$         pass.setPipeline(pipeline);
     //$$         pass.bindSampler("DiffuseSampler", diffTex);
     //$$         pass.bindSampler("MaskSampler", maskTex);
     //$$         pass.bindSampler("MaskDepthSampler", maskDepthTex);
     //$$         pass.bindSampler("SceneDepthSampler", sceneDepthTex);
+    //$$         pass.bindSampler(WorldGlowShader.FOREGROUND_SAMPLER, foregroundTexture);
     //$$         // 1.21.5: individual uniforms instead of UBO
     //$$         pass.setUniform("FrameTimeCounter", GlowTime.worldSecondsFloat());
     //$$         pass.setUniform("ScreenSize", (float) w, (float) h);
@@ -648,6 +670,8 @@ public final class GlowComposite {
     //$$                 maskScaleX, sceneScaleX, maskScaleY, sceneScaleY);
     //$$         pass.setUniform("ShaderOffset",
     //$$                 maskOffsetX, sceneOffsetX, maskOffsetY, sceneOffsetY);
+    //$$         pass.setUniform("GalliumItemDistance", state.itemDistance);
+    //$$         pass.setUniform("GalliumWorldToUv", state.itemWorldToUv.x, state.itemWorldToUv.y);
     //$$         for (cn.spectra.gallium.glowoutline.ShaderParam p : state.config.params()) {
     //$$             switch (p) {
     //$$                 case cn.spectra.gallium.glowoutline.ShaderParam.Float f2 ->
@@ -729,17 +753,25 @@ public final class GlowComposite {
     //$$     setTextureNearest(mask.getColorTextureId());
     //$$     setTextureNearest(mask.getDepthTextureId());
     //$$     setTextureNearest(sceneDepth);
+    //$$     int foregroundTexture = usesForegroundOcclusion(state.firstPerson,
+    //$$             IrisCompat.isShaderActive(), state.superResolutionPrepared,
+    //$$             GlowCaptureManager.getForegroundDepthTarget() != null,
+    //$$             minecraft.options.getCameraType().isFirstPerson())
+    //$$             ? sceneDepth : ForegroundOcclusion.farTarget().getColorTextureId();
+    //$$     setTextureNearest(foregroundTexture);
     //$$
     //#if MC>=1_21_02
     //$$     program.bindSampler("DiffuseSampler", tempColorTarget.getColorTextureId());
     //$$     program.bindSampler("MaskSampler", mask.getColorTextureId());
     //$$     program.bindSampler("MaskDepthSampler", mask.getDepthTextureId());
     //$$     program.bindSampler("SceneDepthSampler", sceneDepth);
+    //$$     program.bindSampler(WorldGlowShader.FOREGROUND_SAMPLER, foregroundTexture);
     //#else
     //$$     program.setSampler("DiffuseSampler", tempColorTarget.getColorTextureId());
     //$$     program.setSampler("MaskSampler", mask.getColorTextureId());
     //$$     program.setSampler("MaskDepthSampler", mask.getDepthTextureId());
     //$$     program.setSampler("SceneDepthSampler", sceneDepth);
+    //$$     program.setSampler(WorldGlowShader.FOREGROUND_SAMPLER, foregroundTexture);
     //#endif
     //$$     program.safeGetUniform("FrameTimeCounter").set(GlowTime.worldSecondsFloat());
     //$$     program.safeGetUniform("ScreenSize").set((float) w, (float) h);
@@ -756,6 +788,8 @@ public final class GlowComposite {
     //$$             maskScaleX, sceneScaleX, maskScaleY, sceneScaleY);
     //$$     program.safeGetUniform("ShaderOffset").set(
     //$$             maskOffsetX, sceneOffsetX, maskOffsetY, sceneOffsetY);
+    //$$     program.safeGetUniform("GalliumItemDistance").set(state.itemDistance);
+    //$$     program.safeGetUniform("GalliumWorldToUv").set(state.itemWorldToUv.x, state.itemWorldToUv.y);
     //$$     for (cn.spectra.gallium.glowoutline.ShaderParam p : state.config.params()) {
     //$$         switch (p) {
     //$$             case cn.spectra.gallium.glowoutline.ShaderParam.Float f -> program.safeGetUniform(f.name()).set(f.value());
@@ -875,6 +909,14 @@ public final class GlowComposite {
 
     enum SuperResolutionSceneDepth {
         MASK, DISPLAY_SCENE, FOREGROUND, NONE
+    }
+
+    /** Only a post-clear foreground layer has unconditional priority over world effects.
+     * Iris's combined depth and item self-depth remain ordinary geometric depth. */
+    static boolean usesForegroundOcclusion(boolean stateFirstPerson, boolean irisActive,
+            boolean superResolutionPrepared, boolean foregroundAvailable, boolean cameraFirstPerson) {
+        if (stateFirstPerson || irisActive) return false;
+        return superResolutionPrepared ? foregroundAvailable : cameraFirstPerson;
     }
 
     /** Chooses one coordinate-coherent display-space depth source for a prepared SR mask. */

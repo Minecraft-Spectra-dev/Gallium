@@ -6,7 +6,7 @@ import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import net.minecraft.client.renderer.ProjectionMatrixBuffer;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
-//#if MC==1_26_01
+//#if MC>=1_26_00
 import org.spongepowered.asm.mixin.Unique;
 //#endif
 import org.spongepowered.asm.mixin.injection.At;
@@ -14,14 +14,14 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * 26.1 path: every projection-matrix UBO upload funnels through
+ * 26.x path: every projection-matrix UBO upload funnels through
  * {@code ProjectionMatrixBuffer.writeBuffer(Matrix4f)}, so a single hook remembers
  * the slice→matrix association no matter which {@code getBuffer(...)} overload was
  * called.
  */
 @Mixin(ProjectionMatrixBuffer.class)
 public class ProjectionMatrixBufferMixin {
-    //#if MC==1_26_01
+    //#if MC>=1_26_00
     /** Survives tracker reloads exactly as long as this vanilla buffer and its cached contents. */
     @Unique private Matrix4f gallium$lastUploadedMatrix;
     @Unique private GpuBufferSlice gallium$lastUploadedSlice;
@@ -41,7 +41,7 @@ public class ProjectionMatrixBufferMixin {
                                         CallbackInfoReturnable<GpuBufferSlice> cir) {
         GpuBufferSlice returned = cir.getReturnValue();
         if (returned != null) {
-            //#if MC==1_26_01
+            //#if MC>=1_26_00
             if (gallium$matrixStorage == null) gallium$matrixStorage = new Matrix4f(projectionMatrix);
             else gallium$matrixStorage.set(projectionMatrix);
             gallium$lastUploadedMatrix = gallium$matrixStorage;
@@ -51,7 +51,7 @@ public class ProjectionMatrixBufferMixin {
         }
     }
 
-    //#if MC==1_26_01
+    //#if MC>=1_26_00
     /** Cache hits skip writeBuffer even after Gallium's resource reload cleared the tracker. */
     @Inject(method = "getBuffer(Lnet/minecraft/client/renderer/Projection;)Lcom/mojang/blaze3d/buffers/GpuBufferSlice;",
             at = @At("RETURN"))

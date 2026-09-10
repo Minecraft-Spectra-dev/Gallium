@@ -97,16 +97,19 @@ public final class GlowPipeline {
     //$$         int variant = worldLocationCounter++;
     //$$         var builder = RenderPipeline.builder()
     //$$                 .withLocation("pipeline/gallium_glow/" + shaderName + "_" + variant)
-    //$$                 .withVertexShader(ResourceLocation.fromNamespaceAndPath("gallium", "core/" + shaderName))
-    //$$                 .withFragmentShader(ResourceLocation.fromNamespaceAndPath("gallium", "core/" + shaderName))
+    //$$                 .withVertexShader(ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(shaderName)))
+    //$$                 .withFragmentShader(ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(shaderName)))
     //$$                 .withSampler("DiffuseSampler")
     //$$                 .withSampler("MaskSampler")
     //$$                 .withSampler("MaskDepthSampler")
     //$$                 .withSampler("SceneDepthSampler")
+    //$$                 .withSampler(WorldGlowShader.FOREGROUND_SAMPLER)
     //$$                 .withUniform("FrameTimeCounter", UniformType.FLOAT)
     //$$                 .withUniform("ScreenSize", UniformType.VEC2)
     //$$                 .withUniform("ShaderAlign", UniformType.VEC4)
-    //$$                 .withUniform("ShaderOffset", UniformType.VEC4);
+    //$$                 .withUniform("ShaderOffset", UniformType.VEC4)
+    //$$                 .withUniform("GalliumItemDistance", UniformType.FLOAT)
+    //$$                 .withUniform("GalliumWorldToUv", UniformType.VEC2);
     //$$         for (ShaderParam p : c.params()) {
     //$$             switch (p) {
     //$$                 case ShaderParam.Float f2 -> builder.withUniform(f2.name(), UniformType.FLOAT);
@@ -138,13 +141,14 @@ public final class GlowPipeline {
             //$$ // withVertexBinding entirely (vanilla POST_PROCESSING_SNIPPET does the same).
             //$$ RenderPipeline pipeline = RenderPipeline.builder()
             //$$         .withLocation("pipeline/gallium_glow/" + name)
-            //$$         .withVertexShader(Identifier.fromNamespaceAndPath("gallium", "core/" + name))
-            //$$         .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", "core/" + name))
+            //$$         .withVertexShader(Identifier.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
+            //$$         .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
             //$$         .withBindGroupLayout(BindGroupLayout.builder()
             //$$                 .withSampler("DiffuseSampler")
             //$$                 .withSampler("MaskSampler")
             //$$                 .withSampler("MaskDepthSampler")
             //$$                 .withSampler("SceneDepthSampler")
+            //$$                 .withSampler(WorldGlowShader.FOREGROUND_SAMPLER)
             //$$                 .withUniform("GlowUniforms", UniformType.UNIFORM_BUFFER)
             //$$                 .build())
             //$$         .withColorTargetState(new ColorTargetState(BlendFunction.ADDITIVE))
@@ -156,16 +160,17 @@ public final class GlowPipeline {
             RenderPipeline pipeline = RenderPipeline.builder()
                     .withLocation("pipeline/gallium_glow/" + name)
                     //#if MC>=1_21_09
-                    .withVertexShader(Identifier.fromNamespaceAndPath("gallium", "core/" + name))
-                    .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", "core/" + name))
+                    .withVertexShader(Identifier.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
+                    .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
                     //#else
-                    //$$ .withVertexShader(ResourceLocation.fromNamespaceAndPath("gallium", "core/" + name))
-                    //$$ .withFragmentShader(ResourceLocation.fromNamespaceAndPath("gallium", "core/" + name))
+                    //$$ .withVertexShader(ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
+                    //$$ .withFragmentShader(ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
                     //#endif
                     .withSampler("DiffuseSampler")
                     .withSampler("MaskSampler")
                     .withSampler("MaskDepthSampler")
                     .withSampler("SceneDepthSampler")
+                    .withSampler(WorldGlowShader.FOREGROUND_SAMPLER)
                     //#if MC>=1_21_06
                     .withUniform("GlowUniforms", UniformType.UNIFORM_BUFFER)
                     //#endif
@@ -279,7 +284,8 @@ public final class GlowPipeline {
 //$$                     new ShaderProgramConfig.Sampler("DiffuseSampler"),
 //$$                     new ShaderProgramConfig.Sampler("MaskSampler"),
 //$$                     new ShaderProgramConfig.Sampler("MaskDepthSampler"),
-//$$                     new ShaderProgramConfig.Sampler("SceneDepthSampler")
+//$$                     new ShaderProgramConfig.Sampler("SceneDepthSampler"),
+//$$                     new ShaderProgramConfig.Sampler(WorldGlowShader.FOREGROUND_SAMPLER)
 //$$             ));
 //$$             Gallium.LOGGER.info("Created 1.21.4 glow shader program: {} ({} params)", shaderName, cfg.params().size());
 //$$             return program;
@@ -301,6 +307,7 @@ public final class GlowPipeline {
 //$$             // perform if we'd gone through ShaderManager.loadShader. We compile directly,
 //$$             // so we have to do the rewrite ourselves via the shared UboRewriter.
 //$$             processed = UboRewriter.rewrite(processed);
+//$$             processed = WorldGlowShader.wrap(processed, type == CompiledShader.Type.VERTEX);
 //$$             return CompiledShader.compile(shaderId, type, processed);
 //$$         }
 //$$     }
@@ -335,6 +342,8 @@ public final class GlowPipeline {
 //$$         uniforms.add(uniform("ScreenSize", 2));
 //$$         uniforms.add(uniform("ShaderAlign", 4));
 //$$         uniforms.add(uniform("ShaderOffset", 4));
+//$$         uniforms.add(uniform("GalliumItemDistance", 1));
+//$$         uniforms.add(uniform("GalliumWorldToUv", 2));
 //$$         for (ShaderParam p : cfg.params()) {
 //$$             switch (p) {
 //$$                 case ShaderParam.Float f -> uniforms.add(uniform(f.name(), 1));

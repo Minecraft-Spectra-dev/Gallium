@@ -65,12 +65,14 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$         // pack's .fsh doesn't read one (e.g. DiffuseSampler), vanilla's updateLocations removes
 //$$         // it from BOTH samplerNames AND samplerLocations in lock-step, so apply()'s loop stays
 //$$         // aligned. drawGlow then setSamplers all four; unused ones become a no-op map entry.
-//$$         appendSamplers(json, "DiffuseSampler", "MaskSampler", "MaskDepthSampler", "SceneDepthSampler");
+//$$         appendSamplers(json, "DiffuseSampler", "MaskSampler", "MaskDepthSampler", "SceneDepthSampler", WorldGlowShader.FOREGROUND_SAMPLER);
 //$$         json.append(",\"uniforms\":[");
 //$$         appendFloatUniform(json, "FrameTimeCounter", 1, true);
 //$$         appendFloatUniform(json, "ScreenSize", 2, false);
 //$$         appendFloatUniform(json, "ShaderAlign", 4, false);
 //$$         appendFloatUniform(json, "ShaderOffset", 4, false);
+//$$         appendFloatUniform(json, "GalliumItemDistance", 1, false);
+//$$         appendFloatUniform(json, "GalliumWorldToUv", 2, false);
 //$$         appendParamUniforms(json, cfg);
 //$$         json.append("]}");
 //$$
@@ -79,7 +81,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$         rewrite.put(coreLoc(synth + ".fsh"), galliumLoc("core/" + cfg.shader() + ".fsh"));
 //$$
 //$$         ShaderInstance si = build(synth, json.toString(), rewrite,
-//$$                 galliumLoc("core/" + cfg.shader() + ".fsh"), DefaultVertexFormat.BLIT_SCREEN);
+//$$                 galliumLoc("core/" + cfg.shader() + ".fsh"), DefaultVertexFormat.BLIT_SCREEN, true);
 //$$         if (si != null) {
 //$$             OWNED.put(si, new Owned(List.of(synth), List.of(synth)));
 //$$             Gallium.LOGGER.info("Created 1.21.1 world glow ShaderInstance: {} ({} params)",
@@ -111,7 +113,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$         rewrite.put(coreLoc(synth + ".fsh"), galliumLoc("core/" + cfg.shader() + "_gui.fsh"));
 //$$
 //$$         ShaderInstance si = build(synth, json.toString(), rewrite,
-//$$                 galliumLoc("core/" + cfg.shader() + "_gui.fsh"), DefaultVertexFormat.POSITION_TEX_COLOR);
+//$$                 galliumLoc("core/" + cfg.shader() + "_gui.fsh"), DefaultVertexFormat.POSITION_TEX_COLOR, false);
 //$$         if (si != null) {
 //$$             OWNED.put(si, new Owned(List.of(), List.of(synth)));
 //$$             Gallium.LOGGER.info("Created 1.21.1 GUI glow ShaderInstance: {} ({} params)",
@@ -142,7 +144,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$
 //$$     private static ShaderInstance build(String jsonName, String jsonText,
 //$$                                         Map<ResourceLocation, ResourceLocation> rewrite,
-//$$                                         ResourceLocation packAnchor, VertexFormat format) {
+//$$                                         ResourceLocation packAnchor, VertexFormat format, boolean world) {
 //$$         ResourceManager rm = Minecraft.getInstance().getResourceManager();
 //$$         PackResources anchorPack = rm.getResource(packAnchor).map(Resource::source).orElse(null);
 //$$         if (anchorPack == null) {
@@ -150,7 +152,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$             return null;
 //$$         }
 //$$         ResourceProvider provider = new SynthProvider(rm, coreLoc(jsonName + ".json"), jsonText,
-//$$                 anchorPack, rewrite);
+//$$                 anchorPack, rewrite, world);
 //$$         try {
 //$$             return new ShaderInstance(provider, jsonName, format);
 //$$         } catch (Exception e) {
@@ -253,14 +255,16 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$         private final String jsonText;
 //$$         private final PackResources anchorPack;
 //$$         private final Map<ResourceLocation, ResourceLocation> rewrite;
+//$$         private final boolean world;
 //$$
 //$$         SynthProvider(ResourceManager delegate, ResourceLocation jsonLoc, String jsonText,
-//$$                       PackResources anchorPack, Map<ResourceLocation, ResourceLocation> rewrite) {
+//$$                       PackResources anchorPack, Map<ResourceLocation, ResourceLocation> rewrite, boolean world) {
 //$$             this.delegate = delegate;
 //$$             this.jsonLoc = jsonLoc;
 //$$             this.jsonText = jsonText;
 //$$             this.anchorPack = anchorPack;
 //$$             this.rewrite = rewrite;
+//$$             this.world = world;
 //$$         }
 //$$
 //$$         @Override
@@ -282,6 +286,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$                     // here keeps the gallium namespace contract working without patching vanilla.
 //$$                     text = inlineGalliumImports(text, delegate);
 //$$                     text = UboRewriter.rewrite(text);
+//$$                     if (world) text = WorldGlowShader.wrap(text, src.getPath().endsWith(".vsh"));
 //$$                     return Optional.of(stringResource(text));
 //$$                 } catch (Exception e) {
 //$$                     Gallium.LOGGER.error("Failed to read glow shader source {}", src, e);

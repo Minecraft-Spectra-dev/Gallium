@@ -191,7 +191,7 @@ public final class IrisCompat {
 
     /**
      * Effective internal-resolution scale applied by the active shader pack to its world/hand
-     * passes (e.g. Kappa/Nostalgia {@code VertexDownscaling}, iterationRP {@code fsrRenderScale}).
+     * passes, using declared metadata or source-proven viewport transforms.
      * <p>
      * Resolved from a standard Super Resolution definition when present, otherwise from the
      * optional per-pack {@code gallium.json} override; see {@link ShaderPackHint}. Returns

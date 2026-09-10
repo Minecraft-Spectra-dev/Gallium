@@ -4,6 +4,7 @@ package cn.spectra.gallium.glowoutline.mixin;
 import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 import cn.spectra.gallium.glowoutline.ItemEffectsManager;
 import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 import cn.spectra.gallium.glowoutline.capture.ItemEntityRenderStateAccessor;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -58,6 +59,7 @@ public class ItemEntityRendererMixin {
         SubmitNodeCollector wrapped = CaptureSites.beginIfCapturable(
                 itemStack, collector, GlowOutlineConfig.Toggle.DROPPED_ITEMS);
         try {
+            GlowCaptureManager.captureItemView(poseStack);
             original.call(poseStack, wrapped, lightCoords, clusterState, random, boundingBox);
         } finally {
             CaptureSites.end();
@@ -68,6 +70,7 @@ public class ItemEntityRendererMixin {
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 //$$ import cn.spectra.gallium.glowoutline.ItemEffectsManager;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 //$$ import cn.spectra.gallium.glowoutline.capture.ItemEntityRenderStateAccessor;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -110,6 +113,7 @@ public class ItemEntityRendererMixin {
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
 //$$                 itemStack, bufferSource, GlowOutlineConfig.Toggle.DROPPED_ITEMS);
 //$$         try {
+//$$             GlowCaptureManager.captureItemView(poseStack);
 //$$             original.call(poseStack, wrapped, lightCoords, clusterState, random, boundingBox);
 //$$         } finally {
 //$$             CaptureSites.end();
@@ -123,6 +127,7 @@ public class ItemEntityRendererMixin {
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 //$$ import cn.spectra.gallium.glowoutline.ItemEffectsManager;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 //$$ import cn.spectra.gallium.glowoutline.capture.ItemEntityRenderStateAccessor;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -164,6 +169,7 @@ public class ItemEntityRendererMixin {
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
 //$$                 itemStack, bufferSource, GlowOutlineConfig.Toggle.DROPPED_ITEMS);
 //$$         try {
+//$$             GlowCaptureManager.captureItemView(poseStack);
 //$$             original.call(poseStack, wrapped, lightCoords, clusterState, random);
 //$$         } finally {
 //$$             CaptureSites.end();
@@ -179,6 +185,7 @@ public class ItemEntityRendererMixin {
 //$$ // ItemEntity directly instead of an ItemEntityRenderState.
 //$$ import cn.spectra.gallium.glowoutline.GlowOutlineConfig;
 //$$ import cn.spectra.gallium.glowoutline.capture.CaptureSites;
+//$$ import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 //$$ import com.mojang.blaze3d.vertex.PoseStack;
@@ -217,6 +224,7 @@ public class ItemEntityRendererMixin {
 //$$         MultiBufferSource wrapped = CaptureSites.beginIfCapturable(
 //$$                 itemStack, bufferSource, GlowOutlineConfig.Toggle.DROPPED_ITEMS);
 //$$         try {
+//$$             GlowCaptureManager.captureItemView(poseStack);
 //$$             original.call(renderer, poseStack, wrapped, lightCoords, itemStack, bakedModel, gui3d, random);
 //$$         } finally {
 //$$             CaptureSites.end();

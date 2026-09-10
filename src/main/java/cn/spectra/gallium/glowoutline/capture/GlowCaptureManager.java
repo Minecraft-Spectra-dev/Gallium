@@ -933,8 +933,18 @@ public final class GlowCaptureManager {
             }
             encoder = RenderSystem.getDevice().createCommandEncoder();
             //#if MC>=1_26_02
-            //$$ sceneDepthReady = copyDepthBounded(
-            //$$         encoder, srcDepth, destination.getDepthTexture(), w, h, 0.0);
+            //$$ // SR can wrap a depth attachment whose native GL format differs from our
+            //$$ // TextureTarget. A sampled transfer preserves depth without requiring matching
+            //$$ // depth-blit formats. Extents were validated above; this is a 1:1 copy.
+            //$$ if (IrisCompat.isShaderActive()
+            //$$         && net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("super_resolution")) {
+            //$$     sceneDepthReady = cn.spectra.gallium.glowoutline.shader.DepthResamplePipeline.resample(
+            //$$             encoder, mainTarget.getDepthTextureView(), destination.getColorTextureView(),
+            //$$             destination.getDepthTextureView());
+            //$$ } else {
+            //$$     sceneDepthReady = copyDepthBounded(
+            //$$             encoder, srcDepth, destination.getDepthTexture(), w, h, 0.0);
+            //$$ }
             //#else
             sceneDepthReady = copyDepthBounded(
                     encoder, srcDepth, destination.getDepthTexture(), w, h, 1.0);
@@ -1027,7 +1037,7 @@ public final class GlowCaptureManager {
         //$$                 continue;
         //$$             }
         //$$         }
-        //$$         state.maskDepthPrepared = copyDepthBounded(encoder, srcDepth,
+        //$$         state.maskDepthPrepared = copyDepthBounded(encoder, sceneDepthTarget.getDepthTexture(),
         //$$                 state.maskTarget.getDepthTexture(), w, h, 0.0);
         //$$         if (state.maskDepthPrepared) recordRenderMaskDepthPrefill(state);
         //$$         else invalidateCapture(state);
@@ -1636,6 +1646,28 @@ public final class GlowCaptureManager {
 
     public static @Nullable GlowCaptureState currentCapture() { return currentCapture; }
 
+    /** Capture-site poses already include the camera-relative world translation. Freeze it
+     * before deferred replay, which may run with a different model-view matrix. A skipped
+     * nested capture must never overwrite its parent's metadata. */
+    public static void captureItemView(com.mojang.blaze3d.vertex.PoseStack poseStack) {
+        if (captureScopeDepth <= 0 || !captureScopeStarted[captureScopeDepth - 1]
+                || currentCapture == null || suppressDepth > 0) return;
+        currentCapture.itemDistance = itemDistance(poseStack.last().pose(), currentCapture.firstPerson);
+        currentCapture.itemWorldToUv.zero();
+        if (!currentCapture.firstPerson && currentCapture.capturedProjectionMatrix4fValid
+                && currentCapture.capturedModelViewMatrixValid) {
+            ItemProjection.worldToUv(poseStack.last().pose(), currentCapture.capturedModelViewMatrix,
+                    currentCapture.capturedProjectionMatrix4f, currentCapture.itemWorldToUv);
+        }
+    }
+
+    static float itemDistance(org.joml.Matrix4fc pose, boolean firstPerson) {
+        if (firstPerson || pose == null) return 0.0f;
+        double x = pose.m30(), y = pose.m31(), z = pose.m32();
+        float distance = (float) Math.sqrt(x * x + y * y + z * z);
+        return Float.isFinite(distance) ? distance : 0.0f;
+    }
+
     /** Unified idempotent payload cleanup used by invalidation, abort and teardown paths. */
     public static void discardPayload(@Nullable GlowCaptureState state) {
         if (state != null) state.discardPayload();
@@ -2021,7 +2053,7 @@ public final class GlowCaptureManager {
                 || !IrisCompat.isShaderActive()
                 || (exactTemporalReplay && projectionApplied)
                 || (shaderCompatDisplayReplay
-                && sceneProjection.exactTemporalJitter()
+                && usesExactShaderCompatDepth(sceneProjection)
                 && projectionApplied && restoreProjection);
         state.capturedThisFrame = true;
         } finally {
@@ -2201,7 +2233,7 @@ public final class GlowCaptureManager {
         //$$         || !IrisCompat.isShaderActive()
         //$$         || (exactTemporalReplay && projectionApplied)
         //$$         || (shaderCompatDisplayReplay
-        //$$         && sceneProjection.exactTemporalJitter()
+        //$$         && usesExactShaderCompatDepth(sceneProjection)
         //$$         && projectionApplied && restoreProjection);
         //$$ state.capturedThisFrame = true;
         //$$ } finally {
@@ -2379,7 +2411,7 @@ public final class GlowCaptureManager {
         //$$         || !IrisCompat.isShaderActive()
         //$$         || (exactTemporalReplay && projectionApplied)
         //$$         || (shaderCompatDisplayReplay
-        //$$         && sceneProjection.exactTemporalJitter()
+        //$$         && usesExactShaderCompatDepth(sceneProjection)
         //$$         && projectionApplied && restoreProj);
         //$$ state.capturedThisFrame = true;
         //$$ } finally {
@@ -2548,7 +2580,7 @@ public final class GlowCaptureManager {
         //$$         || !IrisCompat.isShaderActive()
         //$$         || (exactTemporalReplay && projectionApplied)
         //$$         || (shaderCompatDisplayReplay
-        //$$         && sceneProjection.exactTemporalJitter()
+        //$$         && usesExactShaderCompatDepth(sceneProjection)
         //$$         && projectionApplied && shouldRestoreProj);
         //$$ state.capturedThisFrame = true;
         //$$ } finally {
@@ -2660,6 +2692,22 @@ public final class GlowCaptureManager {
             ShaderPackHint.ProjectionTransform transform, boolean outputSpacePrepare) {
         if (outputSpacePrepare) return ShaderPackHint.ProjectionTransform.IDENTITY;
         return transform == null ? ShaderPackHint.ProjectionTransform.IDENTITY : transform;
+    }
+
+    /**
+     * Shader-compatible SR replays an unjittered display-size mask against a same-size physical
+     * scene attachment whose active region can still be smaller and jittered. Knowing that
+     * transform makes the lookup coordinates exact, but does not make the raster samples equal:
+     * nearest depth can come from another position on the same sloping item face. As jitter
+     * changes, a strict comparison falsely alternates between visible and occluded pixels.
+     * Keep the scene's scale/offset intact and request the existing bounded depth neighbourhood
+     * unless its sampling grid actually matches the display mask. Ordinary same-grid Iris
+     * replay and the separately resolved SR target-replacement path do not use this decision.
+     */
+    static boolean usesExactShaderCompatDepth(
+            ShaderPackHint.@Nullable ProjectionTransform sceneProjection) {
+        return sceneProjection != null && sceneProjection.exactTemporalJitter()
+                && !sceneProjection.changesProjection();
     }
 
     /** Iris replay is safe only when the real shader-selection bypass was enabled. */
