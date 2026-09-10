@@ -44,7 +44,7 @@ public final class CaptureSites {
         GlowCaptureManager.beginItemCaptureScope();
         try {
             if (!GlowOutlineConfig.isEnabled()) return original;
-            if (!featureFlag.get()) return original;
+            if (featureFlag == null || !featureFlag.get()) return original;
             if (IrisCompat.isShadowPass()) return original;
             if (stack == null || stack.isEmpty()) return original;
             if (!GlowCaptureManager.beginItemCapture(stack, firstPerson)) return original;
@@ -326,7 +326,7 @@ public final class CaptureSites {
 //$$         GlowCaptureManager.beginItemCaptureScope();
 //$$         try {
 //$$             if (!GlowOutlineConfig.isEnabled()) return original;
-//$$             if (!featureFlag.get()) return original;
+//$$             if (featureFlag == null || !featureFlag.get()) return original;
 //$$             if (IrisCompat.isShadowPass()) return original;
 //$$             if (stack == null) return original;
 //$$             boolean capturable = GlowCaptureManager.beginItemCapture(stack, firstPerson);
@@ -649,7 +649,7 @@ public final class CaptureSites {
 //$$         GlowCaptureManager.beginItemCaptureScope();
 //$$         try {
 //$$             if (!GlowOutlineConfig.isEnabled()) return original;
-//$$             if (!featureFlag.get()) return original;
+//$$             if (featureFlag == null || !featureFlag.get()) return original;
 //$$             if (IrisCompat.isShadowPass()) return original;
 //$$             if (stack == null) return original;
 //$$             boolean capturable = GlowCaptureManager.beginItemCapture(stack, firstPerson);
@@ -741,7 +741,7 @@ public final class CaptureSites {
 //$$         GlowCaptureManager.beginItemCaptureScope();
 //$$         try {
 //$$             if (!GlowOutlineConfig.isEnabled()) return original;
-//$$             if (!featureFlag.get()) return original;
+//$$             if (featureFlag == null || !featureFlag.get()) return original;
 //$$             if (IrisCompat.isShadowPass()) return original;
 //$$             if (stack == null || stack.isEmpty()) return original;
 //$$             if (!GlowCaptureManager.beginItemCapture(stack, firstPerson)) return original;

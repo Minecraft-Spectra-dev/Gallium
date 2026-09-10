@@ -7,7 +7,7 @@
 	"gallium.options.glow_first_person": "First Person",
 	"gallium.options.glow_first_person.tooltip": "Glow outline on first-person held items",
 	"gallium.options.glow_third_person": "Third Person",
-	"gallium.options.glow_third_person.tooltip": "Glow outline on your own held items in third person",
+	"gallium.options.glow_third_person.tooltip": "Outlines on player-held items and items carried on the body",
 	"gallium.options.glow_other_entities": "Other Entities",
 	"gallium.options.glow_other_entities.tooltip": "Glow outline on items held by other entities",
 	"gallium.options.glow_dropped_items": "Dropped Items",
