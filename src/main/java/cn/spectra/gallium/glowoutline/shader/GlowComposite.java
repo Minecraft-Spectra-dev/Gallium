@@ -407,7 +407,7 @@ public final class GlowComposite {
     public static void composite(Minecraft minecraft, RenderTarget mainTarget) {
         // A late frame has an explicit per-state sequence; TAIL/fallback cannot consume it again.
         if (cn.spectra.gallium.glowoutline.SuperResolutionCompat.ownsLateReplayFrame()) return;
-        //#if MC==1_21_08 || MC==1_21_11
+        //#if MC==1_20_01 || MC==1_21_08 || MC==1_21_11
         //$$ try (var history = OutlineTemporalStabilizer.begin(minecraft, mainTarget)) {
         //#endif
         if (GlowCaptureManager.ownsSequentialSharedMaskFrame()) {
@@ -415,7 +415,7 @@ public final class GlowComposite {
             return;
         }
         compositeCaptured(minecraft, mainTarget, GlowCaptureManager.getActiveStates(), null);
-        //#if MC==1_21_08 || MC==1_21_11
+        //#if MC==1_20_01 || MC==1_21_08 || MC==1_21_11
         //$$ }
         //#endif
     }
@@ -1165,15 +1165,15 @@ public final class GlowComposite {
     //#else
     //$$     RenderSystem.setProjectionMatrix(new org.joml.Matrix4f().setOrtho(0.0f, (float) w, (float) h, 0.0f, -1000.0f, 3000.0f), VertexSorting.ORTHOGRAPHIC_Z);
     //#endif
-    //$$     RenderSystem.getModelViewStack().pushMatrix();
-    //$$     RenderSystem.getModelViewStack().identity();
+    //$$     cn.spectra.gallium.glowoutline.capture.LegacyModelView.push();
+    //$$     cn.spectra.gallium.glowoutline.capture.LegacyModelView.identity();
     //$$     boolean drawn = false;
     //$$     try {
     //$$         LegacyFullscreenQuad.draw(w, h);
     //$$         drawn = true;
     //$$     } finally {
     //$$         if (sparse) LegacySparseGlow.end(mainTarget, drawn);
-    //$$         RenderSystem.getModelViewStack().popMatrix();
+    //$$         cn.spectra.gallium.glowoutline.capture.LegacyModelView.pop();
     //$$         RenderSystem.restoreProjectionMatrix();
     //$$         RenderSystem.defaultBlendFunc();
     //$$         RenderSystem.disableBlend();

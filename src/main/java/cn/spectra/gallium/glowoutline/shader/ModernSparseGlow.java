@@ -46,7 +46,7 @@ final class ModernSparseGlow implements AutoCloseable {
     //#if MC>=1_21_09
     private static final Identifier SHADER = Identifier.fromNamespaceAndPath("gallium", "internal/bounded_glow_alpha");
     //#else
-    //$$ private static final ResourceLocation SHADER = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "internal/bounded_glow_alpha");
+    //$$ private static final ResourceLocation SHADER = cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", "internal/bounded_glow_alpha");
     //#endif
     private static RenderPipeline alphaPipeline;
     //#if MC>=1_21_06

@@ -352,7 +352,7 @@ public final class DepthMinPoolPipeline {
 //$$             Identifier.fromNamespaceAndPath("gallium", "internal/depth_minpool");
 //#else
 //$$     private static final ResourceLocation SHADER_ID =
-//$$             net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "internal/depth_minpool");
+//$$             cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", "internal/depth_minpool");
 //#endif
 //$$
 //$$     private static final String VERTEX_SHADER = """

@@ -299,7 +299,7 @@ public final class NativeGlowInstances implements AutoCloseable {
             //#if MC>=1_21_09
             var shader = Identifier.fromNamespaceAndPath("gallium", "internal/instanced_glow/" + variant + name);
             //#else
-            //$$ var shader = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "internal/instanced_glow/" + variant + name);
+            //$$ var shader = cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", "internal/instanced_glow/" + variant + name);
             //#endif
             var info = RenderPipeline.builder().withLocation("pipeline/gallium_instances/" + variant + name)
                     .withVertexShader(shader).withFragmentShader(shader)

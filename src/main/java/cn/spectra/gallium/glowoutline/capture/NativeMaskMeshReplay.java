@@ -131,7 +131,7 @@ public final class NativeMaskMeshReplay {
         try {
             for (int i = 0; i < count; i++) {
                 Entry entry = entries[i];
-                RenderSystem.getModelViewStack().set(entry.modelView);
+                cn.spectra.gallium.glowoutline.capture.LegacyModelView.set(entry.modelView);
                 RenderSystem.setProjectionMatrix(entry.projection, entry.projectionType);
                 try { entry.type.draw(entry.mesh); }
                 finally { restoreNativeLayers(RenderSystem.getModelViewStack()); }
@@ -139,7 +139,7 @@ public final class NativeMaskMeshReplay {
         } finally {
             drawingNative = false;
             try { RenderSystem.setProjectionMatrix(savedProjection, savedProjectionType); }
-            finally { RenderSystem.getModelViewStack().set(savedNativeModelView); }
+            finally { cn.spectra.gallium.glowoutline.capture.LegacyModelView.set(savedNativeModelView); }
         }
     }
 

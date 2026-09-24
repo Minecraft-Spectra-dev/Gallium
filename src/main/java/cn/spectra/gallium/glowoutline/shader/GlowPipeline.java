@@ -106,8 +106,8 @@ public final class GlowPipeline {
     //$$         int variant = worldLocationCounter++;
     //$$         var builder = RenderPipeline.builder()
     //$$                 .withLocation((preview ? "pipeline/gallium_preview/" : "pipeline/gallium_glow/") + shaderName + "_" + variant)
-    //$$                 .withVertexShader(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(shaderName)))
-    //$$                 .withFragmentShader(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(shaderName)))
+    //$$                 .withVertexShader(cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", WorldGlowShader.path(shaderName)))
+    //$$                 .withFragmentShader(cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", WorldGlowShader.path(shaderName)))
     //$$                 .withSampler("DiffuseSampler")
     //$$                 .withSampler("MaskSampler")
     //$$                 .withSampler("MaskDepthSampler")
@@ -186,8 +186,8 @@ public final class GlowPipeline {
                     .withVertexShader(Identifier.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
                     .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
                     //#else
-                    //$$ .withVertexShader(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
-                    //$$ .withFragmentShader(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
+                    //$$ .withVertexShader(cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", WorldGlowShader.path(name)))
+                    //$$ .withFragmentShader(cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", WorldGlowShader.path(name)))
                     //#endif
                     .withSampler("DiffuseSampler")
                     .withSampler("MaskSampler")
@@ -341,7 +341,7 @@ public final class GlowPipeline {
 //$$     // fragment threw) where vertex still gets unwound.
 //$$     private static CompiledShaderProgram compileProgram(ItemEffectConfig cfg) {
 //$$         String shaderName = cfg.shader();
-//$$         ResourceLocation shaderId = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "core/" + shaderName);
+//$$         ResourceLocation shaderId = cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", "core/" + shaderName);
 //$$         try (CompiledShader vertex = compileShader(shaderId, CompiledShader.Type.VERTEX);
 //$$              CompiledShader fragment = compileShader(shaderId, CompiledShader.Type.FRAGMENT)) {
 //$$             CompiledShaderProgram program = CompiledShaderProgram.link(vertex, fragment, DefaultVertexFormat.BLIT_SCREEN);
@@ -361,7 +361,7 @@ public final class GlowPipeline {
 //$$     }
 //$$
 //$$     private static CompiledShader compileShader(ResourceLocation shaderId, CompiledShader.Type type) throws Exception {
-//$$         ResourceLocation fileId = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(shaderId.getNamespace(),
+//$$         ResourceLocation fileId = cn.spectra.gallium.glowoutline.LegacyResourceIds.create(shaderId.getNamespace(),
 //$$                 "shaders/" + shaderId.getPath() + (type == CompiledShader.Type.VERTEX ? ".vsh" : ".fsh"));
 //$$         Resource resource = Minecraft.getInstance().getResourceManager().getResourceOrThrow(fileId);
 //$$         try (Reader reader = resource.openAsReader()) {
@@ -387,7 +387,7 @@ public final class GlowPipeline {
 //$$                     if (quoted) {
 //$$                         importId = base.withPath(p -> FileUtil.normalizeResourcePath(p + path));
 //$$                     } else {
-//$$                         importId = net.minecraft.resources.ResourceLocation.parse(path).withPrefix("shaders/include/");
+//$$                         importId = cn.spectra.gallium.glowoutline.LegacyResourceIds.parse(path).withPrefix("shaders/include/");
 //$$                     }
 //$$                 } catch (ResourceLocationException e) {
 //$$                     return "#error " + e.getMessage();

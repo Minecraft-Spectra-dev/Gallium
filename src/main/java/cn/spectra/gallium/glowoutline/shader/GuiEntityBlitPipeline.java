@@ -26,7 +26,7 @@ public final class GuiEntityBlitPipeline {
                     //#if MC>=1_21_09
                     .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", "core/internal/entity_preview_blit_gui"))
                     //#else
-                    //$$ .withFragmentShader(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "core/internal/entity_preview_blit_gui"))
+                    //$$ .withFragmentShader(cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", "core/internal/entity_preview_blit_gui"))
                     //#endif
                     //#if MC>=1_26_00
                     .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT_PREMULTIPLIED_ALPHA))

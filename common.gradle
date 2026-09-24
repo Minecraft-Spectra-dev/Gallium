@@ -42,6 +42,19 @@ if (mcVersion >= 1_26_00) {
     JAVA_COMPATIBILITY = JavaVersion.VERSION_1_8
 }
 
+// Loom can upgrade the old graphics libraries when Gradle runs on a newer JDK.
+// Sodium 0.5.13 requires Minecraft 1.20.1's original LWJGL, including its natives.
+if (mcVersion == 1_20_01) {
+    configurations.configureEach {
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == 'org.lwjgl') {
+                details.useVersion '3.3.1'
+                details.because 'Minecraft 1.20.1 / Sodium 0.5.13 runtime compatibility'
+            }
+        }
+    }
+}
+
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     if (!unobfuscated) {
@@ -266,6 +279,7 @@ boolean disableSrForClient = project.mod_loader == 'fabric'
         && (srRunOverride == null ? !srMainlineMinecraft : srRunOverride == 'false')
 
 loom {
+    if (mcVersion == 1_20_01) accessWidenerPath = file('src/main/resources/gallium.accesswidener')
     runConfigs.configureEach {
         ideConfigGenerated = true
         runDir '../../run'

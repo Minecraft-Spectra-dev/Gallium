@@ -32,7 +32,7 @@ public final class NativeMaskSeed {
     //#if MC>=1_21_11
     private static final Identifier SHADER = Identifier.fromNamespaceAndPath("gallium", "internal/native_mask_seed");
     //#else
-    //$$ private static final ResourceLocation SHADER = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "internal/native_mask_seed");
+    //$$ private static final ResourceLocation SHADER = cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", "internal/native_mask_seed");
     //#endif
     private static final String VERTEX = """
             #version 430

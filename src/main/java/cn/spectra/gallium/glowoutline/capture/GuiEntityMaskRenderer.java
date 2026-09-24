@@ -37,7 +37,7 @@ final class GuiEntityMaskRenderer {
             //$$ var projection = new Matrix4f(RenderSystem.getProjectionMatrix());
             //$$ var projectionType = RenderSystem.getProjectionType();
             //#endif
-            RenderSystem.getModelViewStack().pushMatrix();
+            cn.spectra.gallium.glowoutline.capture.LegacyModelView.push();
             try {
                 //#if MC>=1_21_06
                 RenderSystem.outputColorTextureOverride = mask.getColorTextureView();
@@ -46,7 +46,7 @@ final class GuiEntityMaskRenderer {
                 //#else
                 //$$ RenderSystem.setProjectionMatrix(state.capturedProjectionMatrix4f, state.capturedProjectionType);
                 //#endif
-                RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
+                cn.spectra.gallium.glowoutline.capture.LegacyModelView.set(state.capturedModelViewMatrix);
                 //#if MC>=1_21_09
                 //#if MC>=1_26_02
                 //$$ state.captureDispatcher.renderAllFeatures(state.captureStorage);
@@ -64,7 +64,7 @@ final class GuiEntityMaskRenderer {
                 //#endif
                 //#endif
             } finally {
-                RenderSystem.getModelViewStack().popMatrix();
+                cn.spectra.gallium.glowoutline.capture.LegacyModelView.pop();
                 RenderSystem.setProjectionMatrix(projection, projectionType);
                 //#if MC>=1_21_06
                 RenderSystem.outputColorTextureOverride = oldColor;
@@ -82,7 +82,7 @@ final class GuiEntityMaskRenderer {
             //#else
             //$$ var projectionType = RenderSystem.getVertexSorting();
             //#endif
-            //$$ RenderSystem.getModelViewStack().pushMatrix();
+            //$$ cn.spectra.gallium.glowoutline.capture.LegacyModelView.push();
             //$$ try {
             //$$     mask.setClearColor(0, 0, 0, 0);
             //#if MC>=1_21_02
@@ -93,10 +93,10 @@ final class GuiEntityMaskRenderer {
             //$$     mask.copyDepthFrom(scene);
             //$$     mask.bindWrite(true);
             //$$     RenderSystem.setProjectionMatrix(state.capturedProjectionMatrix4f, state.capturedProjectionType);
-            //$$     RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
+            //$$     cn.spectra.gallium.glowoutline.capture.LegacyModelView.set(state.capturedModelViewMatrix);
             //$$     state.customBufferSource.flushToTarget(mask);
             //$$ } finally {
-            //$$     RenderSystem.getModelViewStack().popMatrix();
+            //$$     cn.spectra.gallium.glowoutline.capture.LegacyModelView.pop();
             //$$     RenderSystem.setProjectionMatrix(projection, projectionType);
             //$$     com.mojang.blaze3d.platform.GlStateManager._glBindFramebuffer(36008, readFramebuffer);
             //$$     com.mojang.blaze3d.platform.GlStateManager._glBindFramebuffer(36009, drawFramebuffer);

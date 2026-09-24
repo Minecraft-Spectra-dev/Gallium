@@ -43,8 +43,8 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
     public static final Identifier RELOAD_ID = Identifier.fromNamespaceAndPath("gallium", "item_effects");
     private static final Identifier RESOURCE_PATH = Identifier.fromNamespaceAndPath("gallium", "item_effects.json");
     //#else
-    //$$ public static final ResourceLocation RELOAD_ID = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "item_effects");
-    //$$ private static final ResourceLocation RESOURCE_PATH = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "item_effects.json");
+    //$$ public static final ResourceLocation RELOAD_ID = cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", "item_effects");
+    //$$ private static final ResourceLocation RESOURCE_PATH = cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", "item_effects.json");
     //#endif
 
     private static volatile List<ItemEffectRule> rules = List.of();
@@ -401,7 +401,7 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
     //#else
     //$$ private static ResourceLocation tryParseId(String raw, int ruleIndex, String kind) {
     //$$     try {
-    //$$         return net.minecraft.resources.ResourceLocation.parse(raw);
+    //$$         return cn.spectra.gallium.glowoutline.LegacyResourceIds.parse(raw);
     //$$     } catch (ResourceLocationException e) {
     //$$         Gallium.LOGGER.warn("item_effects rule[{}]: invalid {} id '{}': {}", ruleIndex, kind, raw, e.getMessage());
     //$$         return null;

@@ -22,7 +22,7 @@ final class OriginalGlowBundles {
                 //#if MC>=1_21_09
                 var resource = resources.getResource(Identifier.parse(path));
                 //#else
-                //$$ var resource = resources.getResource(net.minecraft.resources.ResourceLocation.parse(path));
+                //$$ var resource = resources.getResource(cn.spectra.gallium.glowoutline.LegacyResourceIds.parse(path));
                 //#endif
                 if (resource.isEmpty()) return null;
                 try (var reader = resource.get().openAsReader()) {

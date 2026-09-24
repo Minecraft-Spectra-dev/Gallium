@@ -186,7 +186,7 @@ public final class GlowCaptureManager {
     }
 
     public static void beginFrame() {
-        //#if MC==1_21_08 || MC==1_21_11
+        //#if MC==1_20_01 || MC==1_21_08 || MC==1_21_11
         //$$ cn.spectra.gallium.glowoutline.shader.OutlineTemporalStabilizer.beginFrame();
         //#endif
         int retainedStates = poolRetention.nextFrame(activeStates.size());
@@ -582,7 +582,7 @@ public final class GlowCaptureManager {
     static boolean sharedMaskFitsBudget(int width, int height) {
         return captureReservationsFit(CAPTURE_TARGET_BUDGET_BYTES,
                 estimatedCaptureTargetBytes(width, height, CAPTURE_TARGET_BYTES_PER_PIXEL), sourceGridMaskBytesReserved
-                //#if MC==1_21_08 || MC==1_21_11
+                //#if MC==1_20_01 || MC==1_21_08 || MC==1_21_11
                 //$$ , cn.spectra.gallium.glowoutline.shader.OutlineTemporalStabilizer.reservedBytes()
                 //#endif
         );
@@ -602,7 +602,7 @@ public final class GlowCaptureManager {
         //#endif
         return captureReservationsFit(CAPTURE_TARGET_BUDGET_BYTES, shared, atlas, fallback, pooled,
                 sourceGridMaskBytesReserved, captureTargetBytesReserved, visibility
-                //#if MC==1_21_08 || MC==1_21_11
+                //#if MC==1_20_01 || MC==1_21_08 || MC==1_21_11
                 //$$ , cn.spectra.gallium.glowoutline.shader.OutlineTemporalStabilizer.reservedBytes()
                 //#endif
         );
@@ -613,7 +613,7 @@ public final class GlowCaptureManager {
         return captureReservationsFit(CAPTURE_TARGET_BUDGET_BYTES, shared, shared,
                 cn.spectra.gallium.glowoutline.shader.GlowComposite.storedMaskReservedBytes(),
                 sourceGridMaskBytesReserved, captureTargetBytesReserved
-                //#if MC==1_21_08 || MC==1_21_11
+                //#if MC==1_20_01 || MC==1_21_08 || MC==1_21_11
                 //$$ , cn.spectra.gallium.glowoutline.shader.OutlineTemporalStabilizer.reservedBytes()
                 //#endif
                 //#if MC==1_21_11 || MC==1_26_01
@@ -652,6 +652,17 @@ public final class GlowCaptureManager {
     //$$ }
     //#endif
 
+    //#if MC==1_20_01
+    //$$ public static boolean temporalHistoryFitsBudget(int width,int height,long historyBytes) {
+    //$$     if(width<=0 || height<=0 || width>(1<<29) || height>(1<<29))return false;
+    //$$     int aw=width==1?1:Integer.highestOneBit(width-1)<<1;
+    //$$     int ah=height==1?1:Integer.highestOneBit(height-1)<<1;
+    //$$     long shared=estimatedCaptureTargetBytes(width,height,CAPTURE_TARGET_BYTES_PER_PIXEL);
+    //$$     long atlas=estimatedCaptureTargetBytes(aw,ah,CAPTURE_TARGET_BYTES_PER_PIXEL);
+    //$$     return captureReservationsFit(CAPTURE_TARGET_BUDGET_BYTES,shared,shared,atlas,
+    //$$         sourceGridMaskBytesReserved,captureTargetBytesReserved,historyBytes);
+    //$$ }
+    //#endif
 
     /** Checks simultaneously retained targets without overflowing their aggregate. */
     static boolean captureReservationsFit(long budget, long... reservations) {
@@ -2213,9 +2224,9 @@ public final class GlowCaptureManager {
                 RenderSystem.setProjectionMatrix(maskProjectionSlice, state.capturedProjectionType);
             }
             if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
-                RenderSystem.getModelViewStack().pushMatrix();
+                cn.spectra.gallium.glowoutline.capture.LegacyModelView.push();
                 modelViewPushed = true;
-                RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
+                cn.spectra.gallium.glowoutline.capture.LegacyModelView.set(state.capturedModelViewMatrix);
             }
             // The transition precedes dispatcher entry even if dispatch/flush throws.
             if (lateReplay && !state.beginStreamingReplayAttempt()) return;
@@ -2287,7 +2298,7 @@ public final class GlowCaptureManager {
                     if (sourceGridReplay) NativeMaskMeshReplay.abort();
                     //#endif
                 } finally {
-                    if (modelViewPushed) RenderSystem.getModelViewStack().popMatrix();
+                    if (modelViewPushed) cn.spectra.gallium.glowoutline.capture.LegacyModelView.pop();
                 }
             } finally {
                 try {
@@ -2487,9 +2498,9 @@ public final class GlowCaptureManager {
         //$$         RenderSystem.setProjectionMatrix(maskProjection, state.capturedProjectionType);
         //$$     }
         //$$     if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
-        //$$         RenderSystem.getModelViewStack().pushMatrix();
+        //$$         cn.spectra.gallium.glowoutline.capture.LegacyModelView.push();
         //$$         modelViewPushed = true;
-        //$$         RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
+        //$$         cn.spectra.gallium.glowoutline.capture.LegacyModelView.set(state.capturedModelViewMatrix);
         //$$     }
         //$$     if (sequentialReplay && !state.beginOrdinaryReplayAttempt(SuperResolutionCompat.currentFrameEpoch())) return;
         //$$     // The encoder has fully cleared color, or the native reuse path restored it.
@@ -2501,7 +2512,7 @@ public final class GlowCaptureManager {
         //$$     if (restoredSharedMask) ModernMaskReuse.finish(state.maskBounds);
         //$$ } finally {
         //$$     if (projectionBackedUp) RenderSystem.restoreProjectionMatrix();
-        //$$     if (modelViewPushed) RenderSystem.getModelViewStack().popMatrix();
+        //$$     if (modelViewPushed) cn.spectra.gallium.glowoutline.capture.LegacyModelView.pop();
         //$$ }
         //$$
         //$$ state.lastMaskScaleX = maskScaleX;
@@ -2562,9 +2573,17 @@ public final class GlowCaptureManager {
         //$$         && !state.firstPerson ? sourceProjection : packProjection;
         //$$ boolean exactTemporalReplay = usesExactTemporalReplay(state, packProjection)
         //$$         && irisSnapshot.shaderBypassEnabled();
-
+        //#if MC==1_20_01
+        //$$ // Jittered scene depth must not punch holes into an unjittered item mask.
+        //$$ // This verified program checks source and destination scene depth itself.
+        //$$ boolean deferredWorldOcclusion = !state.firstPerson && IrisCompat.isShaderActive()
+        //$$         && cn.spectra.gallium.glowoutline.shader.OriginalGlowParameters
+        //$$         .supportsDeferredSceneOcclusion(state.config);
+        //#endif
         //$$ boolean clearDepthForReplay = (shaderCompatDisplayReplay && !state.firstPerson)
-
+        //#if MC==1_20_01
+        //$$         || deferredWorldOcclusion
+        //#endif
         //$$         || (outputSpacePrepare && state.firstPerson)
         //$$         || (!outputSpacePrepare && clearsMaskDepthForReplay(
         //$$         state.firstPerson, IrisCompat.isShaderActive(), exactTemporalReplay));
@@ -2658,7 +2677,9 @@ public final class GlowCaptureManager {
         //$$ float scaleY = packProjection.scaleY();
         //$$ float zBias = IrisCompat.isShaderActive() && !state.firstPerson
         //$$         && !shaderCompatDisplayReplay && !exactTemporalReplay
-
+        //#if MC==1_20_01
+        //$$         && !deferredWorldOcclusion
+        //#endif
         //$$         ? IRIS_TAA_Z_BIAS : 0.0f;
         //$$ boolean changesProjection = scaleX != 1.0f || scaleY != 1.0f
         //$$         || jitterX != 0.0f || jitterY != 0.0f || zBias != 0.0f;
@@ -2693,9 +2714,9 @@ public final class GlowCaptureManager {
         //$$ boolean backedUpProj = false;
         //$$ try {
         //$$     if (shouldPushModelView) {
-        //$$         RenderSystem.getModelViewStack().pushMatrix();
+        //$$         cn.spectra.gallium.glowoutline.capture.LegacyModelView.push();
         //$$         pushedModelView = true;
-        //$$         RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
+        //$$         cn.spectra.gallium.glowoutline.capture.LegacyModelView.set(state.capturedModelViewMatrix);
         //$$         // 1.21.1 (and possibly other pre-1.21.5 versions): RenderSystem's
         //$$         // modelViewMatrix is a SEPARATE cached field that is only synced from
         //$$         // the PoseStack during shader.apply(). flushToTarget ->
@@ -2722,7 +2743,7 @@ public final class GlowCaptureManager {
         //$$     }
         //$$ } finally {
         //$$     if (backedUpProj) RenderSystem.restoreProjectionMatrix();
-        //$$     if (pushedModelView) RenderSystem.getModelViewStack().popMatrix();
+        //$$     if (pushedModelView) cn.spectra.gallium.glowoutline.capture.LegacyModelView.pop();
         //$$ }
         //$$ state.lastMaskScaleX = maskScaleX;
         //$$ state.lastMaskScaleY = maskScaleY;

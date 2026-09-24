@@ -27,6 +27,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: |
+            17
             21
             25
           distribution: 'microsoft'
@@ -39,7 +40,7 @@ jobs:
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
       - name: build
-        run: ./gradlew build -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_21_X64,JAVA_HOME_25_X64
+        run: ./gradlew build -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64,JAVA_HOME_21_X64,JAVA_HOME_25_X64
       - name: capture build artifacts
         uses: actions/upload-artifact@v4
         with:

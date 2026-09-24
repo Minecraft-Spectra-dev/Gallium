@@ -156,7 +156,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$                 anchorPack, rewrite, world);
 //$$         try {
             //#if NEOFORGE
-//$$             return new ShaderInstance(provider, net.minecraft.resources.ResourceLocation.parse(jsonName), format);
+//$$             return new ShaderInstance(provider, cn.spectra.gallium.glowoutline.LegacyResourceIds.parse(jsonName), format);
             //#else
 //$$             return new ShaderInstance(provider, jsonName, format);
             //#endif
@@ -168,11 +168,11 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$
 //$$     // shaders/core/<x> in the minecraft namespace — ShaderInstance hardcodes that namespace.
 //$$     private static ResourceLocation coreLoc(String tail) {
-//$$         return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("minecraft", "shaders/core/" + tail);
+//$$         return cn.spectra.gallium.glowoutline.LegacyResourceIds.create("minecraft", "shaders/core/" + tail);
 //$$     }
 //$$
 //$$     private static ResourceLocation galliumLoc(String tail) {
-//$$         return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "shaders/" + tail);
+//$$         return cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", "shaders/" + tail);
 //$$     }
 //$$
 //$$     private static String sanitize(String shader) {
@@ -231,7 +231,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$             out.append(source, last, m.start());
 //$$             String ns = m.group(1);
 //$$             String path = m.group(2);
-//$$             ResourceLocation includeLoc = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ns, "shaders/include/" + path);
+//$$             ResourceLocation includeLoc = cn.spectra.gallium.glowoutline.LegacyResourceIds.create(ns, "shaders/include/" + path);
 //$$             Optional<Resource> res = rm.getResource(includeLoc);
 //$$             if (res.isPresent()) {
 //$$                 try (Reader r = res.get().openAsReader()) {

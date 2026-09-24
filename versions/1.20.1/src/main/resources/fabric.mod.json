@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "${id}",
+  "version": "${version}",
+  "name": "${name}",
+  "description": "${description}",
+  "authors": [
+    "ChooseC",
+    "G2F1SH"
+  ],
+  "contact": {
+    "homepage": "${homepage}",
+    "sources": "${sources}"
+  },
+  "license": "${license}",
+  "icon": "assets/gallium/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "cn.spectra.gallium.platform.fabric.FabricEntrypoint"
+    ],
+    "sodium:config_api_user": [
+      "cn.spectra.gallium.compat.sodium.GalliumSodiumConfig"
+    ]
+  },
+  "mixins": [
+    "gallium-glowoutline.mixins.json"
+  ],
+  "depends": {
+    "minecraft": "${minecraft_dependency}",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "sodium": "*",
+    "super_resolution": "*"
+  },
+  "accessWidener": "gallium.accesswidener"
+}

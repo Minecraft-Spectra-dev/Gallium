@@ -58,7 +58,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$         // ADDITIVE blend: overlapping outlines compound rather than alpha-blending.
 //$$         var builder = RenderPipeline.builder(RenderPipelines.GUI_TEXTURED_SNIPPET)
 //$$                 .withLocation(location)
-//$$                 .withFragmentShader(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", shaderPath))
+//$$                 .withFragmentShader(cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", shaderPath))
 //$$                 .withBlend(BlendFunction.ADDITIVE)
 //$$                 .withCull(false)
 //$$                 // Disable depth test so the additive outline always paints, regardless of
@@ -159,8 +159,8 @@ public final class GuiImmediateGlowPipeline {
 //$$     // program.close()) and on failure (vertex compiled but fragment compile/link threw —
 //$$     // vertex still gets closed on unwind). See GlowPipeline.compileProgram for full notes.
 //$$     private static CompiledShaderProgram compileProgram(ItemEffectConfig cfg) {
-//$$         ResourceLocation vertexId = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("minecraft", "core/position_tex_color");
-//$$         ResourceLocation fragmentId = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "core/" + cfg.shader() + "_gui");
+//$$         ResourceLocation vertexId = cn.spectra.gallium.glowoutline.LegacyResourceIds.create("minecraft", "core/position_tex_color");
+//$$         ResourceLocation fragmentId = cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", "core/" + cfg.shader() + "_gui");
 //$$         try (CompiledShader vertex = compileShader(vertexId, CompiledShader.Type.VERTEX);
 //$$              CompiledShader fragment = compileShader(fragmentId, CompiledShader.Type.FRAGMENT)) {
 //$$             CompiledShaderProgram program = CompiledShaderProgram.link(vertex, fragment, DefaultVertexFormat.POSITION_TEX_COLOR);
@@ -174,7 +174,7 @@ public final class GuiImmediateGlowPipeline {
 //$$     }
 //$$
 //$$     private static CompiledShader compileShader(ResourceLocation shaderId, CompiledShader.Type type) throws Exception {
-//$$         ResourceLocation fileId = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(shaderId.getNamespace(),
+//$$         ResourceLocation fileId = cn.spectra.gallium.glowoutline.LegacyResourceIds.create(shaderId.getNamespace(),
 //$$                 "shaders/" + shaderId.getPath() + (type == CompiledShader.Type.VERTEX ? ".vsh" : ".fsh"));
 //$$         Resource resource = Minecraft.getInstance().getResourceManager().getResourceOrThrow(fileId);
 //$$         try (Reader reader = resource.openAsReader()) {
@@ -197,7 +197,7 @@ public final class GuiImmediateGlowPipeline {
 //$$                 try {
 //$$                     ResourceLocation importId = quoted
 //$$                             ? base.withPath(p -> FileUtil.normalizeResourcePath(p + path))
-//$$                             : net.minecraft.resources.ResourceLocation.parse(path).withPrefix("shaders/include/");
+//$$                             : cn.spectra.gallium.glowoutline.LegacyResourceIds.parse(path).withPrefix("shaders/include/");
 //$$                     try (Reader reader = Minecraft.getInstance().getResourceManager().getResourceOrThrow(importId).openAsReader()) {
 //$$                         return CharStreams.toString(reader);
 //$$                     }

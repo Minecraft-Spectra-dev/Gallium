@@ -114,8 +114,8 @@ package cn.spectra.gallium.glowoutline.capture;
 //$$         RenderSystem.setProjectionMatrix(new Matrix4f().setOrtho(0, main.width, main.height, 0, -1, 1),
 //$$                 com.mojang.blaze3d.vertex.VertexSorting.ORTHOGRAPHIC_Z);
 //#endif
-//$$         RenderSystem.getModelViewStack().pushMatrix();
-//$$         RenderSystem.getModelViewStack().identity();
+//$$         cn.spectra.gallium.glowoutline.capture.LegacyModelView.push();
+//$$         cn.spectra.gallium.glowoutline.capture.LegacyModelView.identity();
 //$$         float x0 = region.x(), x1 = x0 + region.width();
 //$$         float y0 = main.height - region.y() - region.height(), y1 = y0 + region.height();
 //$$         try {
@@ -123,7 +123,7 @@ package cn.spectra.gallium.glowoutline.capture;
 //$$             if (blitPipeline == null) {
 //$$                 blitPipeline = RenderPipeline.builder(RenderPipelines.GUI_TEXTURED_SNIPPET)
 //$$                         .withLocation("gallium/entity_preview_blit")
-//$$                         .withFragmentShader(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+//$$                         .withFragmentShader(cn.spectra.gallium.glowoutline.LegacyResourceIds.create(
 //$$                                 "gallium", "core/internal/entity_preview_blit_gui_legacy"))
 //$$                         .withBlend(new BlendFunction(com.mojang.blaze3d.platform.SourceFactor.ONE,
 //$$                                 com.mojang.blaze3d.platform.DestFactor.ONE_MINUS_SRC_ALPHA,
@@ -194,7 +194,7 @@ package cn.spectra.gallium.glowoutline.capture;
 //$$             }
 //#endif
 //$$         } finally {
-//$$             RenderSystem.getModelViewStack().popMatrix();
+//$$             cn.spectra.gallium.glowoutline.capture.LegacyModelView.pop();
 //$$             RenderSystem.setProjectionMatrix(projection, projectionType);
 //$$         }
 //$$     }

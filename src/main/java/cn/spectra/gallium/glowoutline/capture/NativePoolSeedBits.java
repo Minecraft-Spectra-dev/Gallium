@@ -26,8 +26,8 @@ final class NativePoolSeedBits {
     private static final Identifier SOURCE = Identifier.fromNamespaceAndPath("gallium", "internal/depth_minpool");
     private static final Identifier SHADER = Identifier.fromNamespaceAndPath("gallium", "internal/pooled_seed_bits");
     //#else
-    //$$ private static final ResourceLocation SOURCE = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "internal/depth_minpool");
-    //$$ private static final ResourceLocation SHADER = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "internal/pooled_seed_bits");
+    //$$ private static final ResourceLocation SOURCE = cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", "internal/depth_minpool");
+    //$$ private static final ResourceLocation SHADER = cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", "internal/pooled_seed_bits");
     //#endif
     private static RenderPipeline pipeline;
     private static String vertex, fragment;

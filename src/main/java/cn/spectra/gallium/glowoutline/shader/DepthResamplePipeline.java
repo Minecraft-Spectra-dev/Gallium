@@ -207,7 +207,7 @@ public final class DepthResamplePipeline {
 //$$             Identifier.fromNamespaceAndPath("gallium", "internal/depth_resample");
 //#else
 //$$     private static final ResourceLocation SHADER_ID =
-//$$             net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "internal/depth_resample");
+//$$             cn.spectra.gallium.glowoutline.LegacyResourceIds.create("gallium", "internal/depth_resample");
 //#endif
 //$$     private static final String VERTEX_SHADER = """
 //$$             #version 150

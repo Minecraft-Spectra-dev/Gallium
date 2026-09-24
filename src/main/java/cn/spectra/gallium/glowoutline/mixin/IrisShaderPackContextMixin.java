@@ -29,7 +29,11 @@ public abstract class IrisShaderPackContextMixin implements SrShaderPackContext 
 
     /** Save the caller-provided list before Iris appends its internal replacement defines. */
     @Inject(
+            //#if MC>1_20_01
             method = "<init>(Ljava/nio/file/Path;Ljava/util/Map;Lcom/google/common/collect/ImmutableList;Z)V",
+            //#else
+            //$$ method = "<init>(Ljava/nio/file/Path;Ljava/util/Map;Lcom/google/common/collect/ImmutableList;)V",
+            //#endif
             // Mixin 0.8.7 forbids a normal constructor HEAD callback before super(). CTOR_HEAD
             // selects the first safe point after delegate + field initializers but before Iris's
             // constructor body replaces environmentDefines.
@@ -40,7 +44,9 @@ public abstract class IrisShaderPackContextMixin implements SrShaderPackContext 
             Path shadersPath,
             Map<?, ?> changedConfigs,
             ImmutableList<?> environmentDefines,
+            //#if MC>1_20_01
             boolean zip,
+            //#endif
             CallbackInfo ci) {
         gallium$shadersPath = SrShaderPackResolver.normalizeShadersPath(shadersPath);
         gallium$environmentDefines =
@@ -48,11 +54,15 @@ public abstract class IrisShaderPackContextMixin implements SrShaderPackContext 
     }
 
     /**
-     * Every supported Iris build funnels its three-argument constructor through this overload.
+     * Iris 1.7.6 uses three arguments; newer Iris builds delegate to the four-argument overload.
      * {@code require=0} leaves Gallium loadable if a future Iris changes the constructor ABI.
      */
     @Inject(
+            //#if MC>1_20_01
             method = "<init>(Ljava/nio/file/Path;Ljava/util/Map;Lcom/google/common/collect/ImmutableList;Z)V",
+            //#else
+            //$$ method = "<init>(Ljava/nio/file/Path;Ljava/util/Map;Lcom/google/common/collect/ImmutableList;)V",
+            //#endif
             at = @At("RETURN"),
             require = 0,
             remap = false)
@@ -60,7 +70,9 @@ public abstract class IrisShaderPackContextMixin implements SrShaderPackContext 
             Path shadersPath,
             Map<?, ?> changedConfigs,
             ImmutableList<?> environmentDefines,
+            //#if MC>1_20_01
             boolean zip,
+            //#endif
         CallbackInfo ci) {
         if (gallium$contextCaptured) return;
 

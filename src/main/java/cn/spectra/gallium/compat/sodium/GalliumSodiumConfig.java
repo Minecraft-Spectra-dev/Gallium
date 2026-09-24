@@ -41,7 +41,7 @@ public class GalliumSodiumConfig implements ConfigEntryPoint {
                 //#if MC>=1_21_09
                 .setIcon(Identifier.parse("gallium:textures/gui/sodium_icon.png"))
                 //#else
-                //$$ .setIcon(net.minecraft.resources.ResourceLocation.parse("gallium:textures/gui/sodium_icon.png"))
+                //$$ .setIcon(cn.spectra.gallium.glowoutline.LegacyResourceIds.parse("gallium:textures/gui/sodium_icon.png"))
                 //#endif
                 .addPage(createGlowPage(configBuilder));
     }
@@ -66,7 +66,7 @@ public class GalliumSodiumConfig implements ConfigEntryPoint {
         //#if MC>=1_21_09
         return builder.createBooleanOption(Identifier.parse("gallium:" + toggle.sodiumId()))
         //#else
-        //$$ return builder.createBooleanOption(net.minecraft.resources.ResourceLocation.parse("gallium:" + toggle.sodiumId()))
+        //$$ return builder.createBooleanOption(cn.spectra.gallium.glowoutline.LegacyResourceIds.parse("gallium:" + toggle.sodiumId()))
         //#endif
                 .setName(Component.translatable("gallium.options." + toggle.sodiumId()))
                 .setTooltip(Component.translatable("gallium.options." + toggle.sodiumId() + ".tooltip"))
