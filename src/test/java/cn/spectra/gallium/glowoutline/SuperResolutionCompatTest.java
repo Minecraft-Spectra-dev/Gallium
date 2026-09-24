@@ -17,7 +17,7 @@ class SuperResolutionCompatTest {
         assertTrue(SuperResolutionCompat.usesInlineHandCompletion(CaptureMode.B, false));
         assertFalse(SuperResolutionCompat.usesInlineHandCompletion(CaptureMode.C, false));
         assertFalse(SuperResolutionCompat.usesInlineHandCompletion(CaptureMode.UNKNOWN, true));
-        //#if MC==1_21_11 || MC==1_26_01
+        //#if MC==1_21_01 || MC==1_21_11 || MC>=1_26_01
         assertTrue(SuperResolutionCompat.usesInlineHandCompletion(CaptureMode.C, true));
         //#else
         //$$ assertFalse(SuperResolutionCompat.usesInlineHandCompletion(CaptureMode.C, true));
@@ -32,11 +32,7 @@ class SuperResolutionCompatTest {
         //$$ assertFalse(SuperResolutionCompat.hasMainlineRenderingLayer());
         //#endif
 
-        //#if MC==1_21_11 || MC==1_26_01 || MC==1_26_02
         assertTrue(SuperResolutionCompat.usesDeferredFinalHookBuild());
-        //#else
-        //$$ assertFalse(SuperResolutionCompat.usesDeferredFinalHookBuild());
-        //#endif
     }
 
     @Test

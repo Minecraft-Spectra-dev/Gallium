@@ -57,9 +57,9 @@ public class GameRendererMixin {
         SuperResolutionCompat.afterInlineHandRender();
     }
 
-    //#if MC>=1_21_11
+    //#if MC>=1_21_06
     /**
-     * One final call point shared by 1.21.11, 26.1 and 26.2. It is after renderLevel, Iris color
+     * Final call point shared by the GpuTextureView renderers from 1.21.6 onward. It is after renderLevel, Iris color
      * conversion, vanilla entity outlines and post effects, but immediately before SR's priority
      * 900 hudless/presentation capture at FogRenderer.endFrame. Since this mixin has priority
      * 1000, Gallium's callback is injected ahead of SR's callback at the same instruction.

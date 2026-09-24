@@ -154,7 +154,14 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
 
     @Override
     public <S> void submitModel(Model<? super S> model, S state, PoseStack p, RenderType rt, int l, int ov, int tc, @Nullable TextureAtlasSprite sp, int oc, ModelFeatureRenderer.@Nullable CrumblingOverlay cr) {
-        delegate().submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr);
+        //#if MC==1_21_11 || MC==1_26_01
+        try (var source = NativeSourceCoverage.beginSubmission(DuplicatingSubmitNodeStorage.this.state)) {
+            delegate().submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr);
+            if (source != null) source.complete();
+        }
+        //#else
+        //$$ delegate().submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr);
+        //#endif
         OrderedSubmitNodeCollector capture = captureCollector(0);
         if (capture != null) {
             capture.submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr);
@@ -165,7 +172,17 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
     //#if MC<1_26_02
     @Override
     public void submitModelPart(ModelPart mp, PoseStack p, RenderType rt, int l, int ov, @Nullable TextureAtlasSprite sp, boolean sh, boolean hf, int tc, ModelFeatureRenderer.@Nullable CrumblingOverlay cr, int oc) {
+        //#if MC==1_21_11
+        //$$ try(var source=NativeSourceCoverage.beginSubmission(DuplicatingSubmitNodeStorage.this.state)){
+        //$$     delegate().submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc);
+        //$$     if(source!=null)source.complete();
+        //$$ }
+        //#else
         delegate().submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc);
+        //#if MC==1_26_01
+        NativeSourceCoverage.reject(DuplicatingSubmitNodeStorage.this.state);
+        //#endif
+        //#endif
         OrderedSubmitNodeCollector capture = captureCollector(0);
         if (capture != null) {
             capture.submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc);
@@ -178,6 +195,9 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
     @Override
     public void submitBlockModel(PoseStack p, RenderType rt, List<BlockStateModelPart> parts, int[] tints, int l, int ov, int oc) {
         delegate().submitBlockModel(p, rt, parts, tints, l, ov, oc);
+        //#if MC==1_21_11 || MC==1_26_01
+        NativeSourceCoverage.reject(DuplicatingSubmitNodeStorage.this.state);
+        //#endif
         OrderedSubmitNodeCollector capture = captureCollector(0);
         if (capture != null) {
             capture.submitBlockModel(p, rt, parts, tints, l, ov, oc);
@@ -187,7 +207,14 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
 
     @Override
     public void submitItem(PoseStack p, ItemDisplayContext dc, int l, int ov, int oc, int[] tints, List<BakedQuad> quads, ItemStackRenderState.FoilType ft) {
-        delegate().submitItem(p, dc, l, ov, oc, tints, quads, ft);
+        //#if MC==1_21_11 || MC==1_26_01
+        try (var source = NativeSourceCoverage.beginSubmission(DuplicatingSubmitNodeStorage.this.state)) {
+            delegate().submitItem(p, dc, l, ov, oc, tints, quads, ft);
+            if (source != null) source.complete();
+        }
+        //#else
+        //$$ delegate().submitItem(p, dc, l, ov, oc, tints, quads, ft);
+        //#endif
         OrderedSubmitNodeCollector capture = captureCollector(0);
         if (capture != null) {
             capture.submitItem(p, dc, l, ov, oc, tints, quads, ft);
@@ -198,6 +225,9 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
     //$$ @Override
     //$$ public void submitBlockModel(PoseStack p, RenderType rt, BlockStateModel m, float fr, float fg, float fb, int l, int ov, int oc) {
     //$$     delegate().submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc);
+        //#if MC==1_21_11
+        //$$ NativeSourceCoverage.reject(DuplicatingSubmitNodeStorage.this.state);
+        //#endif
     //$$     OrderedSubmitNodeCollector capture = captureCollector(0);
     //$$     if (capture != null) {
     //$$         capture.submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc);
@@ -207,7 +237,14 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
     //$$
     //$$ @Override
     //$$ public void submitItem(PoseStack p, ItemDisplayContext dc, int l, int ov, int oc, int[] tints, List<BakedQuad> quads, RenderType rt, ItemStackRenderState.FoilType ft) {
-    //$$     delegate().submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
+        //#if MC==1_21_11
+        //$$ try (var source = NativeSourceCoverage.beginSubmission(DuplicatingSubmitNodeStorage.this.state)) {
+        //$$     delegate().submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
+        //$$     if (source != null) source.complete();
+        //$$ }
+        //#else
+        //$$ delegate().submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
+        //#endif
     //$$     OrderedSubmitNodeCollector capture = captureCollector(0);
     //$$     if (capture != null) {
     //$$         capture.submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
@@ -219,6 +256,9 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
     @Override
     public void submitCustomGeometry(PoseStack p, RenderType rt, CustomGeometryRenderer cgr) {
         delegate().submitCustomGeometry(p, rt, cgr);
+        //#if MC==1_21_11 || MC==1_26_01
+        NativeSourceCoverage.reject(DuplicatingSubmitNodeStorage.this.state);
+        //#endif
         OrderedSubmitNodeCollector capture = captureCollector(0);
         if (capture != null) {
             capture.submitCustomGeometry(p, rt, cgr);
@@ -270,7 +310,14 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
 
         @Override
         public <S> void submitModel(Model<? super S> model, S state, PoseStack p, RenderType rt, int l, int ov, int tc, @Nullable TextureAtlasSprite sp, int oc, ModelFeatureRenderer.@Nullable CrumblingOverlay cr) {
-            delegate().submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr);
+            //#if MC==1_21_11 || MC==1_26_01
+            try (var source = NativeSourceCoverage.beginSubmission(DuplicatingSubmitNodeStorage.this.state)) {
+                delegate().submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr);
+                if (source != null) source.complete();
+            }
+            //#else
+            //$$ delegate().submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr);
+            //#endif
             OrderedSubmitNodeCollector capture = captureCollector(order);
             if (capture != null) {
                 capture.submitModel(model, state, p, rt, l, ov, tc, sp, oc, cr);
@@ -281,7 +328,17 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
         //#if MC<1_26_02
         @Override
         public void submitModelPart(ModelPart mp, PoseStack p, RenderType rt, int l, int ov, @Nullable TextureAtlasSprite sp, boolean sh, boolean hf, int tc, ModelFeatureRenderer.@Nullable CrumblingOverlay cr, int oc) {
+            //#if MC==1_21_11
+            //$$ try(var source=NativeSourceCoverage.beginSubmission(DuplicatingSubmitNodeStorage.this.state)){
+            //$$     delegate().submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc);
+            //$$     if(source!=null)source.complete();
+            //$$ }
+            //#else
             delegate().submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc);
+            //#if MC==1_26_01
+            NativeSourceCoverage.reject(DuplicatingSubmitNodeStorage.this.state);
+            //#endif
+            //#endif
             OrderedSubmitNodeCollector capture = captureCollector(order);
             if (capture != null) {
                 capture.submitModelPart(mp, p, rt, l, ov, sp, sh, hf, tc, cr, oc);
@@ -294,6 +351,9 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
         @Override
         public void submitBlockModel(PoseStack p, RenderType rt, List<BlockStateModelPart> parts, int[] tints, int l, int ov, int oc) {
             delegate().submitBlockModel(p, rt, parts, tints, l, ov, oc);
+            //#if MC==1_21_11 || MC==1_26_01
+            NativeSourceCoverage.reject(DuplicatingSubmitNodeStorage.this.state);
+            //#endif
             OrderedSubmitNodeCollector capture = captureCollector(order);
             if (capture != null) {
                 capture.submitBlockModel(p, rt, parts, tints, l, ov, oc);
@@ -303,7 +363,14 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
 
         @Override
         public void submitItem(PoseStack p, ItemDisplayContext dc, int l, int ov, int oc, int[] tints, List<BakedQuad> quads, ItemStackRenderState.FoilType ft) {
-            delegate().submitItem(p, dc, l, ov, oc, tints, quads, ft);
+            //#if MC==1_21_11 || MC==1_26_01
+            try (var source = NativeSourceCoverage.beginSubmission(DuplicatingSubmitNodeStorage.this.state)) {
+                delegate().submitItem(p, dc, l, ov, oc, tints, quads, ft);
+                if (source != null) source.complete();
+            }
+            //#else
+            //$$ delegate().submitItem(p, dc, l, ov, oc, tints, quads, ft);
+            //#endif
             OrderedSubmitNodeCollector capture = captureCollector(order);
             if (capture != null) {
                 capture.submitItem(p, dc, l, ov, oc, tints, quads, ft);
@@ -314,6 +381,9 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
         //$$ @Override
         //$$ public void submitBlockModel(PoseStack p, RenderType rt, BlockStateModel m, float fr, float fg, float fb, int l, int ov, int oc) {
         //$$     delegate().submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc);
+            //#if MC==1_21_11
+            //$$ NativeSourceCoverage.reject(DuplicatingSubmitNodeStorage.this.state);
+            //#endif
         //$$     OrderedSubmitNodeCollector capture = captureCollector(order);
         //$$     if (capture != null) {
         //$$         capture.submitBlockModel(p, rt, m, fr, fg, fb, l, ov, oc);
@@ -323,7 +393,14 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
         //$$
         //$$ @Override
         //$$ public void submitItem(PoseStack p, ItemDisplayContext dc, int l, int ov, int oc, int[] tints, List<BakedQuad> quads, RenderType rt, ItemStackRenderState.FoilType ft) {
-        //$$     delegate().submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
+            //#if MC==1_21_11
+            //$$ try (var source = NativeSourceCoverage.beginSubmission(DuplicatingSubmitNodeStorage.this.state)) {
+            //$$     delegate().submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
+            //$$     if (source != null) source.complete();
+            //$$ }
+            //#else
+            //$$ delegate().submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
+            //#endif
         //$$     OrderedSubmitNodeCollector capture = captureCollector(order);
         //$$     if (capture != null) {
         //$$         capture.submitItem(p, dc, l, ov, oc, tints, quads, rt, ft);
@@ -335,6 +412,9 @@ public final class DuplicatingSubmitNodeStorage extends SubmitNodeStorage {
         @Override
         public void submitCustomGeometry(PoseStack p, RenderType rt, CustomGeometryRenderer cgr) {
             delegate().submitCustomGeometry(p, rt, cgr);
+            //#if MC==1_21_11 || MC==1_26_01
+            NativeSourceCoverage.reject(DuplicatingSubmitNodeStorage.this.state);
+            //#endif
             OrderedSubmitNodeCollector capture = captureCollector(order);
             if (capture != null) {
                 capture.submitCustomGeometry(p, rt, cgr);

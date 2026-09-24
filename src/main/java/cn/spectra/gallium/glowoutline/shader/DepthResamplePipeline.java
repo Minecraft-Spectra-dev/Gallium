@@ -207,7 +207,7 @@ public final class DepthResamplePipeline {
 //$$             Identifier.fromNamespaceAndPath("gallium", "internal/depth_resample");
 //#else
 //$$     private static final ResourceLocation SHADER_ID =
-//$$             ResourceLocation.fromNamespaceAndPath("gallium", "internal/depth_resample");
+//$$             net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "internal/depth_resample");
 //#endif
 //$$     private static final String VERTEX_SHADER = """
 //$$             #version 150
@@ -275,6 +275,10 @@ public final class DepthResamplePipeline {
 //$$                 destDepth, OptionalDouble.of(1.0))) {
 //$$             pass.setPipeline(pipeline);
 //$$             SamplerHelper.bindClampToEdge(pass, "Source", source, FilterMode.NEAREST);
+//#if MC<1_21_09
+//$$             // This backend binds a VAO even for gl_VertexID-only shaders.
+//$$             pass.setVertexBuffer(0, RenderSystem.getQuadVertexBuffer());
+//#endif
 //$$             pass.draw(0, 3);
 //$$             return true;
 //$$         } catch (RuntimeException e) {

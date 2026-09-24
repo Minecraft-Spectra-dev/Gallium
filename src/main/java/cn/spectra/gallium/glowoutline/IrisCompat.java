@@ -3,6 +3,7 @@ package cn.spectra.gallium.glowoutline;
 import cn.spectra.gallium.Gallium;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.function.BooleanSupplier;
@@ -38,6 +39,14 @@ public final class IrisCompat {
     private static final boolean BYPASS_FIELD_OK;
     private static final boolean EXTENDED_FIELD_OK;
     private static final boolean BYPASS_AVAILABLE;
+    private static volatile boolean legacyBypassHookObserved;
+    private static final ThreadLocal<Boolean> legacyBypassRequested = new ThreadLocal<>();
+
+    /** Called only by the injected legacy Iris shader-selection gate. */
+    public static boolean legacyShaderBypassForCall() {
+        legacyBypassHookObserved = true;
+        return Boolean.TRUE.equals(legacyBypassRequested.get());
+    }
 
     /** Iris's {@code ImmediateState.skipExtension} ThreadLocal, captured once (the field is
      *  {@code final}). When set {@code true} around a {@code new BufferBuilder(...)}, Iris's
@@ -50,10 +59,14 @@ public final class IrisCompat {
 
     public record BypassSnapshot(boolean bypass, boolean renderWithExtended,
                                   boolean bypassValid, boolean extendedValid,
-                                  boolean shaderBypassEnabled) {
+                                  boolean shaderBypassEnabled, boolean legacyValid, boolean legacyRequested) {
+        public BypassSnapshot(boolean bypass, boolean renderWithExtended, boolean bypassValid,
+                              boolean extendedValid, boolean shaderBypassEnabled) {
+            this(bypass, renderWithExtended, bypassValid, extendedValid, shaderBypassEnabled, false, false);
+        }
         public static final BypassSnapshot NONE =
                 new BypassSnapshot(false, false, false, false, false);
-        public boolean valid() { return bypassValid || extendedValid; }
+        public boolean valid() { return bypassValid || extendedValid || legacyValid; }
     }
 
     static {
@@ -189,6 +202,65 @@ public final class IrisCompat {
         return IS_SHADOW_PASS.getAsBoolean();
     }
 
+    /** Iris tracks target ownership separately from OpenGL's framebuffer binding. */
+    public record TargetBindingSnapshot(Object pipeline, boolean mainBound) {
+        private static final TargetBindingSnapshot NONE = new TargetBindingSnapshot(null, false);
+    }
+
+    public static TargetBindingSnapshot captureTargetBinding() {
+        if (!IRIS_LOADED || LegacyTargetBinding.GET_PIPELINE == null
+                || LegacyTargetBinding.SET_MAIN_BOUND == null) return TargetBindingSnapshot.NONE;
+        try {
+            Object pipeline = (Object) LegacyTargetBinding.GET_PIPELINE.invokeExact();
+            if (!LegacyTargetBinding.PIPELINE_TYPE.isInstance(pipeline)) return TargetBindingSnapshot.NONE;
+            boolean bound = (boolean) LegacyTargetBinding.GET_MAIN_BOUND.invokeExact(pipeline);
+            return new TargetBindingSnapshot(pipeline, bound);
+        } catch (Throwable ignored) {
+            return TargetBindingSnapshot.NONE;
+        }
+    }
+
+    public static void restoreTargetBinding(TargetBindingSnapshot snapshot) {
+        if (snapshot == null || snapshot.pipeline() == null) return;
+        try {
+            LegacyTargetBinding.SET_MAIN_BOUND.invokeExact(snapshot.pipeline(), snapshot.mainBound());
+        } catch (Throwable ignored) {}
+    }
+
+    // Resolve lazily: only the legacy TextureTarget allocation guard uses this Iris internal.
+    // Fetch the current pipeline on every capture so a shader reload cannot leave a stale owner.
+    private static final class LegacyTargetBinding {
+        private static final Class<?> PIPELINE_TYPE;
+        private static final MethodHandle GET_PIPELINE, GET_MAIN_BOUND, SET_MAIN_BOUND;
+        static {
+            Class<?> pipelineType = null;
+            MethodHandle pipeline = null, get = null, set = null;
+            try {
+                Class<?> iris = Class.forName("net.irisshaders.iris.Iris");
+                Class<?> manager = Class.forName("net.irisshaders.iris.pipeline.PipelineManager");
+                pipelineType = Class.forName("net.irisshaders.iris.pipeline.IrisRenderingPipeline");
+                MethodHandles.Lookup lookup = MethodHandles.lookup();
+                MethodHandle current = MethodHandles.filterReturnValue(
+                        lookup.unreflect(iris.getMethod("getPipelineManager")),
+                        lookup.unreflect(manager.getMethod("getPipelineNullable")))
+                        .asType(MethodType.methodType(Object.class));
+                Field mainBound = pipelineType.getDeclaredField("isMainBound");
+                mainBound.setAccessible(true);
+                get = lookup.unreflectGetter(mainBound)
+                        .asType(MethodType.methodType(boolean.class, Object.class));
+                set = lookup.unreflect(pipelineType.getMethod("setIsMainBound", boolean.class))
+                        .asType(MethodType.methodType(void.class, Object.class, boolean.class));
+                pipeline = current;
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError error) {
+                Gallium.LOGGER.debug("Iris target-binding snapshot unavailable: {}", error.toString());
+            }
+            PIPELINE_TYPE = pipelineType;
+            GET_PIPELINE = pipeline;
+            GET_MAIN_BOUND = get;
+            SET_MAIN_BOUND = set;
+        }
+    }
+
     /**
      * Effective internal-resolution scale applied by the active shader pack to its world/hand
      * passes, using declared metadata or source-proven viewport transforms.
@@ -225,18 +297,20 @@ public final class IrisCompat {
     }
 
     /**
-     * Whether the Iris shader-selection bypass field was found. Exact replay never clears its
+     * Whether the bypass field or the observed legacy shader-selection hook is available.
+     * Exact replay never clears its
      * mask depth based on the extended-vertex-format field alone: that field fixes vertex layout,
      * but does not guarantee that Iris leaves the vanilla replay pipeline selected.
      */
     public static boolean isShaderBypassAvailable() {
-        return BYPASS_FIELD_OK;
+        return BYPASS_FIELD_OK || legacyBypassHookObserved;
     }
 
     public static BypassSnapshot setBypass(boolean value) {
-        if (!BYPASS_AVAILABLE) return BypassSnapshot.NONE;
+        if (!BYPASS_AVAILABLE && !legacyBypassHookObserved) return BypassSnapshot.NONE;
         boolean bypassValid = false, extendedValid = false, shaderBypassEnabled = false;
         boolean oldBypass = false, oldExtended = false;
+        boolean legacyValid = false, oldLegacy = false;
         try {
             if (BYPASS_FIELD_OK) {
                 oldBypass = (boolean) BYPASS_GETTER.invokeExact();
@@ -247,21 +321,31 @@ public final class IrisCompat {
                 BYPASS_SETTER.invokeExact(value);
                 shaderBypassEnabled = value;
             }
+            if (!BYPASS_FIELD_OK && legacyBypassHookObserved) {
+                oldLegacy = Boolean.TRUE.equals(legacyBypassRequested.get());
+                legacyValid = true;
+                if (value) legacyBypassRequested.set(true); else legacyBypassRequested.remove();
+                shaderBypassEnabled = value;
+            }
             if (EXTENDED_FIELD_OK) {
                 oldExtended = (boolean) EXTENDED_GETTER.invokeExact();
                 extendedValid = true;
                 if (value) EXTENDED_SETTER.invokeExact(false);
             }
             return new BypassSnapshot(oldBypass, oldExtended, bypassValid, extendedValid,
-                    shaderBypassEnabled);
+                    shaderBypassEnabled, legacyValid, oldLegacy);
         } catch (Throwable t) {
             return new BypassSnapshot(oldBypass, oldExtended, bypassValid, extendedValid,
-                    shaderBypassEnabled);
+                    shaderBypassEnabled, legacyValid, oldLegacy);
         }
     }
 
     public static void restoreBypass(BypassSnapshot snapshot) {
         if (snapshot == null || !snapshot.valid()) return;
+        if (snapshot.legacyValid()) {
+            if (snapshot.legacyRequested()) legacyBypassRequested.set(true);
+            else legacyBypassRequested.remove();
+        }
         try {
             if (snapshot.bypassValid() && BYPASS_FIELD_OK) BYPASS_SETTER.invokeExact(snapshot.bypass());
             if (snapshot.extendedValid() && EXTENDED_FIELD_OK) EXTENDED_SETTER.invokeExact(snapshot.renderWithExtended());

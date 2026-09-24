@@ -49,11 +49,10 @@ import java.util.List;
 
 public final class GlowCaptureManager {
 
-    /** Hard cap on world capture states. Each holds a screen-sized TextureTarget (~8MB at 1080p)
-     *  plus RenderBuffers; the cap stops a brief peak (many on-screen items + armor) from pinning
-     *  VRAM forever. Peaks beyond the cap still render — surplus states are freed at the next
-     *  {@link #beginFrame()} (alloc/destroy round-trip, but VRAM stays bounded). */
-    private static final int POOL_HIGH_WATER_MARK = 32;
+    /** Shared frames retain geometry, not a full-screen attachment per state. */
+    private static final CapturePoolRetention poolRetention = new CapturePoolRetention(32, 256, 120);
+    /** Most armor pieces need only a few KiB; ByteBufferBuilder grows for larger meshes. */
+    static final int INITIAL_CAPTURE_VERTEX_BYTES = 4096;
 
     /**
      * Hard upper bound for pooled per-state mask attachments: RGBA8 mask color plus 32-bit depth
@@ -71,33 +70,8 @@ public final class GlowCaptureManager {
     private static final List<GlowCaptureState> pool = new ArrayList<>();
     private static final List<GlowCaptureState> activeStates = new ArrayList<>();
     //#if MC==1_21_11 || MC==1_26_01
-    private static final MaskRenderContext<TextureTarget> sharedMask = new MaskRenderContext<>(
-            (width, height) -> estimatedCaptureTargetBytes(width, height, CAPTURE_TARGET_BYTES_PER_PIXEL)
-                    <= CAPTURE_TARGET_BUDGET_BYTES - sourceGridMaskBytesReserved
-                    ? new TextureTarget("GlowSharedNativeMask", width, height, true) : null,
-            TextureTarget::destroyBuffers);
-    private static boolean sharedOwnershipActive;
     private static @Nullable TextureTarget sourceGridMaskTarget;
     private static @Nullable TextureTarget nativeCoverageMaskTarget;
-    private static final SequentialMaskPolicy sequentialMaskPolicy = new SequentialMaskPolicy();
-    private static @Nullable SequentialFrameEvidence sequentialFrame;
-
-    /** Ordinary final replay uses actual native attachments, never SR's event-derived extents. */
-    private record SequentialFrameEvidence(long epoch, RenderTarget output,
-            GpuTexture color, GpuTexture depth, int width, int height,
-            boolean iris, boolean srShaderRuntime, OpenGlMaskOrdering.Stamp backend) {
-        boolean current() {
-            return epoch == SuperResolutionCompat.currentFrameEpoch() && backend.current()
-                    && Minecraft.getInstance().getMainRenderTarget() == output
-                    && output.width == width && output.height == height
-                    && output.getColorTexture() == color && output.getDepthTexture() == depth
-                    && !color.isClosed() && !depth.isClosed()
-                    && renderTargetSizeMatches(output, width, height)
-                    && IrisCompat.isShaderActive() == iris
-                    && IrisCompat.isActiveSrRuntime() == srShaderRuntime
-                    && !SuperResolutionCompat.isHackConfigured();
-        }
-    }
     //#endif
 
     private static @Nullable GlowCaptureState currentCapture;
@@ -212,6 +186,10 @@ public final class GlowCaptureManager {
     }
 
     public static void beginFrame() {
+        //#if MC==1_21_08 || MC==1_21_11
+        //$$ cn.spectra.gallium.glowoutline.shader.OutlineTemporalStabilizer.beginFrame();
+        //#endif
+        int retainedStates = poolRetention.nextFrame(activeStates.size());
         for (GlowCaptureState state : activeStates) {
             state.resetFrame();
         }
@@ -220,37 +198,26 @@ public final class GlowCaptureManager {
         currentCapture = null;
         suppressDepth = 0;
         //#if MC==1_21_11 || MC==1_26_01
-        Minecraft minecraft = Minecraft.getInstance();
         if (!SuperResolutionCompat.isHackConfigured()) releaseSourceGridMask();
-        RenderTarget nativeOutput = minecraft != null ? minecraft.getMainRenderTarget() : null;
-        boolean sequential = SuperResolutionCompat.sequentialFinalHookAvailable()
-                && !SuperResolutionCompat.isHackConfigured()
-                && nativeOutput != null
-                && nativeOutput.getDepthTexture() != null
-                && renderTargetSizeMatches(nativeOutput, nativeOutput.width, nativeOutput.height);
-        var ordinaryBackend = sequential ? OpenGlMaskOrdering.observe() : null;
-        sequentialMaskPolicy.beginFrame(SuperResolutionCompat.currentFrameEpoch(), ordinaryBackend != null);
-        sequentialFrame = sequentialMaskPolicy.selected() ? new SequentialFrameEvidence(
-                SuperResolutionCompat.currentFrameEpoch(), nativeOutput,
-                nativeOutput.getColorTexture(), nativeOutput.getDepthTexture(),
-                nativeOutput.width, nativeOutput.height, IrisCompat.isShaderActive(),
-                IrisCompat.isActiveSrRuntime(), ordinaryBackend) : null;
-        if (ownsAnySharedMaskFrame()) {
-            if (!sharedOwnershipActive) releaseAllPerStateTargets();
-            sharedOwnershipActive = true;
-            if (sequentialFrame != null) {
-                sharedMask.beginFrame(sequentialFrame.epoch(), sequentialFrame.width(), sequentialFrame.height(),
-                        sequentialFrame.backend(), sequentialFrame.backend()::current);
-            } else {
-                var frame = SuperResolutionCompat.currentStreamingFramePlan();
-                var backend = SuperResolutionCompat.sharedMaskBackend();
-                sharedMask.beginFrame(frame.epoch(), frame.expectedDisplayWidth(), frame.expectedDisplayHeight(),
-                        backend, backend::current);
-            }
-        } else if (sharedOwnershipActive) {
-            sharedMask.close();
-            sharedOwnershipActive = false;
-        }
+        //#endif
+        SharedMaskFrame.beginFrame();
+        //#if MC<1_21_05
+        //$$ var legacyStorageOutput=SharedMaskFrame.currentMainTarget();
+        //$$ cn.spectra.gallium.glowoutline.shader.GlowComposite.beginLegacyStoredMaskFrame(SharedMaskFrame.selected(),
+        //$$         legacyStorageOutput==null?0:legacyStorageOutput.width,legacyStorageOutput==null?0:legacyStorageOutput.height);
+        //#endif
+        //#if MC>=1_21_06 && MC<1_26_02
+        var storageOutput = SharedMaskFrame.currentMainTarget();
+        //#if MC==1_21_08 || MC==1_21_10 || MC==1_21_11 || MC==1_26_01
+        SharedPooledDepth.beginFrame(SharedMaskFrame.selected(),
+                storageOutput == null ? 0 : storageOutput.width, storageOutput == null ? 0 : storageOutput.height);
+        //#endif
+        cn.spectra.gallium.glowoutline.shader.GlowComposite.beginStoredMaskFrame(
+                SharedMaskFrame.selected(), storageOutput == null ? 0 : storageOutput.width,
+                storageOutput == null ? 0 : storageOutput.height);
+        //#endif
+        //#if MC==1_21_11 || MC==1_26_01
+        cn.spectra.gallium.glowoutline.shader.NativeWorldVisibility.beginFrame();
         //#endif
         sceneDepthCaptured = false;
         worldCaptureSeenThisFrame = false;
@@ -260,8 +227,8 @@ public final class GlowCaptureManager {
         srDisplaySceneDepthSourceGeneration = -1L;
         //#endif
 
-        if (pool.size() > POOL_HIGH_WATER_MARK) {
-            for (int i = pool.size() - 1; i >= POOL_HIGH_WATER_MARK; i--) {
+        if (pool.size() > retainedStates) {
+            for (int i = pool.size() - 1; i >= retainedStates; i--) {
                 releaseState(pool.remove(i));
             }
         }
@@ -296,6 +263,8 @@ public final class GlowCaptureManager {
         if (state == null) return;
         //#if MC>=1_26_02
         //$$ state.captureStorageClean = false;
+        //#elseif MC>=1_21_09
+        state.markCaptureStorageDirty();
         //#endif
     }
 
@@ -429,12 +398,15 @@ public final class GlowCaptureManager {
         return false;
     }
 
-    //#if MC==1_21_11 || MC==1_26_01
+    //#if MC==1_21_11 || MC>=1_26_01
     /** Resource preparation only. No dispatcher/geometry consumption occurs before plan creation. */
     public static boolean prepareLateReplayTargets(List<GlowCaptureState> states, int width, int height) {
         if (states.stream().anyMatch(state -> !state.firstPerson)
                 && (!prepareSuperResolutionSceneDepth(width, height)
-                || !prepareSourceGridMask(width, height))) return false;
+                //#if MC==1_21_11 || MC==1_26_01
+                || !prepareSourceGridMask(width, height)
+                //#endif
+                )) return false;
         for (GlowCaptureState state : states) {
             if (!SuperResolutionCompat.ownsSharedMaskFrame()) {
                 if (!reserveCaptureTarget(state, width, height)) return false;
@@ -457,7 +429,7 @@ public final class GlowCaptureManager {
     public static boolean lateReplayPayloadReady(GlowCaptureState state) {
         return state.capturedThisFrame && !state.maskPreparedThisFrame && !state.compositedThisFrame
                 && !state.hasOpenCaptureScope() && state.config != null
-                && state.captureDispatcher != null && sharedCaptureBuffers != null
+                && replayPayloadAvailable(state)
                 && state.capturedProjectionMatrix4fValid && state.capturedProjectionType != null
                 && state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null
                 && state.lateReplayProjection != null;
@@ -481,65 +453,9 @@ public final class GlowCaptureManager {
         state.superResolutionPrepared = true;
         return true;
     }
+    //#endif
 
-    public static MaskRenderContext<TextureTarget>.Frame prepareSharedMaskFrame() {
-        return sharedMask.prepareFrame();
-    }
-
-    public static void abortSharedMaskFrame() {
-        sharedMask.close();
-    }
-
-    public static MaskRenderContext<TextureTarget>.Frame prepareSequentialMaskFrame() {
-        return sequentialFrameCurrent() ? sharedMask.prepareOrdinaryFrame() : null;
-    }
-
-    public static boolean consumeSequentialFrame() {
-        return sequentialMaskPolicy.consume(SuperResolutionCompat.currentFrameEpoch());
-    }
-
-    public static boolean sequentialFrameCurrent() {
-        return sequentialFrame != null && sequentialMaskPolicy.selected() && sequentialFrame.current()
-                && SuperResolutionCompat.sequentialFinalHookCurrent()
-                && (!sequentialFrame.srShaderRuntime() || SuperResolutionCompat.hasCompletedShaderCompatDispatch(
-                        sequentialFrame.width(), sequentialFrame.height()));
-    }
-
-    public static void abortSequentialFrame() {
-        sequentialMaskPolicy.fail(SuperResolutionCompat.currentFrameEpoch());
-        try {
-            abortPendingPayloads();
-        } finally {
-            sharedMask.close();
-        }
-    }
-
-    /** Strict payload readiness without requiring an independently owned texture. */
-    public static boolean sequentialPayloadReady(GlowCaptureState state) {
-        return ownsSequentialSharedMaskFrame() && sequentialFrame != null
-                && state.captureEpoch == sequentialFrame.epoch()
-                && state.capturedThisFrame && !state.compositedThisFrame && !state.maskPreparedThisFrame
-                && !state.hasPayloadReplayAttempted() && !state.hasOpenCaptureScope()
-                && state.streamingReplayPlan() == null && state.config != null && state.maskTarget == null
-                && (state.captureStage() == CaptureStage.CAPTURED || state.captureStage() == CaptureStage.ELIGIBLE)
-                && state.captureDispatcher != null && sharedCaptureBuffers != null
-                && state.capturedProjectionMatrix4fValid && state.capturedProjectionType != null
-                && state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null;
-    }
-
-    public static boolean sequentialCaptureMatches(GlowCaptureState state, int width, int height) {
-        return sequentialPayloadReady(state) && sequentialFrame.width() == width && sequentialFrame.height() == height;
-    }
-
-    public static boolean replaySequentialMask(GlowCaptureState state, Minecraft minecraft, TextureTarget mask) {
-        if (!sequentialFrameCurrent() || !sequentialPayloadReady(state)
-                || !lateReplayTargetMatches(mask, sequentialFrame.width(), sequentialFrame.height())) return false;
-        renderCapturedNodes(state, minecraft, false, mask);
-        if (!state.capturedThisFrame || !state.hasPayloadReplayAttempted()) return false;
-        state.maskPreparedThisFrame = true;
-        return true;
-    }
-
+    //#if MC==1_21_11 || MC==1_26_01
     /** Allocate two fixed scratch targets per extent, never per capture state or replay. */
     private static boolean prepareSourceGridMask(int outputWidth, int outputHeight) {
         if (!sceneDepthCaptured || sceneDepthTarget == null) return false;
@@ -590,6 +506,185 @@ public final class GlowCaptureManager {
     }
     //#endif
 
+    //#if MC==1_21_01
+    //$$ /** Legacy SR uses the same authoritative plans, with direct-GL targets and retained meshes. */
+    //$$ public static boolean prepareLateReplayTargets(List<GlowCaptureState> states, int width, int height) {
+    //$$     if (states.stream().anyMatch(state -> !state.firstPerson)
+    //$$             && (!sceneDepthCaptured || sceneDepthTarget == null)) return false;
+    //$$     for (var state : states) {
+    //$$         if (!SuperResolutionCompat.ownsSharedMaskFrame()) {
+    //$$             if (!reserveCaptureTarget(state, width, height)) return false;
+    //$$             try (var binding = new LegacyFramebufferBinding()) {
+    //$$                 if (state.maskTarget == null) state.maskTarget = new TextureTarget(width, height, true, Minecraft.ON_OSX);
+    //$$                 else if (!lateReplayTargetMatches(state.maskTarget, width, height)) state.maskTarget.resize(width, height, Minecraft.ON_OSX);
+    //$$             }
+    //$$             if (!lateReplayTargetMatches(state.maskTarget, width, height)) return false;
+    //$$         }
+    //$$         state.maskDepthPrepared = false;
+    //$$         state.maskDepthSnapshotGeneration = -1L;
+    //$$     }
+    //$$     return true;
+    //$$ }
+    //$$
+    //$$ public static boolean lateReplayTargetMatches(TextureTarget mask, int width, int height) {
+    //$$     return mask != null && width > 0 && height > 0 && mask.width == width && mask.height == height
+    //$$             && mask.getColorTextureId() != -1 && mask.getDepthTextureId() != -1;
+    //$$ }
+    //$$
+    //$$ public static boolean lateReplayPayloadReady(GlowCaptureState state) {
+    //$$     return state.capturedThisFrame && !state.maskPreparedThisFrame && !state.compositedThisFrame
+    //$$             && !state.hasOpenCaptureScope() && !state.hasPayloadReplayAttempted()
+    //$$             && state.config != null && state.customBufferSource != null
+    //$$             && state.capturedProjectionMatrix4fValid && state.capturedProjectionType != null
+    //$$             && state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null
+    //$$             && state.lateReplayProjection != null;
+    //$$ }
+    //$$
+    //$$ public static boolean replayScheduledMask(GlowCaptureState state, Minecraft minecraft, TextureTarget mask) {
+    //$$     var plan = state.streamingReplayPlan();
+    //$$     if (!SuperResolutionCompat.ownsLateReplayFrame() || plan == null
+    //$$             || plan.epoch() != SuperResolutionCompat.currentFrameEpoch()
+    //$$             || state.captureStage() != CaptureStage.SCHEDULED || !lateReplayPayloadReady(state)
+    //$$             || !lateReplayTargetMatches(mask, plan.outputWidth(), plan.outputHeight())
+    //$$             || (SuperResolutionCompat.ownsSharedMaskFrame() ? state.maskTarget != null : mask != state.maskTarget)
+    //$$             || (!state.firstPerson && (!sceneDepthCaptured || sceneDepthTarget == null
+    //$$             || plan.worldSnapshotGeneration() != sceneDepthGeneration))) return false;
+    //$$     renderCapturedNodes(state, minecraft, true, mask);
+    //$$     if (!state.capturedThisFrame || state.captureStage() != CaptureStage.REPLAY_ATTEMPTED) return false;
+    //$$     state.maskPreparedThisFrame = true;
+    //$$     state.superResolutionPrepared = true;
+    //$$     return true;
+    //$$ }
+    //$$
+    //#endif
+
+    /** Shared ownership and payload validation are the same on every Minecraft version. */
+    public static MaskRenderContext<TextureTarget>.Frame prepareSharedMaskFrame() {
+        return SharedMaskFrame.prepareStreaming();
+    }
+    public static void abortSharedMaskFrame() { SharedMaskFrame.abortStreaming(); }
+    public static MaskRenderContext<TextureTarget>.Frame prepareSequentialMaskFrame() {
+        return SharedMaskFrame.prepareOrdinary();
+    }
+    public static boolean consumeSequentialFrame() { return SharedMaskFrame.consume(); }
+    public static boolean sequentialFrameCurrent() { return SharedMaskFrame.current(); }
+    public static void abortSequentialFrame() { SharedMaskFrame.abortOrdinary(); }
+    public static boolean sequentialPayloadReady(GlowCaptureState state) { return SharedMaskFrame.payloadReady(state); }
+    public static boolean sequentialCaptureMatches(GlowCaptureState state, int width, int height) {
+        return SharedMaskFrame.captureMatches(state, width, height);
+    }
+    //#if MC==1_21_10 || MC==1_21_11 || MC==1_26_01
+    public static TextureTarget storedPooledMaskBase(GlowCaptureState state) {
+        return sceneDepthCaptured ? SharedPooledDepth.maskBase(state, sceneDepthTarget,
+                SuperResolutionCompat.currentFrameEpoch(), sceneDepthGeneration) : null;
+    }
+    //#endif
+    static boolean sharedMaskFitsBudget(int width, int height) {
+        return captureReservationsFit(CAPTURE_TARGET_BUDGET_BYTES,
+                estimatedCaptureTargetBytes(width, height, CAPTURE_TARGET_BYTES_PER_PIXEL), sourceGridMaskBytesReserved
+                //#if MC==1_21_08 || MC==1_21_11
+                //$$ , cn.spectra.gallium.glowoutline.shader.OutlineTemporalStabilizer.reservedBytes()
+                //#endif
+        );
+    }
+    public static boolean maskAtlasFitsBudget(int outputWidth, int outputHeight, int atlasWidth, int atlasHeight) {
+        long shared = estimatedCaptureTargetBytes(outputWidth, outputHeight, CAPTURE_TARGET_BYTES_PER_PIXEL);
+        long atlas = estimatedCaptureTargetBytes(atlasWidth, atlasHeight, CAPTURE_TARGET_BYTES_PER_PIXEL);
+        long fallback = 0L, pooled = 0L, visibility = 0L;
+        //#if MC<1_21_05 || MC>=1_21_06 && MC<1_26_01
+        //$$ fallback = shared;
+        //#endif
+        //#if MC==1_21_08 || MC==1_21_10 || MC==1_21_11 || MC==1_26_01
+        pooled = SharedPooledDepth.reservedBytes();
+        //#endif
+        //#if MC==1_21_11 || MC==1_26_01
+        visibility = cn.spectra.gallium.glowoutline.shader.NativeWorldVisibility.reservedBytes();
+        //#endif
+        return captureReservationsFit(CAPTURE_TARGET_BUDGET_BYTES, shared, atlas, fallback, pooled,
+                sourceGridMaskBytesReserved, captureTargetBytesReserved, visibility
+                //#if MC==1_21_08 || MC==1_21_11
+                //$$ , cn.spectra.gallium.glowoutline.shader.OutlineTemporalStabilizer.reservedBytes()
+                //#endif
+        );
+    }
+    //#if MC==1_21_08 || MC==1_21_10 || MC==1_21_11 || MC==1_26_01
+    static boolean pooledDepthFitsBudget(int width, int height) {
+        long shared = estimatedCaptureTargetBytes(width, height, CAPTURE_TARGET_BYTES_PER_PIXEL);
+        return captureReservationsFit(CAPTURE_TARGET_BUDGET_BYTES, shared, shared,
+                cn.spectra.gallium.glowoutline.shader.GlowComposite.storedMaskReservedBytes(),
+                sourceGridMaskBytesReserved, captureTargetBytesReserved
+                //#if MC==1_21_08 || MC==1_21_11
+                //$$ , cn.spectra.gallium.glowoutline.shader.OutlineTemporalStabilizer.reservedBytes()
+                //#endif
+                //#if MC==1_21_11 || MC==1_26_01
+                , cn.spectra.gallium.glowoutline.shader.NativeWorldVisibility.reservedBytes()
+                //#endif
+        );
+    }
+    //#endif
+    //#if MC==1_21_08
+    //$$ public static boolean temporalHistoryFitsBudget(int width, int height, long historyBytes) {
+    //$$     if(width<=0 || height<=0 || width>(1<<29) || height>(1<<29))return false;
+    //$$     int aw=width==1?1:Integer.highestOneBit(width-1)<<1;
+    //$$     int ah=height==1?1:Integer.highestOneBit(height-1)<<1;
+    //$$     long shared=estimatedCaptureTargetBytes(width,height,CAPTURE_TARGET_BYTES_PER_PIXEL);
+    //$$     long atlas=estimatedCaptureTargetBytes(aw,ah,CAPTURE_TARGET_BYTES_PER_PIXEL);
+    //$$     return captureReservationsFit(CAPTURE_TARGET_BUDGET_BYTES,shared,shared,atlas,
+    //$$             SharedPooledDepth.reservedBytes(),sourceGridMaskBytesReserved,captureTargetBytesReserved,historyBytes);
+    //$$ }
+    //#endif
+
+    //#if MC==1_21_11
+    //$$ public static boolean srStoredFallbackFitsBudget(int width,int height) {
+    //$$     long shared=estimatedCaptureTargetBytes(width,height,CAPTURE_TARGET_BYTES_PER_PIXEL);
+    //$$     return captureReservationsFit(CAPTURE_TARGET_BUDGET_BYTES,shared,shared,shared,
+    //$$         cn.spectra.gallium.glowoutline.shader.GlowComposite.storedMaskReservedBytes(),
+    //$$         sourceGridMaskBytesReserved,captureTargetBytesReserved,
+    //$$         cn.spectra.gallium.glowoutline.shader.NativeWorldVisibility.reservedBytes(),
+    //$$         cn.spectra.gallium.glowoutline.shader.OutlineTemporalStabilizer.reservedBytes());
+    //$$ }
+    //$$ public static boolean temporalHistoryFitsBudget(int width,int height,long historyBytes) {
+    //$$     long shared=estimatedCaptureTargetBytes(width,height,CAPTURE_TARGET_BYTES_PER_PIXEL);
+    //$$     return captureReservationsFit(CAPTURE_TARGET_BUDGET_BYTES,shared,shared,
+    //$$         cn.spectra.gallium.glowoutline.shader.GlowComposite.storedMaskReservedBytes(),
+    //$$         sourceGridMaskBytesReserved,captureTargetBytesReserved,
+    //$$         cn.spectra.gallium.glowoutline.shader.NativeWorldVisibility.reservedBytes(),historyBytes);
+    //$$ }
+    //#endif
+
+
+    /** Checks simultaneously retained targets without overflowing their aggregate. */
+    static boolean captureReservationsFit(long budget, long... reservations) {
+        if (budget < 0) return false;
+        for (long bytes : reservations) {
+            if (bytes < 0 || bytes > budget) return false;
+            budget -= bytes;
+        }
+        return true;
+    }
+
+    static boolean replayPayloadAvailable(GlowCaptureState state) {
+        //#if MC>=1_21_09
+        return state.captureDispatcher != null && sharedCaptureBuffers != null
+                //#if MC>=1_26_02
+                //$$ && state.captureStorage != null
+                //#endif
+                ;
+        //#else
+        //$$ return state.customBufferSource != null;
+        //#endif
+    }
+    public static boolean replaySequentialMask(GlowCaptureState state, Minecraft minecraft, TextureTarget mask) {
+        if (!sequentialFrameCurrent() || !sequentialPayloadReady(state) || !SharedMaskFrame.maskMatches(mask)) return false;
+        // Every borrow starts from the immutable scene snapshot, never the previous occupant's depth.
+        state.maskDepthPrepared = false;
+        state.maskDepthSnapshotGeneration = -1L;
+        renderCapturedNodes(state, minecraft, false, mask);
+        if (!state.capturedThisFrame || !state.hasPayloadReplayAttempted()) return false;
+        state.maskPreparedThisFrame = true;
+        return true;
+    }
+
     static boolean usesSourceGridReplay(boolean outputSpace, boolean firstPerson,
                                         int sourceWidth, int sourceHeight, int outputWidth, int outputHeight) {
         return outputSpace && !firstPerson && sourceWidth > 0 && sourceHeight > 0
@@ -597,13 +692,7 @@ public final class GlowCaptureManager {
                 && (sourceWidth < outputWidth || sourceHeight < outputHeight);
     }
 
-    public static boolean ownsSequentialSharedMaskFrame() {
-        //#if MC==1_21_11 || MC==1_26_01
-        return sequentialMaskPolicy.selected();
-        //#else
-        //$$ return false;
-        //#endif
-    }
+    public static boolean ownsSequentialSharedMaskFrame() { return SharedMaskFrame.selected(); }
 
     public static boolean ownsAnySharedMaskFrame() {
         return ownsSequentialSharedMaskFrame() || SuperResolutionCompat.ownsSharedMaskFrame();
@@ -706,7 +795,15 @@ public final class GlowCaptureManager {
     private static void releaseCaptureTargets(GlowCaptureState state) {
         long reserved = state.captureTargetBytesReserved;
         if (state.maskTarget != null) {
+            //#if MC<1_21_05
+            //$$ // Pool pruning runs at renderLevel HEAD, after vanilla bound its target.
+            //$$ // Legacy destroyBuffers unbinds both FBOs even when deleting an idle target.
+            //$$ try (var binding = new LegacyFramebufferBinding()) {
+            //#endif
             state.maskTarget.destroyBuffers();
+            //#if MC<1_21_05
+            //$$ }
+            //#endif
             state.maskTarget = null;
         }
         captureTargetBytesReserved = Math.max(0L, captureTargetBytesReserved - reserved);
@@ -754,7 +851,7 @@ public final class GlowCaptureManager {
     /** Checks both RenderTarget metadata and its real GPU attachment extents. HD screenshot
      *  mods resize the main target around capture boundaries, so trusting only width/height can
      *  leave Gallium about to use an old pooled attachment with a new frame extent. */
-    private static boolean renderTargetSizeMatches(@Nullable RenderTarget target, int w, int h) {
+    static boolean renderTargetSizeMatches(@Nullable RenderTarget target, int w, int h) {
         if (target == null || !dimensionsMatch(target.width, target.height, w, h)
                 || !textureSizeMatches(target.getColorTexture(), w, h)) return false;
         return !target.useDepth || textureSizeMatches(target.getDepthTexture(), w, h);
@@ -793,6 +890,9 @@ public final class GlowCaptureManager {
             encoder.clearDepthTexture(dst, farDepth);
             return false;
         }
+        //#if MC>=1_21_06 && MC<1_26_02
+        if (NativeDepthCopy.copy(src, dst, w, h)) return true;
+        //#endif
         encoder.copyTextureToTexture(src, dst, 0, 0, 0, 0, 0, w, h);
         return true;
     }
@@ -1431,24 +1531,30 @@ public final class GlowCaptureManager {
         //#endif
         //$$ state.capturedProjectionMatrix4fValid = true;
         //$$
+        //$$ if (!ownsAnySharedMaskFrame()) {
         //$$ if (!reserveCaptureTarget(state, main.width, main.height)) {
         //$$     warnCaptureBudget(main.width, main.height);
         //$$     state.resetFrame();
         //$$     return false;
         //$$ }
         //$$
-        //$$ if (state.maskTarget == null) {
+        //$$ if (state.maskTarget == null || state.maskTarget.width != main.width || state.maskTarget.height != main.height) {
+        //$$     try (var binding = new LegacyFramebufferBinding()) {
+        //$$         if (state.maskTarget == null) {
         //#if MC>=1_21_02
-        //$$     state.maskTarget = new TextureTarget(main.width, main.height, true);
+        //$$             state.maskTarget = new TextureTarget(main.width, main.height, true);
         //#else
-        //$$     state.maskTarget = new TextureTarget(main.width, main.height, true, net.minecraft.client.Minecraft.ON_OSX);
+        //$$             state.maskTarget = new TextureTarget(main.width, main.height, true, net.minecraft.client.Minecraft.ON_OSX);
         //#endif
-        //$$ } else if (state.maskTarget.width != main.width || state.maskTarget.height != main.height) {
+        //$$         } else {
         //#if MC>=1_21_02
-        //$$     state.maskTarget.resize(main.width, main.height);
+        //$$             state.maskTarget.resize(main.width, main.height);
         //#else
-        //$$     state.maskTarget.resize(main.width, main.height, net.minecraft.client.Minecraft.ON_OSX);
+        //$$             state.maskTarget.resize(main.width, main.height, net.minecraft.client.Minecraft.ON_OSX);
         //#endif
+        //$$         }
+        //$$     }
+        //$$ }
         //$$ }
         //$$ activeStates.add(state);
         //$$ currentCapture = state;
@@ -1623,8 +1729,9 @@ public final class GlowCaptureManager {
             //$$         mc.font
             //$$ );
             //#endif
+            state.captureStorageDrained(state.captureDispatcher);
         } else {
-            state.captureDispatcher.getSubmitNodeStorage().clear();
+            state.clearCaptureStorage();
         }
         //#endif
     }
@@ -1741,6 +1848,10 @@ public final class GlowCaptureManager {
     }
 
     public static @Nullable SubmitNodeStorage captureStorageForCurrent() {
+        //#if MC<1_26_02
+        // A caller receiving the mutable storage may append nodes outside the mirror wrapper.
+        markCaptureStorageDirty(currentCapture);
+        //#endif
         return captureStorageFor(currentCapture);
     }
     //#endif
@@ -1760,14 +1871,15 @@ public final class GlowCaptureManager {
 
     private static void renderCapturedNodes(GlowCaptureState state, Minecraft mc,
                                             boolean outputSpacePrepare, TextureTarget mask) {
-        //#if MC==1_21_11 || MC==1_26_01
+        //#if MC==1_21_10 || MC==1_21_11 || MC==1_26_01
+        SharedPooledDepth.preparedMask(null, null);
+        //#endif
         boolean lateReplay = SuperResolutionCompat.ownsLateReplayFrame();
         if (lateReplay && (!outputSpacePrepare || state.captureStage() != CaptureStage.SCHEDULED)) return;
         boolean sequentialReplay = ownsSequentialSharedMaskFrame();
         if (sequentialReplay && (outputSpacePrepare || !sequentialPayloadReady(state))) return;
-        //#endif
-        //#if MC>=1_21_09
-        if (state.captureDispatcher == null || sharedCaptureBuffers == null || mask == null) {
+        //#if MC>=1_21_06
+        if (!replayPayloadAvailable(state) || mask == null) {
             invalidateCapture(state);
             return;
         }
@@ -1819,12 +1931,10 @@ public final class GlowCaptureManager {
         var encoder = RenderSystem.getDevice().createCommandEncoder();
         //#if MC>=1_26_02
         //$$ encoder.clearColorTexture(mask.getColorTexture(), new org.joml.Vector4f(0.0F));
-        //#else
-        encoder.clearColorTexture(mask.getColorTexture(), 0);
         //#endif
 
         ShaderPackHint.ProjectionTransform sourceProjection =
-                //#if MC==1_21_11 || MC==1_26_01
+                //#if MC==1_21_11 || MC>=1_26_01
                 lateReplay ? state.lateReplayProjection :
                 //#endif
                 IrisCompat.getShaderProjectionTransform(mask.width, mask.height);
@@ -1884,14 +1994,85 @@ public final class GlowCaptureManager {
         //$$         state.firstPerson, IrisCompat.isShaderActive(),
         //$$         IrisCompat.usesForwardDepthCompatibility(), exactTemporalReplay);
         //#endif
+        //#if MC==1_21_08
+        //$$ // The original shader already tests every outline tap against scene depth.
+        //$$ // Pre-filling a jittered scene here clips the stable native silhouette first;
+        //$$ // the discarded mask pixels then reappear as false internal edges each frame.
+        //$$ boolean deferOriginalWorldOcclusion = sequentialReplay && !outputSpacePrepare
+        //$$         && !state.firstPerson && IrisCompat.isShaderActive() && !IrisCompat.isActiveSrRuntime()
+        //$$         && sceneDepthCaptured && renderTargetSizeMatches(sceneDepthTarget, mask.width, mask.height)
+        //$$         && cn.spectra.gallium.glowoutline.shader.OriginalGlowParameters
+        //$$             .supportsDeferredSceneOcclusion(state.config);
+        //#endif
         boolean clearDepthForReplay = (shaderCompatDisplayReplay && !state.firstPerson)
                 || (outputSpacePrepare && state.firstPerson)
                 || (!outputSpacePrepare && clearsMaskDepthForReplay(
                 state.firstPerson, IrisCompat.isShaderActive(), exactTemporalReplay))
-                || (!outputSpacePrepare && deferReverseZWorldOcclusion);
+                || (!outputSpacePrepare && deferReverseZWorldOcclusion)
+                //#if MC==1_21_08
+                //$$ || deferOriginalWorldOcclusion
+                //#endif
+                ;
+
+        //#if MC==1_21_08 || MC==1_21_10 || MC==1_21_11 || MC==1_26_01
+        TextureTarget pooledScene = sequentialReplay && !outputSpacePrepare && !clearDepthForReplay
+                && sceneDepthCaptured && irisSnapshot.shaderBypassEnabled()
+                ? SharedPooledDepth.prepare(encoder, sceneDepthTarget,
+                    SuperResolutionCompat.currentFrameEpoch(), sceneDepthGeneration) : null;
+        //#endif
+        //#if MC==1_21_11
+        boolean combinedSrClear = false;
+        //#endif
+        //#if MC>=1_21_06 && MC<1_26_02
+        // Select the same initial depth as the complete replay before restoring a
+        // borrowed mask. Unknown Iris transforms still use their pooled-depth path.
+        boolean restoredSharedMask = sequentialReplay && !outputSpacePrepare
+                //#if MC>=1_21_11
+                && !sourceGridReplay
+                //#endif
+                //#if MC==1_21_08
+                //$$ && (!IrisCompat.isShaderActive()
+                //$$     || (irisSnapshot.shaderBypassEnabled() && (clearDepthForReplay
+                //$$         || pooledScene != null || !cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.isReady())))
+                //#elseif MC==1_21_10 || MC==1_21_11 || MC==1_26_01
+                && (!IrisCompat.isShaderActive() || (!state.firstPerson && !clearDepthForReplay
+                    && pooledScene != null && irisSnapshot.shaderBypassEnabled()
+                    && cn.spectra.gallium.glowoutline.shader.OriginalGlowParameters
+                        .supportsDeferredSceneOcclusion(state.config)))
+                //#else
+                //$$ && !IrisCompat.isShaderActive()
+                //#endif
+                && !IrisCompat.isActiveSrRuntime()
+                && sceneDepthCaptured && sceneDepthTarget != null
+                && ModernMaskReuse.prepare(mask, clearDepthForReplay ? null :
+                        //#if MC==1_21_08 || MC==1_21_10 || MC==1_21_11 || MC==1_26_01
+                        pooledScene != null ? pooledScene :
+                        //#endif
+                        sceneDepthTarget, SuperResolutionCompat.currentFrameEpoch(), sceneDepthGeneration);
+        if (restoredSharedMask) {
+            state.maskDepthPrepared = !clearDepthForReplay;
+            state.maskDepthSnapshotGeneration = clearDepthForReplay ? -1L : sceneDepthGeneration;
+        } else {
+            ModernMaskReuse.invalidate();
+            //#if MC==1_21_11
+            if (clearDepthForReplay && IrisCompat.isActiveSrRuntime()) {
+                encoder.clearColorAndDepthTextures(mask.getColorTexture(), 0, mask.getDepthTexture(), 1.0);
+                combinedSrClear = true;
+            } else
+            //#endif
+            encoder.clearColorTexture(mask.getColorTexture(), 0);
+        }
+        //#endif
 
         if (clearDepthForReplay) {
             state.maskDepthSnapshotGeneration = -1L;
+            //#if MC>=1_21_06 && MC<1_26_02
+            if (!restoredSharedMask
+                //#if MC==1_21_11
+                && !combinedSrClear
+                //#endif
+            )
+            //#endif
             //#if MC>=1_26_02
             //$$ // Pass the native reverse-Z far value. Iris/OpenGL's UndoReverseZ wrapper turns
             //$$ // this into forward-Z 1.0 while a pack is active; passing 1.0 here would be
@@ -1906,25 +2087,31 @@ public final class GlowCaptureManager {
             //#else
             RenderTarget mainTarget = mc.getMainRenderTarget();
             //#endif
-            RenderTarget sourceDepth = sceneDepthCaptured && sceneDepthTarget != null
-                    ? sceneDepthTarget : mainTarget;
-            //#if MC==1_21_11 || MC==1_26_01
+            RenderTarget sourceDepth =
+                    //#if MC==1_21_08 || MC==1_21_10 || MC==1_21_11 || MC==1_26_01
+                    pooledScene != null ? pooledScene :
+                    //#endif
+                    sceneDepthCaptured && sceneDepthTarget != null ? sceneDepthTarget : mainTarget;
             // The old prefill ran once into the first independent mask and copied its depth.
-            // A shared mask is never a retained source: repeat the same existing pool from the
-            // immutable scene snapshot before each unknown-Iris replay. No new depth algorithm.
+            // A shared mask is never a retained source. Reuse the separately owned pooled
+            // snapshot when available; otherwise repeat the same pool before this replay.
             if (sequentialReplay && !state.firstPerson && IrisCompat.isShaderActive()
                     && !exactTemporalReplay && sceneDepthCaptured
+                    //#if MC==1_21_08 || MC==1_21_10 || MC==1_21_11 || MC==1_26_01
+                    && pooledScene == null
+                    //#endif
                     && cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.isReady()) {
                 state.maskDepthPrepared = cn.spectra.gallium.glowoutline.shader.DepthMinPoolPipeline.pool(
                         encoder, sceneDepthTarget.getDepthTextureView(),
                         mask.getColorTextureView(), mask.getDepthTextureView());
             }
-            //#endif
             // Final exact-size guard for a target change after captureSceneDepth. Failure
             // invalidates this state below rather than issuing an out-of-bounds GPU copy.
             //#if MC>=1_26_02
-            //$$ state.maskDepthPrepared = copyDepthBounded(encoder, sourceDepth.getDepthTexture(),
-            //$$         mask.getDepthTexture(), sourceDepth.width, sourceDepth.height, 0.0);
+            //$$ if (!state.maskDepthPrepared) {
+            //$$     state.maskDepthPrepared = copyDepthBounded(encoder, sourceDepth.getDepthTexture(),
+            //$$             mask.getDepthTexture(), sourceDepth.width, sourceDepth.height, 0.0);
+            //$$ }
             //#else
             if (!state.maskDepthPrepared) {
                 state.maskDepthPrepared = copyDepthBounded(encoder, sourceDepth.getDepthTexture(),
@@ -1943,7 +2130,8 @@ public final class GlowCaptureManager {
         // differences in clip-space Z, alpha discard, or coverage then punch permanent holes in
         // the mask. The composite shader has both item and scene depth and performs the actual
         // world/item occlusion after the complete mask has been captured. Unknown pack transforms
-        // retain the copied/pooled depth fallback above.
+        // retain the copied/pooled depth fallback above unless their verified original shader
+        // performs the complete scene comparison itself.
 
         var oldColor = RenderSystem.outputColorTextureOverride;
         var oldDepth = RenderSystem.outputDepthTextureOverride;
@@ -1972,21 +2160,17 @@ public final class GlowCaptureManager {
                 || replayScaleY != 1.0f
                 || jitterX != 0.0f || jitterY != 0.0f || zBias != 0.0f;
         if (state.capturedProjectionMatrix4fValid && (changesProjection
-                //#if MC==1_21_11 || MC==1_26_01
                 || lateReplay || sequentialReplay
-                //#endif
         )) {
             GpuBufferSlice scaled = uploadScaledProjection(
                     encoder, state,
                     state.capturedProjectionMatrix4f,
                     replayScaleX, replayScaleY,
                     jitterX, jitterY, zBias);
-            //#if MC==1_21_11 || MC==1_26_01
             if ((lateReplay || sequentialReplay) && scaled == null) {
                 invalidateCapture(state);
                 return;
             }
-            //#endif
             if (scaled != null) {
                 maskProjectionSlice = scaled;
                 maskScaleX = replayScaleX;
@@ -2012,6 +2196,14 @@ public final class GlowCaptureManager {
         boolean restoreProjection = maskProjectionSlice != null && state.capturedProjectionType != null;
         boolean projectionBackedUp = false;
         boolean modelViewPushed = false;
+        //#if MC>=1_21_06 && MC<1_26_02
+        try (var bounds = ModernMaskBounds.begin(state, mask, sequentialReplay
+                && (!IrisCompat.isShaderActive() || irisSnapshot.shaderBypassEnabled()))
+                //#if MC==1_21_11
+                //$$ ; var srHistory = cn.spectra.gallium.glowoutline.shader.OutlineSrCapture.begin(state, mask)
+                //#endif
+        ) {
+        //#endif
         try {
             RenderSystem.outputColorTextureOverride = mask.getColorTextureView();
             RenderSystem.outputDepthTextureOverride = mask.getDepthTextureView();
@@ -2025,10 +2217,10 @@ public final class GlowCaptureManager {
                 modelViewPushed = true;
                 RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
             }
-            //#if MC==1_21_11 || MC==1_26_01
             // The transition precedes dispatcher entry even if dispatch/flush throws.
             if (lateReplay && !state.beginStreamingReplayAttempt()) return;
             if (sequentialReplay && !state.beginOrdinaryReplayAttempt(SuperResolutionCompat.currentFrameEpoch())) return;
+            //#if MC==1_21_11 || MC==1_26_01
             if (sourceGridReplay) NativeMaskMeshReplay.begin();
             //#endif
             //#if MC>=1_26_02
@@ -2052,9 +2244,15 @@ public final class GlowCaptureManager {
             //#if MC==1_21_11 || MC==1_26_01
             try {
             //#endif
-            state.captureDispatcher.renderAllFeatures();
+            //#if MC>=1_21_09
+            var replayDispatcher = state.captureDispatcher;
+            replayDispatcher.renderAllFeatures();
+            state.captureStorageDrained(replayDispatcher);
             sharedCaptureBuffers.bufferSource().endBatch();
             sharedCaptureBuffers.outlineBufferSource().endOutlineBatch();
+            //#else
+            //$$ state.customBufferSource.flush();
+            //#endif
             //#if MC==1_21_11 || MC==1_26_01
             if (sourceGridReplay) {
                 if (!cn.spectra.gallium.glowoutline.shader.WorldMaskOcclusionPipeline.prepareNativeDepth(
@@ -2116,6 +2314,13 @@ public final class GlowCaptureManager {
                 && usesExactShaderCompatDepth(sceneProjection)
                 && projectionApplied && restoreProjection);
         state.capturedThisFrame = true;
+        //#if MC>=1_21_06 && MC<1_26_02
+        }
+        if (restoredSharedMask) ModernMaskReuse.finish(state.maskBounds);
+        //#if MC==1_21_10 || MC==1_21_11 || MC==1_26_01
+        SharedPooledDepth.preparedMask(state, restoredSharedMask ? pooledScene : null);
+        //#endif
+        //#endif
         } finally {
             IrisCompat.restoreBypass(irisSnapshot);
         }
@@ -2124,194 +2329,19 @@ public final class GlowCaptureManager {
             completeNativeCapacityRejection(rejection);
         }
         //#endif
-        //#elseif MC>=1_21_06
-        //$$ // 1.21.6-1.21.8 capture vertices exclusively through DelayingMultiBufferSource.
-        //$$ // captureBuffers is never allocated on this path, so it must not gate replay.
-        //$$ if (state.customBufferSource == null || state.maskTarget == null) {
-        //$$     invalidateCapture(state);
-        //$$     return;
-        //$$ }
-        //$$ RenderTarget frameTarget = mc.getMainRenderTarget();
-        //$$ if (frameTarget == null
-        //$$         || !renderTargetSizeMatches(frameTarget, frameTarget.width, frameTarget.height)
-        //$$         || !renderTargetSizeMatches(state.maskTarget, frameTarget.width, frameTarget.height)
-        //$$         || (sceneDepthCaptured
-        //$$         && !renderTargetSizeMatches(sceneDepthTarget, frameTarget.width, frameTarget.height))) {
-        //$$     invalidateCapture(state);
-        //$$     return;
-        //$$ }
-        //$$
-        //$$ var irisSnapshot = IrisCompat.setBypass(true);
-        //$$ try {
-        //$$ if (!canReplayWithShaderBypass(
-        //$$         IrisCompat.isShaderActive(), irisSnapshot.shaderBypassEnabled())) {
-        //$$     invalidateCapture(state);
-        //$$     return;
-        //$$ }
-        //$$ var encoder = RenderSystem.getDevice().createCommandEncoder();
-        //$$ encoder.clearColorTexture(state.maskTarget.getColorTexture(), 0);
-        //$$
-        //$$ ShaderPackHint.ProjectionTransform sourceProjection =
-        //$$         IrisCompat.getShaderProjectionTransform(state.maskTarget.width, state.maskTarget.height);
-        //$$ boolean shaderCompatDisplayReplay = !outputSpacePrepare
-        //$$         && IrisCompat.isActiveSrRuntime()
-        //$$         && SuperResolutionCompat.hasCompletedShaderCompatDispatch(
-        //$$         state.maskTarget.width, state.maskTarget.height);
-        //$$ if (shaderCompatDisplayReplay && !state.firstPerson
-        //$$         && (!sceneDepthCaptured || !renderTargetSizeMatches(
-        //$$         sceneDepthTarget, state.maskTarget.width, state.maskTarget.height))) {
-        //$$     invalidateCapture(state);
-        //$$     return;
-        //$$ }
-        //$$ if (shaderCompatDisplayReplay
-        //$$         && (state.capturedProjectionMatrix == null
-        //$$         || state.capturedProjectionType == null)) {
-        //$$     invalidateCapture(state);
-        //$$     return;
-        //$$ }
-        //$$ ShaderPackHint.ProjectionTransform packProjection = projectionForReplay(
-        //$$         sourceProjection, outputSpacePrepare || shaderCompatDisplayReplay);
-        //$$ ShaderPackHint.ProjectionTransform sceneProjection = shaderCompatDisplayReplay
-        //$$         && !state.firstPerson ? sourceProjection : packProjection;
-        //$$ boolean exactTemporalReplay = usesExactTemporalReplay(state, packProjection)
-        //$$         && irisSnapshot.shaderBypassEnabled();
-        //$$ if (outputSpacePrepare && !state.firstPerson) {
-        //$$     if (!srDisplaySceneDepthPrepared || srDisplaySceneDepthTarget == null
-        //$$             || !copyDepthBounded(encoder,
-        //$$             srDisplaySceneDepthTarget.getDepthTexture(),
-        //$$             state.maskTarget.getDepthTexture(), state.maskTarget.width,
-        //$$             state.maskTarget.height, 1.0)) {
-        //$$         invalidateCapture(state);
-        //$$         return;
-        //$$     }
-        //$$     state.maskDepthPrepared = true;
-        //$$     state.maskDepthSnapshotGeneration = sceneDepthGeneration;
-        //$$ }
-        //$$ boolean clearDepthForReplay = (shaderCompatDisplayReplay && !state.firstPerson)
-        //$$         || (outputSpacePrepare && state.firstPerson)
-        //$$         || (!outputSpacePrepare && clearsMaskDepthForReplay(
-        //$$         state.firstPerson, IrisCompat.isShaderActive(), exactTemporalReplay));
-        //$$ if (clearDepthForReplay) {
-        //$$     state.maskDepthSnapshotGeneration = -1L;
-        //$$     encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 1.0);
-        //$$ } else if (!state.maskDepthPrepared) {
-        //$$     RenderTarget mainTarget = mc.getMainRenderTarget();
-        //$$     RenderTarget sourceDepth = sceneDepthCaptured && sceneDepthTarget != null
-        //$$             ? sceneDepthTarget : mainTarget;
-        //$$     // [issue #1] bounded copy - see copyDepthBounded.
-        //$$     state.maskDepthPrepared = copyDepthBounded(encoder, sourceDepth.getDepthTexture(),
-        //$$             state.maskTarget.getDepthTexture(), sourceDepth.width, sourceDepth.height, 1.0);
-        //$$     if (!state.maskDepthPrepared) {
-        //$$         invalidateCapture(state);
-        //$$         return;
-        //$$     }
-        //$$     state.maskDepthSnapshotGeneration = sceneDepthCaptured ? sceneDepthGeneration : -1L;
-        //$$ }
-        //$$ // Exact Iris replays intentionally defer world occlusion to the composite shader;
-        //$$ // keeping the copied scene depth here would let tiny pack-vs-vanilla Z/coverage
-        //$$ // differences discard the mask fragment before the composite can compare it.
-        //$$
-        //$$ var oldColor = RenderSystem.outputColorTextureOverride;
-        //$$ var oldDepth = RenderSystem.outputDepthTextureOverride;
-        //$$ RenderSystem.outputColorTextureOverride = state.maskTarget.getColorTextureView();
-        //$$ RenderSystem.outputDepthTextureOverride = state.maskTarget.getDepthTextureView();
-        //$$
-        //$$ GpuBufferSlice maskProjectionSlice = state.capturedProjectionMatrix;
-        //$$ float maskScaleX = 1.0f;
-        //$$ float maskScaleY = 1.0f;
-        //$$ float maskOffsetX = packProjection.viewportOriginX();
-        //$$ float maskOffsetY = packProjection.viewportOriginY();
-        //$$ float sceneOffsetX = sceneProjection.viewportOriginX();
-        //$$ float sceneOffsetY = sceneProjection.viewportOriginY();
-        //$$ boolean projectionApplied = !packProjection.changesProjection();
-        //$$ float jitterX = 2.0f * packProjection.viewportOriginX()
-        //$$         + (exactTemporalReplay ? packProjection.jitterX() : 0.0f);
-        //$$ float jitterY = 2.0f * packProjection.viewportOriginY()
-        //$$         + (exactTemporalReplay ? packProjection.jitterY() : 0.0f);
-        //$$ float replayScaleX = packProjection.scaleX();
-        //$$ float replayScaleY = packProjection.scaleY();
-        //$$ float zBias = 0.0f;
-        //$$ boolean changesProjection = replayScaleX != 1.0f
-        //$$         || replayScaleY != 1.0f
-        //$$         || jitterX != 0.0f || jitterY != 0.0f || zBias != 0.0f;
-        //$$ if (state.capturedProjectionMatrix4fValid && changesProjection) {
-        //$$     GpuBufferSlice scaled = uploadScaledProjection(
-        //$$             encoder, state,
-        //$$             state.capturedProjectionMatrix4f,
-        //$$             replayScaleX, replayScaleY,
-        //$$             jitterX, jitterY, zBias);
-        //$$     if (scaled != null) {
-        //$$         maskProjectionSlice = scaled;
-        //$$         maskScaleX = replayScaleX;
-        //$$         maskScaleY = replayScaleY;
-        //$$         if (exactTemporalReplay) {
-        //$$             maskOffsetX = packProjection.uvOffsetX();
-        //$$             maskOffsetY = packProjection.uvOffsetY();
-        //$$         }
-        //$$         projectionApplied = true;
-        //$$     }
-        //$$ }
-        //$$ if (!state.firstPerson && IrisCompat.isShaderActive()
-        //$$         && sceneProjection.exactTemporalJitter()) {
-        //$$     sceneOffsetX = sceneProjection.uvOffsetX();
-        //$$     sceneOffsetY = sceneProjection.uvOffsetY();
-        //$$ }
-        //$$
-        //$$ boolean restoreProjection = maskProjectionSlice != null && state.capturedProjectionType != null;
-        //$$ if (restoreProjection) {
-        //$$     RenderSystem.backupProjectionMatrix();
-        //$$     RenderSystem.setProjectionMatrix(maskProjectionSlice, state.capturedProjectionType);
-        //$$ }
-        //$$
-        //$$ if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
-        //$$     RenderSystem.getModelViewStack().pushMatrix();
-        //$$     RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
-        //$$ }
-        //$$
-        //$$ try {
-        //$$     state.customBufferSource.flush();
-        //$$ } finally {
-        //$$     if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
-        //$$         RenderSystem.getModelViewStack().popMatrix();
-        //$$     }
-        //$$     if (restoreProjection) {
-        //$$         RenderSystem.restoreProjectionMatrix();
-        //$$     }
-        //$$     RenderSystem.outputColorTextureOverride = oldColor;
-        //$$     RenderSystem.outputDepthTextureOverride = oldDepth;
-        //$$ }
-        //$$
-        //$$ state.lastMaskScaleX = maskScaleX;
-        //$$ state.lastMaskScaleY = maskScaleY;
-        //$$ state.lastSceneScaleX = state.firstPerson ? maskScaleX : sceneProjection.scaleX();
-        //$$ state.lastSceneScaleY = state.firstPerson ? maskScaleY : sceneProjection.scaleY();
-        //$$ state.lastMaskOffsetX = maskOffsetX;
-        //$$ state.lastMaskOffsetY = maskOffsetY;
-        //$$ state.lastSceneOffsetX = sceneOffsetX;
-        //$$ state.lastSceneOffsetY = sceneOffsetY;
-        //$$ state.exactDepthAlignment = state.firstPerson
-        //$$         || !IrisCompat.isShaderActive()
-        //$$         || (exactTemporalReplay && projectionApplied)
-        //$$         || (shaderCompatDisplayReplay
-        //$$         && usesExactShaderCompatDepth(sceneProjection)
-        //$$         && projectionApplied && restoreProjection);
-        //$$ state.capturedThisFrame = true;
-        //$$ } finally {
-        //$$     IrisCompat.restoreBypass(irisSnapshot);
-        //$$ }
         //#elseif MC>=1_21_05
         //$$ // 1.21.5: no outputColorTextureOverride. DelayingMultiBufferSource.flushToTarget()
         //$$ // manually uploads meshes and opens a RenderPass targeting the mask textures.
         //$$ // 1.21.5 capture vertices exclusively through DelayingMultiBufferSource.
         //$$ // captureBuffers is never allocated on this path, so it must not gate replay.
-        //$$ if (state.customBufferSource == null || state.maskTarget == null) {
+        //$$ if (state.customBufferSource == null || mask == null) {
         //$$     invalidateCapture(state);
         //$$     return;
         //$$ }
         //$$ RenderTarget frameTarget = mc.getMainRenderTarget();
         //$$ if (frameTarget == null
         //$$         || !renderTargetSizeMatches(frameTarget, frameTarget.width, frameTarget.height)
-        //$$         || !renderTargetSizeMatches(state.maskTarget, frameTarget.width, frameTarget.height)
+        //$$         || !renderTargetSizeMatches(mask, frameTarget.width, frameTarget.height)
         //$$         || (sceneDepthCaptured
         //$$         && !renderTargetSizeMatches(sceneDepthTarget, frameTarget.width, frameTarget.height))) {
         //$$     invalidateCapture(state);
@@ -2326,8 +2356,6 @@ public final class GlowCaptureManager {
         //$$     return;
         //$$ }
         //$$ var encoder = RenderSystem.getDevice().createCommandEncoder();
-        //$$ encoder.clearColorTexture(state.maskTarget.getColorTexture(), 0);
-        //$$
         //$$ // Mask depth strategy mirrors the >=1_21_06 branch above; one local twist:
         //$$ // 1.21.5's GameRenderer.renderLevel issues clearDepthTexture(mainDepth, 1.0)
         //$$ // right after levelRenderer.renderLevel and BEFORE renderItemInHand — so by
@@ -2337,14 +2365,14 @@ public final class GlowCaptureManager {
         //$$ // pre-clear snapshot into every active state's mask depth ahead of time. Under Iris,
         //$$ // that snapshot also contains the custom hand rendered inside LevelRenderer.
         //$$ ShaderPackHint.ProjectionTransform sourceProjection =
-        //$$         IrisCompat.getShaderProjectionTransform(state.maskTarget.width, state.maskTarget.height);
+        //$$         IrisCompat.getShaderProjectionTransform(mask.width, mask.height);
         //$$ boolean shaderCompatDisplayReplay = !outputSpacePrepare
         //$$         && IrisCompat.isActiveSrRuntime()
         //$$         && SuperResolutionCompat.hasCompletedShaderCompatDispatch(
-        //$$         state.maskTarget.width, state.maskTarget.height);
+        //$$         mask.width, mask.height);
         //$$ if (shaderCompatDisplayReplay && !state.firstPerson
         //$$         && (!sceneDepthCaptured || !renderTargetSizeMatches(
-        //$$         sceneDepthTarget, state.maskTarget.width, state.maskTarget.height))) {
+        //$$         sceneDepthTarget, mask.width, mask.height))) {
         //$$     invalidateCapture(state);
         //$$     return;
         //$$ }
@@ -2367,7 +2395,7 @@ public final class GlowCaptureManager {
         //$$     }
         //$$     // Both are Gallium TextureTargets with the same depth format. GL's NEAREST
         //$$     // depth blit safely scales the render-size snapshot into the screen-size mask.
-        //$$     state.maskTarget.copyDepthFrom(sceneDepthTarget);
+        //$$     mask.copyDepthFrom(sceneDepthTarget);
         //$$     state.maskDepthPrepared = true;
         //$$     state.maskDepthSnapshotGeneration = sceneDepthGeneration;
         //$$ }
@@ -2375,16 +2403,30 @@ public final class GlowCaptureManager {
         //$$         || (outputSpacePrepare && state.firstPerson)
         //$$         || (!outputSpacePrepare && clearsMaskDepthForReplay(
         //$$         state.firstPerson, IrisCompat.isShaderActive(), exactTemporalReplay));
+        //$$ boolean restoredSharedMask = sequentialReplay && !outputSpacePrepare
+        //$$         && (!IrisCompat.isShaderActive() || irisSnapshot.shaderBypassEnabled())
+        //$$         && !IrisCompat.isActiveSrRuntime()
+        //$$         && sceneDepthCaptured && sceneDepthTarget != null
+        //$$         && ModernMaskReuse.prepare(mask, clearDepthForReplay ? null : sceneDepthTarget,
+        //$$                 SuperResolutionCompat.currentFrameEpoch(), sceneDepthGeneration);
+        //$$ if (restoredSharedMask) {
+        //$$     state.maskDepthPrepared = !clearDepthForReplay;
+        //$$     state.maskDepthSnapshotGeneration = clearDepthForReplay ? -1L : sceneDepthGeneration;
+        //$$ } else {
+        //$$     ModernMaskReuse.invalidate();
+        //$$     encoder.clearColorTexture(mask.getColorTexture(), 0);
+        //$$ }
+        //$$
         //$$ if (clearDepthForReplay) {
         //$$     state.maskDepthSnapshotGeneration = -1L;
-        //$$     encoder.clearDepthTexture(state.maskTarget.getDepthTexture(), 1.0);
+        //$$     if (!restoredSharedMask) encoder.clearDepthTexture(mask.getDepthTexture(), 1.0);
         //$$ } else if (!state.maskDepthPrepared) {
         //$$     RenderTarget mainTarget = mc.getMainRenderTarget();
         //$$     RenderTarget sourceDepth = sceneDepthCaptured && sceneDepthTarget != null
         //$$             ? sceneDepthTarget : mainTarget;
         //$$     // [issue #1] bounded copy - see copyDepthBounded.
         //$$     state.maskDepthPrepared = copyDepthBounded(encoder, sourceDepth.getDepthTexture(),
-        //$$             state.maskTarget.getDepthTexture(), sourceDepth.width, sourceDepth.height, 1.0);
+        //$$             mask.getDepthTexture(), sourceDepth.width, sourceDepth.height, 1.0);
         //$$     if (!state.maskDepthPrepared) {
         //$$         invalidateCapture(state);
         //$$         return;
@@ -2394,11 +2436,6 @@ public final class GlowCaptureManager {
         //$$ // Exact Iris world replays intentionally defer world occlusion to the composite
         //$$ // shader. Retaining the pre-clear depth here would let tiny pack-vs-vanilla Z or
         //$$ // alpha-coverage differences discard mask pixels before that comparison.
-        //$$
-        //$$ if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
-        //$$     RenderSystem.getModelViewStack().pushMatrix();
-        //$$     RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
-        //$$ }
         //$$
         //$$ // 1.21.5 lacks GpuBufferSlice/Std140Builder, so apply the declared scale and exact
         //$$ // temporal offset directly through the Matrix4f projection overload.
@@ -2441,22 +2478,30 @@ public final class GlowCaptureManager {
         //$$ }
         //$$ boolean restoreProj = state.capturedProjectionMatrix4fValid
         //$$         && state.capturedProjectionType != null;
-        //$$ if (restoreProj) {
-        //$$     RenderSystem.backupProjectionMatrix();
-        //$$     RenderSystem.setProjectionMatrix(maskProjection,
-        //$$             state.capturedProjectionType);
-        //$$ }
-        //$$
+        //$$ boolean projectionBackedUp = false;
+        //$$ boolean modelViewPushed = false;
         //$$ try {
-        //$$     state.customBufferSource.flushToTarget(state.maskTarget);
-        //$$ } finally {
         //$$     if (restoreProj) {
-        //$$         RenderSystem.restoreProjectionMatrix();
+        //$$         RenderSystem.backupProjectionMatrix();
+        //$$         projectionBackedUp = true;
+        //$$         RenderSystem.setProjectionMatrix(maskProjection, state.capturedProjectionType);
         //$$     }
-        //$$ }
-        //$$
-        //$$ if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
-        //$$     RenderSystem.getModelViewStack().popMatrix();
+        //$$     if (state.capturedModelViewMatrixValid && state.capturedModelViewMatrix != null) {
+        //$$         RenderSystem.getModelViewStack().pushMatrix();
+        //$$         modelViewPushed = true;
+        //$$         RenderSystem.getModelViewStack().set(state.capturedModelViewMatrix);
+        //$$     }
+        //$$     if (sequentialReplay && !state.beginOrdinaryReplayAttempt(SuperResolutionCompat.currentFrameEpoch())) return;
+        //$$     // The encoder has fully cleared color, or the native reuse path restored it.
+        //$$     // Iris replay additionally requires the actual bypass to have been enabled.
+        //$$     try (var bounds = ModernMaskBounds.begin(state, mask, sequentialReplay
+        //$$             && (!IrisCompat.isShaderActive() || irisSnapshot.shaderBypassEnabled()))) {
+        //$$         state.customBufferSource.flushToTarget(mask);
+        //$$     }
+        //$$     if (restoredSharedMask) ModernMaskReuse.finish(state.maskBounds);
+        //$$ } finally {
+        //$$     if (projectionBackedUp) RenderSystem.restoreProjectionMatrix();
+        //$$     if (modelViewPushed) RenderSystem.getModelViewStack().popMatrix();
         //$$ }
         //$$
         //$$ state.lastMaskScaleX = maskScaleX;
@@ -2478,7 +2523,7 @@ public final class GlowCaptureManager {
         //$$     IrisCompat.restoreBypass(irisSnapshot);
         //$$ }
         //#else
-        //$$ if (state.maskTarget == null) return;
+        //$$ if (mask == null) return;
         //$$ var irisSnapshot = IrisCompat.setBypass(true);
         //$$ try {
         //$$ if (!canReplayWithShaderBypass(
@@ -2486,25 +2531,22 @@ public final class GlowCaptureManager {
         //$$     invalidateCapture(state);
         //$$     return;
         //$$ }
-        //$$ mask.setClearColor(0.0F, 0.0F, 0.0F, 0.0F);
-        //#if MC>=1_21_02
-        //$$ mask.clear();
-        //#else
-        //$$ mask.clear(net.minecraft.client.Minecraft.ON_OSX);
-        //#endif
         //$$ // Mask depth strategy mirrors the >=1_21_06 branch above; see comments there.
         //$$ // Local difference: 1.21.4 uses RenderTarget.copyDepthFrom(sceneDepthTarget) instead
         //$$ // of CommandEncoder.copyTextureToTexture (no GpuTexture API on this version).
         //$$ ShaderPackHint.ProjectionTransform sourceProjection =
-        //$$         IrisCompat.getShaderProjectionTransform(state.maskTarget.width, state.maskTarget.height);
+        //#if MC==1_21_01
+        //$$         lateReplay ? state.lateReplayProjection :
+        //#endif
+        //$$         IrisCompat.getShaderProjectionTransform(mask.width, mask.height);
         //$$ boolean shaderCompatDisplayReplay = !outputSpacePrepare
         //$$         && IrisCompat.isActiveSrRuntime()
         //$$         && SuperResolutionCompat.hasCompletedShaderCompatDispatch(
-        //$$         state.maskTarget.width, state.maskTarget.height);
+        //$$         mask.width, mask.height);
         //$$ if (shaderCompatDisplayReplay && !state.firstPerson
         //$$         && (!sceneDepthCaptured || sceneDepthTarget == null
-        //$$         || sceneDepthTarget.width != state.maskTarget.width
-        //$$         || sceneDepthTarget.height != state.maskTarget.height)) {
+        //$$         || sceneDepthTarget.width != mask.width
+        //$$         || sceneDepthTarget.height != mask.height)) {
         //$$     invalidateCapture(state);
         //$$     return;
         //$$ }
@@ -2520,6 +2562,55 @@ public final class GlowCaptureManager {
         //$$         && !state.firstPerson ? sourceProjection : packProjection;
         //$$ boolean exactTemporalReplay = usesExactTemporalReplay(state, packProjection)
         //$$         && irisSnapshot.shaderBypassEnabled();
+
+        //$$ boolean clearDepthForReplay = (shaderCompatDisplayReplay && !state.firstPerson)
+
+        //$$         || (outputSpacePrepare && state.firstPerson)
+        //$$         || (!outputSpacePrepare && clearsMaskDepthForReplay(
+        //$$         state.firstPerson, IrisCompat.isShaderActive(), exactTemporalReplay));
+        //$$ // A world mask may already contain the pre-hand scene depth. Clearing both
+        //$$ // attachments here would erase its occluders while leaving maskDepthPrepared true.
+        //$$ boolean knownTransparentClear = sequentialReplay && !outputSpacePrepare
+        //$$         && IrisCompat.isShaderActive() && !IrisCompat.isActiveSrRuntime()
+        //$$         && irisSnapshot.shaderBypassEnabled() && MaskBoundsTracker.fullColorClearKnown(mask);
+        //$$ var replayTargetBinding = knownTransparentClear ? IrisCompat.captureTargetBinding() : null;
+        //$$ boolean reusableReplay = !IrisCompat.isShaderActive()
+        //$$         || replayTargetBinding != null && replayTargetBinding.pipeline() != null;
+        //$$ boolean restoredSharedMask = sequentialReplay && !outputSpacePrepare
+        //$$         && reusableReplay && !IrisCompat.isActiveSrRuntime()
+        //$$         && sceneDepthCaptured && sceneDepthTarget != null
+        //$$         && sceneDepthTarget.width == mask.width && sceneDepthTarget.height == mask.height
+        //$$         && LegacyMaskReuse.prepare(mask, clearDepthForReplay ? null : sceneDepthTarget,
+        //$$                 SuperResolutionCompat.currentFrameEpoch(), sceneDepthGeneration);
+        //$$ if (restoredSharedMask) {
+        //$$     if (replayTargetBinding != null) {
+        //$$         // Match TextureTarget.clear's Iris bookkeeping without a needless FBO switch.
+        //$$         IrisCompat.restoreTargetBinding(new IrisCompat.TargetBindingSnapshot(
+        //$$                 replayTargetBinding.pipeline(), false));
+        //$$     }
+        //$$     state.maskDepthPrepared = !clearDepthForReplay;
+        //$$     state.maskDepthSnapshotGeneration = clearDepthForReplay ? -1L : sceneDepthGeneration;
+        //$$ } else {
+        //$$ LegacyMaskReuse.invalidate();
+        //$$ if (state.maskDepthPrepared && !clearDepthForReplay) {
+        //$$     mask.bindWrite(true);
+        //$$     RenderSystem.clearColor(0.0F, 0.0F, 0.0F, 0.0F);
+        //#if MC>=1_21_02
+        //$$     RenderSystem.clear(16384);
+        //#else
+        //$$     RenderSystem.clear(16384, net.minecraft.client.Minecraft.ON_OSX);
+        //#endif
+        //$$     mask.unbindWrite();
+        //$$ } else {
+        //$$     mask.setClearColor(0.0F, 0.0F, 0.0F, 0.0F);
+        //#if MC>=1_21_02
+        //$$     mask.clear();
+        //#else
+        //$$     mask.clear(net.minecraft.client.Minecraft.ON_OSX);
+        //#endif
+        //$$     state.maskDepthPrepared = false;
+        //$$     state.maskDepthSnapshotGeneration = -1L;
+        //$$ }
         //$$ if (outputSpacePrepare && !state.firstPerson) {
         //$$     if (!sceneDepthCaptured || sceneDepthTarget == null) {
         //$$         invalidateCapture(state);
@@ -2531,10 +2622,6 @@ public final class GlowCaptureManager {
         //$$     state.maskDepthPrepared = true;
         //$$     state.maskDepthSnapshotGeneration = sceneDepthGeneration;
         //$$ }
-        //$$ boolean clearDepthForReplay = (shaderCompatDisplayReplay && !state.firstPerson)
-        //$$         || (outputSpacePrepare && state.firstPerson)
-        //$$         || (!outputSpacePrepare && clearsMaskDepthForReplay(
-        //$$         state.firstPerson, IrisCompat.isShaderActive(), exactTemporalReplay));
         //$$ if (clearDepthForReplay) {
         //$$     state.maskDepthSnapshotGeneration = -1L;
         //$$     // mask.clear() already leaves the forward-Z depth at the far plane.
@@ -2553,6 +2640,7 @@ public final class GlowCaptureManager {
         //$$     state.maskDepthPrepared = true;
         //$$     state.maskDepthSnapshotGeneration = -1L;
         //$$ }
+        //$$ }
         //$$
         //$$ float maskScaleX = 1.0f;
         //$$ float maskScaleY = 1.0f;
@@ -2570,6 +2658,7 @@ public final class GlowCaptureManager {
         //$$ float scaleY = packProjection.scaleY();
         //$$ float zBias = IrisCompat.isShaderActive() && !state.firstPerson
         //$$         && !shaderCompatDisplayReplay && !exactTemporalReplay
+
         //$$         ? IRIS_TAA_Z_BIAS : 0.0f;
         //$$ boolean changesProjection = scaleX != 1.0f || scaleY != 1.0f
         //$$         || jitterX != 0.0f || jitterY != 0.0f || zBias != 0.0f;
@@ -2621,8 +2710,15 @@ public final class GlowCaptureManager {
         //$$         backedUpProj = true;
         //$$         RenderSystem.setProjectionMatrix(maskProjection, state.capturedProjectionType);
         //$$     }
+        //$$     if (lateReplay && !state.beginStreamingReplayAttempt()) return;
+        //$$     if (sequentialReplay && !state.beginOrdinaryReplayAttempt(SuperResolutionCompat.currentFrameEpoch())) return;
         //$$     if (state.customBufferSource != null) {
-        //$$         state.customBufferSource.flushToTarget(mask);
+        //$$         MaskBoundsTracker.begin(state, mask.width, mask.height, restoredSharedMask || knownTransparentClear);
+        //$$         try {
+        //$$             state.customBufferSource.flushToTarget(mask);
+        //$$             if (restoredSharedMask) LegacyMaskReuse.finish(state.maskBounds);
+        //$$         }
+        //$$         finally { MaskBoundsTracker.end(); }
         //$$     }
         //$$ } finally {
         //$$     if (backedUpProj) RenderSystem.restoreProjectionMatrix();
@@ -2660,6 +2756,13 @@ public final class GlowCaptureManager {
             CommandEncoder encoder, GlowCaptureState state,
             Matrix4f baseProjection, float scaleX, float scaleY,
             float jitterX, float jitterY, float zBias) {
+        Matrix4f result = computeScaledProjection(
+                baseProjection, scaleX, scaleY, jitterX, jitterY, zBias,
+                SCRATCH_SCALED_PROJECTION);
+        //#if MC==1_21_08 || MC==1_26_01
+        var sharedProjection = NativeVertexUploadBatch.projection(encoder, result);
+        if (sharedProjection != null) return sharedProjection;
+        //#endif
         if (state.scaledProjectionBuffer == null) {
             state.scaledProjectionBuffer = RenderSystem.getDevice().createBuffer(
                     () -> "Glow Scaled Projection",
@@ -2670,15 +2773,13 @@ public final class GlowCaptureManager {
             state.scaledProjectionSlice = state.scaledProjectionBuffer.slice(
                     0, RenderSystem.PROJECTION_MATRIX_UBO_SIZE);
         }
-        Matrix4f result = computeScaledProjection(
-                baseProjection, scaleX, scaleY, jitterX, jitterY, zBias,
-                SCRATCH_SCALED_PROJECTION);
-
+        ProjectionMatrixTracker.forget(state.scaledProjectionSlice);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             ByteBuffer data = Std140Builder.onStack(stack, RenderSystem.PROJECTION_MATRIX_UBO_SIZE)
                     .putMat4f(result).get();
             encoder.writeToBuffer(state.scaledProjectionSlice, data);
         }
+        ProjectionMatrixTracker.remember(state.scaledProjectionSlice, result);
         return state.scaledProjectionSlice;
     }
     //#endif
@@ -2838,6 +2939,7 @@ public final class GlowCaptureManager {
         state.resetFrame();
         //#if MC>=1_21_06
         if (state.scaledProjectionBuffer != null) {
+            ProjectionMatrixTracker.remove(state.scaledProjectionSlice);
             state.scaledProjectionBuffer.close();
             state.scaledProjectionBuffer = null;
             state.scaledProjectionSlice = null;
@@ -2855,6 +2957,7 @@ public final class GlowCaptureManager {
         //$$ state.captureStorageClean = false;
         //#else
         state.captureDispatcher = null;
+        state.forgetCaptureStorage();
         //#endif
         // Shared RenderBuffers lives across all states — don't null it out or allocate per-state.
         //#else
@@ -2871,12 +2974,12 @@ public final class GlowCaptureManager {
     }
 
     public static void clearAll() {
+        //#if MC==1_21_08 || MC==1_21_10 || MC==1_21_11 || MC==1_26_01
+        SharedPooledDepth.dispose();
+        //#endif
+        SharedMaskFrame.dispose();
         //#if MC==1_21_11 || MC==1_26_01
-        sharedMask.close();
         releaseSourceGridMask();
-        sharedOwnershipActive = false;
-        sequentialMaskPolicy.reset();
-        sequentialFrame = null;
         //#endif
         for (GlowCaptureState state : pool) {
             releaseState(state);
@@ -2915,6 +3018,7 @@ public final class GlowCaptureManager {
         //#endif
         captureTargetBytesReserved = 0L;
         captureBudgetWarningLogged = false;
+        poolRetention.reset();
         activeStates.clear();
         clearCaptureScopes();
         currentCapture = null;
@@ -2930,37 +3034,37 @@ public final class GlowCaptureManager {
         //#if MC==1_21_11 || MC==1_26_01
         releaseSharedBuffers(null);
         //#else
-        if (sharedCaptureBuffers == null) return;
-        RenderBuffers rb = sharedCaptureBuffers;
-        sharedCaptureBuffers = null;
+        //$$ if (sharedCaptureBuffers == null) return;
+        //$$ RenderBuffers rb = sharedCaptureBuffers;
+        //$$ sharedCaptureBuffers = null;
         //#if MC>=1_26_02
         //$$ if (!closeOwnedResource(rb)) {
         //$$     cn.spectra.gallium.Gallium.LOGGER.warn(
         //$$             "Failed to close Gallium shared capture RenderBuffers");
         //$$ }
         //#else
-        try {
-            for (java.lang.reflect.Field field : RenderBuffers.class.getDeclaredFields()) {
-                field.setAccessible(true);
-                Object value;
-                try {
-                    value = field.get(rb);
-                } catch (IllegalAccessException e) {
-                    continue;
-                }
-                if (value instanceof com.mojang.blaze3d.vertex.ByteBufferBuilder bb) {
-                    bb.close();
-                } else if (value instanceof java.util.Map<?, ?> map) {
-                    for (Object v : map.values()) {
-                        if (v instanceof com.mojang.blaze3d.vertex.ByteBufferBuilder bbb) {
-                            bbb.close();
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            cn.spectra.gallium.Gallium.LOGGER.warn("Failed to close shared capture buffers: {}", e.toString());
-        }
+        //$$ try {
+        //$$     for (java.lang.reflect.Field field : RenderBuffers.class.getDeclaredFields()) {
+        //$$         field.setAccessible(true);
+        //$$         Object value;
+        //$$         try {
+        //$$             value = field.get(rb);
+        //$$         } catch (IllegalAccessException e) {
+        //$$             continue;
+        //$$         }
+        //$$         if (value instanceof com.mojang.blaze3d.vertex.ByteBufferBuilder bb) {
+        //$$             bb.close();
+        //$$         } else if (value instanceof java.util.Map<?, ?> map) {
+        //$$             for (Object v : map.values()) {
+        //$$                 if (v instanceof com.mojang.blaze3d.vertex.ByteBufferBuilder bbb) {
+        //$$                     bbb.close();
+        //$$                 }
+        //$$             }
+        //$$         }
+        //$$     }
+        //$$ } catch (Exception e) {
+        //$$     cn.spectra.gallium.Gallium.LOGGER.warn("Failed to close shared capture buffers: {}", e.toString());
+        //$$ }
         //#endif
         //#endif
     }
@@ -2985,6 +3089,7 @@ public final class GlowCaptureManager {
                 } finally {
                     // Every dispatcher retains the same BufferSources, including cold slots.
                     state.captureDispatcher = null;
+                    state.forgetCaptureStorage();
                 }
             }
             // A throwing storage.clear may have interrupted invalidation before its flags were

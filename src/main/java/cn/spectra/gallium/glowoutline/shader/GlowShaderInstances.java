@@ -73,6 +73,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$         appendFloatUniform(json, "ShaderOffset", 4, false);
 //$$         appendFloatUniform(json, "GalliumItemDistance", 1, false);
 //$$         appendFloatUniform(json, "GalliumWorldToUv", 2, false);
+//$$         appendFloatUniform(json, "GalliumMaskBounds", 4, false);
 //$$         appendParamUniforms(json, cfg);
 //$$         json.append("]}");
 //$$
@@ -155,7 +156,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$                 anchorPack, rewrite, world);
 //$$         try {
             //#if NEOFORGE
-//$$             return new ShaderInstance(provider, ResourceLocation.parse(jsonName), format);
+//$$             return new ShaderInstance(provider, net.minecraft.resources.ResourceLocation.parse(jsonName), format);
             //#else
 //$$             return new ShaderInstance(provider, jsonName, format);
             //#endif
@@ -167,11 +168,11 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$
 //$$     // shaders/core/<x> in the minecraft namespace — ShaderInstance hardcodes that namespace.
 //$$     private static ResourceLocation coreLoc(String tail) {
-//$$         return ResourceLocation.withDefaultNamespace("shaders/core/" + tail);
+//$$         return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("minecraft", "shaders/core/" + tail);
 //$$     }
 //$$
 //$$     private static ResourceLocation galliumLoc(String tail) {
-//$$         return ResourceLocation.fromNamespaceAndPath("gallium", "shaders/" + tail);
+//$$         return net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "shaders/" + tail);
 //$$     }
 //$$
 //$$     private static String sanitize(String shader) {
@@ -201,12 +202,11 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$
 //$$     private static void appendParamUniforms(StringBuilder json, ItemEffectConfig cfg) {
 //$$         for (ShaderParam p : cfg.params()) {
-//$$             switch (p) {
-//$$                 case ShaderParam.Float f -> appendFloatUniform(json, f.name(), 1, false);
-//$$                 case ShaderParam.Vec2 v -> appendFloatUniform(json, v.name(), 2, false);
-//$$                 case ShaderParam.Vec3 v -> appendFloatUniform(json, v.name(), 3, false);
-//$$                 case ShaderParam.Vec4 v -> appendFloatUniform(json, v.name(), 4, false);
-//$$             }
+//$$             java.util.Objects.requireNonNull(p);
+//$$             if (p instanceof ShaderParam.Float f) appendFloatUniform(json, f.name(), 1, false);
+//$$             else if (p instanceof ShaderParam.Vec2 v) appendFloatUniform(json, v.name(), 2, false);
+//$$             else if (p instanceof ShaderParam.Vec3 v) appendFloatUniform(json, v.name(), 3, false);
+//$$             else if (p instanceof ShaderParam.Vec4 v) appendFloatUniform(json, v.name(), 4, false);
 //$$         }
 //$$     }
 //$$
@@ -231,7 +231,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$             out.append(source, last, m.start());
 //$$             String ns = m.group(1);
 //$$             String path = m.group(2);
-//$$             ResourceLocation includeLoc = ResourceLocation.fromNamespaceAndPath(ns, "shaders/include/" + path);
+//$$             ResourceLocation includeLoc = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(ns, "shaders/include/" + path);
 //$$             Optional<Resource> res = rm.getResource(includeLoc);
 //$$             if (res.isPresent()) {
 //$$                 try (Reader r = res.get().openAsReader()) {
@@ -290,7 +290,7 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$                     // here keeps the gallium namespace contract working without patching vanilla.
 //$$                     text = inlineGalliumImports(text, delegate);
 //$$                     text = UboRewriter.rewrite(text);
-//$$                     if (world) text = WorldGlowShader.wrap(text, src.getPath().endsWith(".vsh"));
+//$$                     if (world) text = WorldGlowShader.wrapKnown(text, src.getPath().endsWith(".vsh"), src.getPath());
 //$$                     return Optional.of(stringResource(text));
 //$$                 } catch (Exception e) {
 //$$                     Gallium.LOGGER.error("Failed to read glow shader source {}", src, e);

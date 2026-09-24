@@ -64,7 +64,7 @@ public final class GuiGlowElementPipeline {
                 //#if MC>=1_21_09
                 .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", shaderPath))
                 //#else
-                //$$ .withFragmentShader(ResourceLocation.fromNamespaceAndPath("gallium", shaderPath))
+                //$$ .withFragmentShader(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", shaderPath))
                 //#endif
                 //#if MC>=1_26_00
                 .withColorTargetState(new ColorTargetState(BlendFunction.ADDITIVE))

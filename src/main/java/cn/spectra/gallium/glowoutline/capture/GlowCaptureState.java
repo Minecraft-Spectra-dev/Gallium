@@ -37,7 +37,7 @@ public final class GlowCaptureState {
     private boolean payloadReplayAttempted;
     private boolean captureScopeActive;
     private boolean deferredDiscardUntilScopeEnd;
-    //#if MC==1_21_11 || MC==1_26_01
+    //#if MC==1_21_01 || MC==1_21_11 || MC>=1_26_01
     /** Immutable pack transform frozen at the domain's old output-space prepare site. */
     public cn.spectra.gallium.glowoutline.ShaderPackHint.@Nullable ProjectionTransform lateReplayProjection;
     //#endif
@@ -47,6 +47,29 @@ public final class GlowCaptureState {
     public @Nullable FeatureRenderDispatcher captureDispatcher;
     /** Reused submit mirror; reset to the current vanilla storage for each capture. */
     public @Nullable DuplicatingSubmitNodeStorage duplicatingStorage;
+    //#endif
+    //#if MC>=1_21_09 && MC<1_26_02
+    private final CaptureStorageCleanup captureCleanup = new CaptureStorageCleanup();
+
+    void markCaptureStorageDirty() { captureCleanup.dirty(); }
+    void forgetCaptureStorage() { captureCleanup.forget(); }
+
+    /** A native dispatcher returns only after its submit storage has been cleared. */
+    public void captureStorageDrained(FeatureRenderDispatcher dispatcher) {
+        if (dispatcher == captureDispatcher && dispatcher != null
+                && dispatcher.getClass() == FeatureRenderDispatcher.class) {
+            var storage = dispatcher.getSubmitNodeStorage();
+            if (storage.getClass() == net.minecraft.client.renderer.SubmitNodeStorage.class) {
+                captureCleanup.cleared(storage);
+            }
+        }
+    }
+
+    void clearCaptureStorage() {
+        if (captureDispatcher == null) { captureCleanup.forget(); return; }
+        var storage = captureDispatcher.getSubmitNodeStorage();
+        if (!captureCleanup.isClear(storage)) captureCleanup.clear(storage, storage::clear);
+    }
     //#endif
     //#if MC>=1_26_02
     //$$ // 26.2: FeatureRenderDispatcher no longer owns a SubmitNodeStorage — renderAllFeatures
@@ -81,6 +104,8 @@ public final class GlowCaptureState {
     public float itemDistance;
     /** Final-output UV units per view-plane block; zero disables world-size styling. */
     public final org.joml.Vector2f itemWorldToUv = new org.joml.Vector2f();
+    /** Physical mask pixels; an unavailable certificate is encoded as four zeroes. */
+    public final ProjectedMaskBounds maskBounds = new ProjectedMaskBounds();
     /** Whether captureSceneDepth populated mask depth for this state in the current frame. Exact
      *  Iris replay intentionally leaves this false; if enabling Iris bypass fails later, replay
      *  restores the scene snapshot before drawing instead of treating an empty depth target as
@@ -160,6 +185,7 @@ public final class GlowCaptureState {
     }
 
     public void beginCaptureLifecycle(long epoch, boolean firstPersonCapture) {
+        maskBounds.invalidate();
         itemDistance = 0.0f;
         itemWorldToUv.zero();
         streamingLifecycle.reset();
@@ -218,6 +244,29 @@ public final class GlowCaptureState {
         return payloadReplayAttempted;
     }
 
+    private Object ordinaryMaskStorage;
+    private long ordinaryMaskStorageEpoch = -1;
+
+    /** The borrowed native mask was consumed by an ordered GPU copy, before final composition. */
+    public boolean markOrdinaryMaskStored(long epoch, Object storage) {
+        if (storage == null || epoch != captureEpoch || !payloadReplayAttempted
+                || !capturedThisFrame || !maskPreparedThisFrame || compositedThisFrame
+                || captureScopeActive || superResolutionPrepared || streamingReplayPlan() != null
+                || ordinaryMaskStorageEpoch == epoch) return false;
+        ordinaryMaskStorage = storage;
+        ordinaryMaskStorageEpoch = epoch;
+        return true;
+    }
+
+    public boolean hasOrdinaryMaskStored(long epoch, Object storage) {
+        return storage != null && epoch == captureEpoch && epoch == ordinaryMaskStorageEpoch
+                && ordinaryMaskStorage == storage && !compositedThisFrame;
+    }
+
+    public void forgetOrdinaryMaskStorage(Object storage) {
+        if (ordinaryMaskStorage == storage) { ordinaryMaskStorage = null; ordinaryMaskStorageEpoch = -1; }
+    }
+
     /** Ordinary replay has no SR plan; its shadow lifecycle retains CAPTURED/ELIGIBLE metadata. */
     boolean canBeginOrdinaryReplay(long epoch) {
         CaptureStage stage = streamingLifecycle.stage();
@@ -242,6 +291,8 @@ public final class GlowCaptureState {
 
     /** Version-specific, idempotent release of captured CPU payload references. */
     public void discardPayload() {
+        ordinaryMaskStorage = null;
+        ordinaryMaskStorageEpoch = -1;
         if (!payloadDiscarded) {
             //#if MC>=1_21_09
             if (duplicatingStorage != null) duplicatingStorage.disableCapture();
@@ -263,7 +314,7 @@ public final class GlowCaptureState {
         //$$     captureStorageClean = false;
         //$$ }
         //#else
-        if (captureDispatcher != null) captureDispatcher.getSubmitNodeStorage().clear();
+        clearCaptureStorage();
         //#endif
         //#else
         //$$ if (customBufferSource != null) customBufferSource.endFrame();
@@ -320,7 +371,7 @@ public final class GlowCaptureState {
         exactDepthAlignment = true;
         config = null;
         capturedModelViewMatrixValid = false;
-        //#if MC==1_21_11 || MC==1_26_01
+        //#if MC==1_21_01 || MC==1_21_11 || MC>=1_26_01
         lateReplayProjection = null;
         //#endif
         //#if MC>=1_21_06

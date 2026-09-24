@@ -173,12 +173,11 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$                 pass.setUniform("ShaderAlign", 1f, 1f, 0f, 0f);
 //$$                 // Per-config user params; must match pipeline's individual uniform decls.
 //$$                 for (ShaderParam p : cfg.params()) {
-//$$                     switch (p) {
-//$$                         case ShaderParam.Float f -> pass.setUniform(f.name(), f.value());
-//$$                         case ShaderParam.Vec2 v -> pass.setUniform(v.name(), v.x(), v.y());
-//$$                         case ShaderParam.Vec3 v -> pass.setUniform(v.name(), v.x(), v.y(), v.z());
-//$$                         case ShaderParam.Vec4 v -> pass.setUniform(v.name(), v.x(), v.y(), v.z(), v.w());
-//$$                     }
+//$$                     java.util.Objects.requireNonNull(p);
+//$$                     if (p instanceof ShaderParam.Float f) pass.setUniform(f.name(), f.value());
+//$$                     else if (p instanceof ShaderParam.Vec2 v) pass.setUniform(v.name(), v.x(), v.y());
+//$$                     else if (p instanceof ShaderParam.Vec3 v) pass.setUniform(v.name(), v.x(), v.y(), v.z());
+//$$                     else if (p instanceof ShaderParam.Vec4 v) pass.setUniform(v.name(), v.x(), v.y(), v.z(), v.w());
 //$$                 }
 //$$
 //$$                 pass.setVertexBuffer(0, vBuf);
@@ -292,12 +291,11 @@ public final class GuiImmediateGlowComposite {
 //$$         program.safeGetUniform("ScreenSize").set((float) mc.getWindow().getWidth(), (float) mc.getWindow().getHeight());
 //$$         program.safeGetUniform("ShaderAlign").set(1f, 1f, 0f, 0f);
 //$$         for (ShaderParam p : cfg.params()) {
-//$$             switch (p) {
-//$$                 case ShaderParam.Float f -> program.safeGetUniform(f.name()).set(f.value());
-//$$                 case ShaderParam.Vec2 v -> program.safeGetUniform(v.name()).set(v.x(), v.y());
-//$$                 case ShaderParam.Vec3 v -> program.safeGetUniform(v.name()).set(v.x(), v.y(), v.z());
-//$$                 case ShaderParam.Vec4 v -> program.safeGetUniform(v.name()).set(v.x(), v.y(), v.z(), v.w());
-//$$             }
+//$$             java.util.Objects.requireNonNull(p);
+//$$             if (p instanceof ShaderParam.Float f) program.safeGetUniform(f.name()).set(f.value());
+//$$             else if (p instanceof ShaderParam.Vec2 v) program.safeGetUniform(v.name()).set(v.x(), v.y());
+//$$             else if (p instanceof ShaderParam.Vec3 v) program.safeGetUniform(v.name()).set(v.x(), v.y(), v.z());
+//$$             else if (p instanceof ShaderParam.Vec4 v) program.safeGetUniform(v.name()).set(v.x(), v.y(), v.z(), v.w());
 //$$         }
 //$$
 //$$         RenderSystem.bindTexture(tile.getColorTextureId());

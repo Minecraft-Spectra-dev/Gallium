@@ -20,6 +20,19 @@ public final class WorldGlowShader {
                 ? "core/" + path.substring(PREFIX.length()) : null;
     }
 
+    public static String wrapKnown(String source, boolean vertex, String path) {
+        String name=sourceName(path);
+        if(OriginalGlowBundles.matches(name))source=OriginalGlowSource.adapt(source,vertex);
+        return wrap(source,vertex);
+    }
+
+    static String sourceName(String path) {
+        if(path==null)return null;
+        String name=path.startsWith("shaders/core/")?path.substring(13):path.startsWith("core/")?path.substring(5):null;
+        if(name!=null && (name.endsWith(".vsh") || name.endsWith(".fsh")))name=name.substring(0,name.length()-4);
+        return name==null || name.isEmpty()?null:name;
+    }
+
     public static String wrap(String source, boolean vertex) {
         if (source.contains(MARKER)) return source;
         if (source.startsWith("\uFEFF")) source = source.substring(1);
@@ -47,7 +60,11 @@ public final class WorldGlowShader {
                     gallium_InternalPackMain();
                 }
                 """;
-        return header + MARKER + "#define main gallium_InternalPackMain\n" + body
+        return header + MARKER + "#define GALLIUM_HAS_MASK_BOUNDS 1\n"
+                //#if MC>=1_21_06 && MC<1_26_02
+                + "#define GALLIUM_HAS_MASK_STORAGE 1\n"
+                //#endif
+                + "#define main gallium_InternalPackMain\n" + body
                 + "\n#undef main\n" + adapter;
     }
 

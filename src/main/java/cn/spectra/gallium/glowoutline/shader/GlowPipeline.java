@@ -106,8 +106,8 @@ public final class GlowPipeline {
     //$$         int variant = worldLocationCounter++;
     //$$         var builder = RenderPipeline.builder()
     //$$                 .withLocation((preview ? "pipeline/gallium_preview/" : "pipeline/gallium_glow/") + shaderName + "_" + variant)
-    //$$                 .withVertexShader(ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(shaderName)))
-    //$$                 .withFragmentShader(ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(shaderName)))
+    //$$                 .withVertexShader(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(shaderName)))
+    //$$                 .withFragmentShader(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(shaderName)))
     //$$                 .withSampler("DiffuseSampler")
     //$$                 .withSampler("MaskSampler")
     //$$                 .withSampler("MaskDepthSampler")
@@ -118,7 +118,8 @@ public final class GlowPipeline {
     //$$                 .withUniform("ShaderAlign", UniformType.VEC4)
     //$$                 .withUniform("ShaderOffset", UniformType.VEC4)
     //$$                 .withUniform("GalliumItemDistance", UniformType.FLOAT)
-    //$$                 .withUniform("GalliumWorldToUv", UniformType.VEC2);
+    //$$                 .withUniform("GalliumWorldToUv", UniformType.VEC2)
+    //$$                 .withUniform("GalliumMaskBounds", UniformType.VEC4);
     //$$         for (ShaderParam p : c.params()) {
     //$$             switch (p) {
     //$$                 case ShaderParam.Float f2 -> builder.withUniform(f2.name(), UniformType.FLOAT);
@@ -131,7 +132,7 @@ public final class GlowPipeline {
     //$$                 shaderName, variant, c.params().size());
     //$$         return builder
     //$$                 .withBlend(BlendFunction.ADDITIVE)
-                    //$$ .withColorWrite(true, !preview)
+    //$$                 .withColorWrite(true, !preview)
     //$$                 .withCull(false)
     //$$                 .withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
     //$$                 .withDepthWrite(false)
@@ -185,14 +186,17 @@ public final class GlowPipeline {
                     .withVertexShader(Identifier.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
                     .withFragmentShader(Identifier.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
                     //#else
-                    //$$ .withVertexShader(ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
-                    //$$ .withFragmentShader(ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
+                    //$$ .withVertexShader(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
+                    //$$ .withFragmentShader(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", WorldGlowShader.path(name)))
                     //#endif
                     .withSampler("DiffuseSampler")
                     .withSampler("MaskSampler")
                     .withSampler("MaskDepthSampler")
                     .withSampler("SceneDepthSampler")
                     .withSampler(WorldGlowShader.FOREGROUND_SAMPLER)
+                    //#if MC==1_26_01
+                    .withSampler("GalliumMaskBaseDepthSampler")
+                    //#endif
                     //#if MC>=1_21_06
                     .withUniform("GlowUniforms", UniformType.UNIFORM_BUFFER)
                     //#endif
@@ -219,6 +223,26 @@ public final class GlowPipeline {
             Gallium.LOGGER.info("Created glow pipeline: {}", name);
             return pipeline;
         });
+    }
+
+    static boolean matchesAutomaticContract(String shader) {
+        //#if MC>=1_26_02
+        //$$ return false;
+        //#elseif MC>=1_21_06
+        var pipeline=getOrCreate(shader);
+        if(pipeline==null)return false;
+        var compiled=com.mojang.blaze3d.systems.RenderSystem.getDevice().precompilePipeline(pipeline);
+        return compiled instanceof com.mojang.blaze3d.opengl.GlRenderPipeline gl && gl.isValid()
+                && AutomaticGlowPrograms.verify(gl.program(),gl.program().getProgramId());
+        //#else
+        //$$ boolean found=false;
+        //$$ for(var entry:BY_CONFIG.entrySet())if(entry.getKey().shader().equals(shader)){
+        //$$     found=true;var compiled=com.mojang.blaze3d.systems.RenderSystem.getDevice().precompilePipeline(entry.getValue());
+        //$$     if(!(compiled instanceof com.mojang.blaze3d.opengl.GlRenderPipeline gl) || !gl.isValid()
+        //$$             || !AutomaticGlowPrograms.verify(gl.program(),gl.program().getProgramId()))return false;
+        //$$ }
+        //$$ return found;
+        //#endif
     }
 
     public static RenderPipeline get(String shaderName) {
@@ -299,6 +323,14 @@ public final class GlowPipeline {
 //$$         return BY_CONFIG.computeIfAbsent(cfg, GlowPipeline::compileProgram);
 //$$     }
 //$$     public static CompiledShaderProgram getOrCreate(String shaderName) { return null; }
+//$$     static boolean matchesAutomaticContract(String shader) {
+//$$         boolean found=false;
+//$$         for(var entry:BY_CONFIG.entrySet())if(entry.getKey().shader().equals(shader)){
+//$$             found=true;var program=entry.getValue();
+//$$             if(program==null || !AutomaticGlowPrograms.verify(program,program.getProgramId()))return false;
+//$$         }
+//$$         return found;
+//$$     }
 //$$     public static CompiledShaderProgram get(String shaderName) { return null; }
 //$$     public static CompiledShaderProgram get(ItemEffectConfig cfg) { return BY_CONFIG.get(cfg); }
 //$$     public static void init() {}
@@ -309,7 +341,7 @@ public final class GlowPipeline {
 //$$     // fragment threw) where vertex still gets unwound.
 //$$     private static CompiledShaderProgram compileProgram(ItemEffectConfig cfg) {
 //$$         String shaderName = cfg.shader();
-//$$         ResourceLocation shaderId = ResourceLocation.fromNamespaceAndPath("gallium", "core/" + shaderName);
+//$$         ResourceLocation shaderId = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "core/" + shaderName);
 //$$         try (CompiledShader vertex = compileShader(shaderId, CompiledShader.Type.VERTEX);
 //$$              CompiledShader fragment = compileShader(shaderId, CompiledShader.Type.FRAGMENT)) {
 //$$             CompiledShaderProgram program = CompiledShaderProgram.link(vertex, fragment, DefaultVertexFormat.BLIT_SCREEN);
@@ -329,7 +361,7 @@ public final class GlowPipeline {
 //$$     }
 //$$
 //$$     private static CompiledShader compileShader(ResourceLocation shaderId, CompiledShader.Type type) throws Exception {
-//$$         ResourceLocation fileId = ResourceLocation.fromNamespaceAndPath(shaderId.getNamespace(),
+//$$         ResourceLocation fileId = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(shaderId.getNamespace(),
 //$$                 "shaders/" + shaderId.getPath() + (type == CompiledShader.Type.VERTEX ? ".vsh" : ".fsh"));
 //$$         Resource resource = Minecraft.getInstance().getResourceManager().getResourceOrThrow(fileId);
 //$$         try (Reader reader = resource.openAsReader()) {
@@ -340,7 +372,7 @@ public final class GlowPipeline {
 //$$             // perform if we'd gone through ShaderManager.loadShader. We compile directly,
 //$$             // so we have to do the rewrite ourselves via the shared UboRewriter.
 //$$             processed = UboRewriter.rewrite(processed);
-//$$             processed = WorldGlowShader.wrap(processed, type == CompiledShader.Type.VERTEX);
+//$$             processed = WorldGlowShader.wrapKnown(processed, type == CompiledShader.Type.VERTEX, shaderId.getPath());
 //$$             return CompiledShader.compile(shaderId, type, processed);
 //$$         }
 //$$     }
@@ -355,7 +387,7 @@ public final class GlowPipeline {
 //$$                     if (quoted) {
 //$$                         importId = base.withPath(p -> FileUtil.normalizeResourcePath(p + path));
 //$$                     } else {
-//$$                         importId = ResourceLocation.parse(path).withPrefix("shaders/include/");
+//$$                         importId = net.minecraft.resources.ResourceLocation.parse(path).withPrefix("shaders/include/");
 //$$                     }
 //$$                 } catch (ResourceLocationException e) {
 //$$                     return "#error " + e.getMessage();
@@ -377,6 +409,7 @@ public final class GlowPipeline {
 //$$         uniforms.add(uniform("ShaderOffset", 4));
 //$$         uniforms.add(uniform("GalliumItemDistance", 1));
 //$$         uniforms.add(uniform("GalliumWorldToUv", 2));
+//$$         uniforms.add(uniform("GalliumMaskBounds", 4));
 //$$         for (ShaderParam p : cfg.params()) {
 //$$             switch (p) {
 //$$                 case ShaderParam.Float f -> uniforms.add(uniform(f.name(), 1));
@@ -449,6 +482,14 @@ public final class GlowPipeline {
 //$$         return si;
 //$$     }
 //$$     public static ShaderInstance getOrCreate(String shaderName) { return null; }
+//$$     static boolean matchesAutomaticContract(String shader) {
+//$$         boolean found=false;
+//$$         for(var entry:BY_CONFIG.entrySet())if(entry.getKey().shader().equals(shader)){
+//$$             found=true;var program=entry.getValue();
+//$$             if(program==null || !AutomaticGlowPrograms.verify(program,program.getId()))return false;
+//$$         }
+//$$         return found;
+//$$     }
 //$$     public static ShaderInstance get(String shaderName) { return null; }
 //$$     public static ShaderInstance get(ItemEffectConfig cfg) { return BY_CONFIG.get(cfg); }
 //$$     public static void init() {}

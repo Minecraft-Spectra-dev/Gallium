@@ -98,7 +98,7 @@ public final class CaptureSites {
 //$$     private static final Set<String> GLINT_LAYER_NAMES = Set.of(
 //$$             "glint", "entity_glint", "armor_entity_glint", "glint_translucent"
 //$$     );
-//$$ 
+//$$
 //$$     public static MultiBufferSource beginIfCapturable(ItemStack stack,
 //$$                                                        MultiBufferSource original,
 //$$                                                        GlowOutlineConfig.Toggle featureFlag) {
@@ -106,7 +106,7 @@ public final class CaptureSites {
 //$$     }
 //$$
 //$$     public static class DelayingMultiBufferSource implements MultiBufferSource {
-//$$         // One capture layer per RenderType. The native ByteBufferBuilder (256 KiB off-heap)
+//$$         // One capture layer per RenderType. The growable native ByteBufferBuilder
 //$$         // is RETAINED across frames to avoid per-frame malloc/free churn — vanilla's
 //$$         // MultiBufferSource.BufferSource pools its buffers the same way. Only the lightweight
 //$$         // BufferBuilder wrapper is recreated each frame (it is single-use after build()).
@@ -132,7 +132,7 @@ public final class CaptureSites {
 //$$                     return l.builder;
 //$$                 }
 //$$             }
-//$$             ByteBufferBuilder nb = new ByteBufferBuilder(262144);
+//$$             ByteBufferBuilder nb = new ByteBufferBuilder(GlowCaptureManager.INITIAL_CAPTURE_VERTEX_BYTES);
 //$$             Layer l = new Layer(renderType, nb);
 //$$             l.builder = newBuilder(nb, renderType);
 //$$             layers.add(l);
@@ -318,7 +318,7 @@ public final class CaptureSites {
 //$$             }
 //$$         }
 //$$     }
-//$$ 
+//$$
 //$$     public static MultiBufferSource beginIfCapturable(ItemStack stack,
 //$$                                                        MultiBufferSource original,
 //$$                                                        GlowOutlineConfig.Toggle featureFlag,
@@ -353,7 +353,7 @@ public final class CaptureSites {
 //$$             throw e;
 //$$         }
 //$$     }
-//$$ 
+//$$
 //$$     public static void end() {
 //$$         GlowCaptureManager.endItemCapture();
 //$$     }
@@ -409,7 +409,7 @@ public final class CaptureSites {
 //$$                     return l.builder;
 //$$                 }
 //$$             }
-//$$             ByteBufferBuilder nb = new ByteBufferBuilder(262144);
+//$$             ByteBufferBuilder nb = new ByteBufferBuilder(GlowCaptureManager.INITIAL_CAPTURE_VERTEX_BYTES);
 //$$             Layer l = new Layer(renderType, nb);
 //$$             l.builder = newBuilder(nb, renderType);
 //$$             layers.add(l);
@@ -503,7 +503,9 @@ public final class CaptureSites {
 //$$                                 }
 //$$                                 pass.setVertexBuffer(0, vBuf);
 //$$                                 pass.setIndexBuffer(iBuf, iType);
+//$$                                 ModernMaskBounds.transformed(mesh, com.mojang.blaze3d.systems.RenderSystem.getModelViewMatrix());
 //$$                                 pass.drawIndexed(0, ds.indexCount());
+//$$                                 ModernMaskBounds.drawn(mesh, pipeline.getVertexFormat(), target);
 //$$                             }
 //$$                         } finally {
 //$$                             l.type.clearRenderState();
@@ -812,32 +814,44 @@ public final class CaptureSites {
 //$$                 TeeVertexConsumer consumer = consumers.get(i);
 //$$                 if (consumer.type == renderType) return consumer.reset(orig, cap, state);
 //$$             }
-//$$             TeeVertexConsumer consumer = new TeeVertexConsumer(renderType);
+//$$             TeeVertexConsumer consumer = newConsumer(renderType);
 //$$             consumers.add(consumer);
 //$$             return consumer.reset(orig, cap, state);
 //$$         }
 //$$
-//$$         private static final class TeeVertexConsumer implements VertexConsumer {
+//$$         private static boolean sodiumBulk = cn.spectra.gallium.platform.PlatformServices.isModLoaded("sodium");
+//$$         private static TeeVertexConsumer newConsumer(RenderType type) {
+//$$             if (sodiumBulk) {
+//$$                 try { return new cn.spectra.gallium.compat.sodium.SodiumCaptureTee(type); }
+//$$                 catch (LinkageError unsupported) {
+//$$                     sodiumBulk = false;
+//$$                     cn.spectra.gallium.Gallium.LOGGER.warn("Sodium bulk capture unavailable: {}", unsupported.toString());
+//$$                 }
+//$$             }
+//$$             return new TeeVertexConsumer(type);
+//$$         }
+//$$
+//$$         public static class TeeVertexConsumer implements VertexConsumer {
 //$$             private final RenderType type;
-//$$             private VertexConsumer original;
-//$$             private VertexConsumer capture;
+//$$             protected VertexConsumer original;
+//$$             protected VertexConsumer capture;
 //$$             private GlowCaptureState state;
 //$$             private boolean marked;
-//$$             private boolean captureEnabled;
+//$$             protected boolean captureEnabled;
 //$$             private boolean mirrorCurrentVertex;
-//$$             private TeeVertexConsumer(RenderType type) { this.type = type; }
-//$$             private TeeVertexConsumer reset(VertexConsumer original, VertexConsumer capture,
+//$$             protected TeeVertexConsumer(RenderType type) { this.type = type; }
+//$$             protected TeeVertexConsumer reset(VertexConsumer original, VertexConsumer capture,
 //$$                                             GlowCaptureState state) {
 //$$                 this.original = original; this.capture = capture; this.state = state;
 //$$                 this.marked = false; this.captureEnabled = true;
 //$$                 this.mirrorCurrentVertex = false; return this;
 //$$             }
 //$$             private void disableCapture() { captureEnabled = false; }
-//$$             private void detach() {
+//$$             protected void detach() {
 //$$                 original = null; capture = null; state = null; marked = false;
 //$$                 captureEnabled = false; mirrorCurrentVertex = false;
 //$$             }
-//$$             private void mark() {
+//$$             protected final void mark() {
 //$$                 if (!marked) { GlowCaptureManager.markCaptured(state); marked = true; }
 //$$             }
 //$$             @Override public VertexConsumer addVertex(float x, float y, float z) {
@@ -892,6 +906,8 @@ public final class CaptureSites {
 //$$             final RenderType type;
 //$$             final ByteBufferBuilder nativeBuffer;
 //$$             BufferBuilder builder;
+//$$             com.mojang.blaze3d.vertex.MeshData prepared;
+//$$             LegacyMeshUploadBatch.Range uploaded;
 //$$             Layer(RenderType type, ByteBufferBuilder nativeBuffer) {
 //$$                 this.type = type;
 //$$                 this.nativeBuffer = nativeBuffer;
@@ -907,7 +923,7 @@ public final class CaptureSites {
 //$$                     return l.builder;
 //$$                 }
 //$$             }
-//$$             ByteBufferBuilder nb = new ByteBufferBuilder(262144);
+//$$             ByteBufferBuilder nb = new ByteBufferBuilder(GlowCaptureManager.INITIAL_CAPTURE_VERTEX_BYTES);
 //$$             Layer l = new Layer(renderType, nb);
 //$$             l.builder = newBuilder(nb, renderType);
 //$$             layers.add(l);
@@ -925,12 +941,30 @@ public final class CaptureSites {
 //$$             }
 //$$         }
 //$$
+//$$         void prepareMeshes(LegacyMeshUploadBatch batch) {
+//$$             for (Layer layer : layers) {
+//$$                 if (layer.builder == null) continue;
+//$$                 try {
+//$$                     layer.prepared = layer.builder.build();
+//$$                     if (layer.prepared != null) layer.uploaded = batch.add(layer.prepared);
+//$$                 } finally { layer.builder = null; }
+//$$             }
+//$$         }
+//$$
+//$$         void clearPreparedMeshes() {
+//$$             for (Layer layer : layers) {
+//$$                 var mesh = layer.prepared;
+//$$                 layer.prepared = null; layer.uploaded = null;
+//$$                 if (mesh != null) mesh.close();
+//$$             }
+//$$         }
+//$$
 //$$         public void flushToTarget(TextureTarget target) {
 //$$             if (target == null) return;
 //$$             for (Layer l : layers) {
-//$$                 if (l.builder == null) continue;
+//$$                 if (l.builder == null && l.prepared == null) continue;
 //$$                 try {
-//$$                     try (var mesh = l.builder.build()) {
+//$$                     try (var mesh = l.prepared != null ? l.prepared : l.builder.build()) {
 //$$                         if (mesh != null) {
 //$$                             // RenderType.draw(mesh) does setupRenderState() → BufferUploader.drawWithShader → clearRenderState().
 //$$                             // The setupRenderState() runs every CompositeState shard, including OutputStateShard which
@@ -940,12 +974,18 @@ public final class CaptureSites {
 //$$                             // — visible to the user as the captured item appearing in the wrong screen corner.
 //$$                             // Fix: invoke setupRenderState() and clearRenderState() manually around the draw, and
 //$$                             // re-bind the mask target *after* setupRenderState so our binding wins.
-//$$                             l.type.setupRenderState();
+//$$                             boolean previousOutput = LegacyOutputBindings.enter(l.type);
 //$$                             try {
-//$$                                 target.bindWrite(true);
-//$$                                 BufferUploader.drawWithShader(mesh);
+//$$                                 l.type.setupRenderState();
+//$$                                 try {
+//$$                                     target.bindWrite(true);
+//$$                                     MaskBoundsTracker.record(mesh, l.type);
+//$$                                     LegacyMeshUploadBatch.draw(l.uploaded, mesh);
+//$$                                 } finally {
+//$$                                     l.type.clearRenderState();
+//$$                                 }
 //$$                             } finally {
-//$$                                 l.type.clearRenderState();
+//$$                                 LegacyOutputBindings.restore(previousOutput);
 //$$                             }
 //$$                         }
 //$$                     }
@@ -953,7 +993,7 @@ public final class CaptureSites {
 //$$                     cn.spectra.gallium.Gallium.LOGGER.error(
 //$$                             "Error flushing pre-1.21.5 mesh for layer {}: {}", l.type, e.toString(), e);
 //$$                 } finally {
-//$$                     l.builder = null;
+//$$                     l.builder = null; l.prepared = null; l.uploaded = null;
 //$$                 }
 //$$             }
 //$$             target.unbindWrite();

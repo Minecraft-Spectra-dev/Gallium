@@ -3,9 +3,7 @@ package cn.spectra.gallium.glowoutline;
 import cn.spectra.gallium.Gallium;
 import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager;
 import cn.spectra.gallium.glowoutline.capture.GlowCaptureState;
-//#if MC==1_21_11 || MC==1_26_01
 import cn.spectra.gallium.glowoutline.capture.OpenGlMaskOrdering;
-//#endif
 import cn.spectra.gallium.glowoutline.capture.GlowCaptureManager.SceneDepthSnapshotStatus;
 import cn.spectra.gallium.glowoutline.shader.GlowComposite;
 import cn.spectra.gallium.glowoutline.shader.GlowResources;
@@ -103,13 +101,11 @@ public final class SuperResolutionCompat {
     private static boolean lateReplayFrame;
     private static boolean lateReplayFinalConsumed;
     private static boolean sharedMaskFrame;
-    //#if MC==1_21_11 || MC==1_26_01
     private static OpenGlMaskOrdering.Stamp sharedMaskBackend;
 
     public static OpenGlMaskOrdering.Stamp sharedMaskBackend() {
         return sharedMaskBackend;
     }
-    //#endif
     /** Per-mode evidence; replay and mask ownership selection are frozen at HEAD. */
     private static final CapabilityTracker streamingCapabilities = new CapabilityTracker();
     private static final DomainLifecycle streamingDomains = new DomainLifecycle(0L);
@@ -194,7 +190,7 @@ public final class SuperResolutionCompat {
         lateReplayFrame = selectsLateReplayAtHead(
                 isActive(), mode, firstPerson, capability);
         sharedMaskFrame = false;
-        //#if MC==1_21_11 || MC==1_26_01
+        //#if MC==1_21_01 || MC==1_21_11 || MC>=1_26_01
         sharedMaskBackend = lateReplayFrame ? OpenGlMaskOrdering.observe() : null;
         if (sharedMaskBackend != null) {
             markCapability(mode, HookKind.BACKEND_ORDERING, HookCapabilityState.ENABLED);
@@ -491,8 +487,8 @@ public final class SuperResolutionCompat {
 
     static boolean selectsLateReplayAtHead(
             boolean active, CaptureMode mode, boolean firstPerson, ModeCapability capability) {
-        //#if MC==1_21_11 || MC==1_26_01
-        return active && (mode == CaptureMode.A || mode == CaptureMode.C)
+        //#if MC==1_21_01 || MC==1_21_11 || MC>=1_26_01
+        return active && (mode == CaptureMode.A || mode == CaptureMode.B || mode == CaptureMode.C)
                 && SrStreamingCoordinator.lateReplayReadiness(capability, firstPerson)
                 == SrStreamingCoordinator.StreamingCapability.ENABLED;
         //#else
@@ -519,7 +515,7 @@ public final class SuperResolutionCompat {
 
     /** Freeze the pack transform at the former prepare site, before SR changes its live state. */
     private static void freezeLateReplayInputs(boolean firstPerson) {
-        //#if MC==1_21_11 || MC==1_26_01
+        //#if MC==1_21_01 || MC==1_21_11 || MC>=1_26_01
         if (!lateReplayFrame) return;
         ShaderPackHint.ProjectionTransform transform = IrisCompat.getShaderProjectionTransform(
                 streamingFramePlan.expectedDisplayWidth(), streamingFramePlan.expectedDisplayHeight());
@@ -751,7 +747,7 @@ public final class SuperResolutionCompat {
 
     static boolean usesInlineHandCompletion(CaptureMode mode, boolean irisActive) {
         if (mode == CaptureMode.A || mode == CaptureMode.B) return true;
-        //#if MC==1_21_11 || MC==1_26_01
+        //#if MC==1_21_01 || MC==1_21_11 || MC>=1_26_01
         // SR skips its separated-hand path when Iris renders the hand inside renderLevel.
         // The subsequent vanilla hand TAIL is still reached, after both Iris hand phases.
         return mode == CaptureMode.C && irisActive;
@@ -831,11 +827,7 @@ public final class SuperResolutionCompat {
 
     /** Only these current SR-mainline render pipelines expose the shared pre-HUD final point. */
     static boolean usesDeferredFinalHookBuild() {
-        //#if MC==1_21_11 || MC==1_26_01 || MC==1_26_02
         return true;
-        //#else
-        //$$ return false;
-        //#endif
     }
 
     /** The invasive RenderTarget/event layer is never enabled on frozen non-mainline builds. */
@@ -886,13 +878,12 @@ public final class SuperResolutionCompat {
                 HookKind.FINAL, HookCapabilityState.ENABLED);
         Minecraft minecraft = Minecraft.getInstance();
         RenderTarget display = currentMainTarget();
-        //#if MC==1_21_11 || MC==1_26_01
-        // Ownership was frozen at HEAD. Even a mode/backend change must not send a shared
-        // ordinary payload through an SR prepare or a null per-state fallback this frame.
+        // Ownership is common to every version and frozen before any capture is accepted.
         if (GlowCaptureManager.ownsSequentialSharedMaskFrame()) {
             GlowComposite.composite(minecraft, display);
             return true;
         }
+        //#if MC==1_21_01 || MC==1_21_11 || MC>=1_26_01
         if (lateReplayFrame) {
             compositeLateReplayFrame(minecraft, display);
             return true;
@@ -990,7 +981,7 @@ public final class SuperResolutionCompat {
         }
     }
 
-    //#if MC==1_21_11 || MC==1_26_01
+    //#if MC==1_21_01 || MC==1_21_11 || MC>=1_26_01
     private static boolean lateFrameEvidenceCurrent(SrFramePlan plan, Minecraft minecraft,
                                                     RenderTarget display) {
         if (!lateReplayFrame || plan.epoch() != frameEpoch || !isActive()
@@ -1092,7 +1083,11 @@ public final class SuperResolutionCompat {
                  var composite = GlowComposite.prepareLateCompositeFrame(minecraft, display)) {
                 if (composite == null || (sharedMaskFrame && masks == null)) return;
                 boolean foreground = GlowCaptureManager.getForegroundDepthTarget() != null;
+                //#if MC>=1_21_06
                 boolean displayDepth = GlowCaptureManager.getSuperResolutionDisplaySceneDepthTarget() != null;
+                //#else
+                //$$ boolean displayDepth = false; // Legacy output replay copies scene depth into the borrowed mask.
+                //#endif
                 var resources = new SrStreamingCoordinator.PreparedFrameResources(
                         sharedMaskFrame ? SrStreamingCoordinator.ReplayTargetMode.SHARED_MASK
                                 : SrStreamingCoordinator.ReplayTargetMode.STATE_MASK,

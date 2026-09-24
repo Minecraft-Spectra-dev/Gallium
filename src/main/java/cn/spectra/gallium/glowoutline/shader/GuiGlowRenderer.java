@@ -13,6 +13,9 @@ import com.mojang.blaze3d.textures.GpuTexture;
 public final class GuiGlowRenderer {
 
     private static TextureTarget maskTarget;
+    //#if MC>=1_21_06 && MC<1_26_02
+    private static int dirtyRows;
+    //#endif
     private static long lastCopyErrorLogNanos;
     private static final long COPY_ERROR_LOG_INTERVAL_NANOS = 5_000_000_000L; // 5s
 
@@ -37,6 +40,10 @@ public final class GuiGlowRenderer {
                     //$$ , GpuFormat.RGBA8_UNORM
                     //#endif
             );
+            //#if MC>=1_21_06 && MC<1_26_02
+            // Newly allocated storage has no known contents. Initialize every pixel once.
+            dirtyRows = screenH;
+            //#endif
         }
         return maskTarget;
     }
@@ -47,15 +54,25 @@ public final class GuiGlowRenderer {
         ensureMaskTarget(screenW, screenH);
 
         var encoder = RenderSystem.getDevice().createCommandEncoder();
+        //#if MC>=1_21_06 && MC<1_26_02
+        if (!NativeGuiMaskClear.clear(maskTarget.getColorTexture(), dirtyRows)) {
+        //#endif
         //#if MC>=1_26_02
         //$$ encoder.clearColorTexture(maskTarget.getColorTexture(), new org.joml.Vector4f(0.0F));
         //#else
         encoder.clearColorTexture(maskTarget.getColorTexture(), 0);
         //#endif
+        //#if MC>=1_21_06 && MC<1_26_02
+        }
+        dirtyRows = 0;
+        //#endif
 
         GpuTexture maskTex = maskTarget.getColorTexture();
         int actualMaskW = maskTex.getWidth(0);
         int actualMaskH = maskTex.getHeight(0);
+        //#if MC>=1_21_06 && MC<1_26_02
+        var nativeCopies = NativeGuiMaskCopy.begin(maskTex);
+        //#endif
 
         // Fix the limit before iterating: captures acquired by a nested submission belong to a
         // later pass, matching the old snapshot-list semantics without copying the active prefix.
@@ -100,6 +117,12 @@ public final class GuiGlowRenderer {
             if (dstX < 0 || dstY < 0 || dstX + copyW > actualMaskW || dstY + copyH > actualMaskH) continue;
 
             try {
+                //#if MC>=1_21_06 && MC<1_26_02
+                // Only copied interiors can become nonzero. Track before the operation so
+                // even a copy failure cannot leave an untracked, partially written region.
+                dirtyRows = Math.max(dirtyRows, dstY + copyH);
+                if (nativeCopies != null && nativeCopies.copy(atlasTex, dstX, dstY, srcX, srcY, copyW, copyH)) continue;
+                //#endif
                 encoder.copyTextureToTexture(atlasTex, maskTex, 0, dstX, dstY, srcX, srcY, copyW, copyH);
             } catch (IllegalArgumentException e) {
                 long now = System.nanoTime();

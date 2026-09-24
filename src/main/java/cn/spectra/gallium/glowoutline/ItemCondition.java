@@ -121,7 +121,7 @@ public sealed interface ItemCondition permits
         //$$ private static @Nullable ResourceLocation compileContainsId(CheckMode mode, String value) {
         //$$     if (mode != CheckMode.CONTAINS) return null;
         //$$     try {
-        //$$         return ResourceLocation.parse(value);
+        //$$         return net.minecraft.resources.ResourceLocation.parse(value);
         //$$     } catch (ResourceLocationException ignored) {
         //$$         return null;
         //$$     }

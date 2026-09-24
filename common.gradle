@@ -203,10 +203,27 @@ List<String> STUB_MIXIN_CLASSES_NON_SR_MAINLINE = [
         "RenderSystemFrameCleanupMixin"
 ]
 
-List<String> ACTIVE_STUB_MIXINS = []
-if (project.mod_loader == 'neoforge' && mcVersion == 1_21_01) ACTIVE_STUB_MIXINS += ['HumanoidArmorLayerMixin']
-if (mcVersion != 1_21_01) ACTIVE_STUB_MIXINS += ['SuperResolutionLegacyDepthFormatMixin']
-if (mcVersion != 1_21_11 && mcVersion != 1_26_01) {
+  List<String> ACTIVE_STUB_MIXINS = []
+  if (mcVersion != 1_26_01) ACTIVE_STUB_MIXINS += ['EmptyMovingBlockCaptureMixin']
+  if (mcVersion != 1_21_11) ACTIVE_STUB_MIXINS += ['accessor.NativePrimaryBuilderAccessor', 'accessor.NativePrimaryBufferAccessor', 'accessor.NativePrimaryPassAccessor', 'accessor.NativePrimarySamplerAccessor', 'accessor.NativePrimaryPartAccessor', 'NativeSourcePartStorageMixin', 'NativeSourcePartDrawMixin']
+  if (mcVersion != 1_21_11 && mcVersion != 1_26_01) {
+      ACTIVE_STUB_MIXINS += ['NativeVisibilityTextureMixin', 'NativeSourceModelStorageMixin', 'NativeSourceItemStorageMixin', 'NativeSourceModelDrawMixin', 'NativeSourceItemDrawMixin', 'NativePrimaryBufferMixin', 'NativePrimaryBuilderMixin', 'NativePrimaryDrawMixin']
+  }
+if (mcVersion < 1_21_06 || mcVersion >= 1_26_02) {
+    ACTIVE_STUB_MIXINS += ['NativeCaptureFenceMixin', 'NativeFrameFenceMixin']
+}
+if (mcVersion >= 1_21_05) {
+    ACTIVE_STUB_MIXINS += ['GlowUniformUploadMixin', 'LegacyMaskOutputMixin', 'IrisLegacyShaderBypassMixin', 'accessor.LegacyCompositeRenderTypeAccessor',
+                          'accessor.LegacyCompositeStateAccessor', 'accessor.LegacyTextureStateAccessor']
+}
+if (mcVersion != 1_21_01) {
+    ACTIVE_STUB_MIXINS += ['SuperResolutionLegacyDepthFormatMixin']
+}
+if (project.mod_loader == 'neoforge' && mcVersion == 1_21_01) {
+    // NeoForge's extended Model/animation signature is handled by the platform mixin.
+    ACTIVE_STUB_MIXINS += ['HumanoidArmorLayerMixin']
+}
+if (mcVersion < 1_21_06 || mcVersion >= 1_26_02) {
     ACTIVE_STUB_MIXINS += ["NativeMaskMeshReplayMixin"]
 }
 ACTIVE_STUB_MIXINS += unobfuscated ? STUB_MIXIN_CLASSES_FROM_1_26 : STUB_MIXIN_CLASSES_PRE_1_26

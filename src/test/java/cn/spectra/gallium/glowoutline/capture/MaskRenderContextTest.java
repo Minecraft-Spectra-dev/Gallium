@@ -237,6 +237,59 @@ class MaskRenderContextTest {
     }
 
     @Test
+    void orderedCopyReleasesNativeMaskOnlyAfterIndependentStorageExists() {
+        var allocations = new ArrayList<Target>();
+        try (var owner = owner(allocations)) {
+            owner.beginFrame(5, 854, 480, "gl", () -> true);
+            try (var frame = owner.prepareOrdinaryFrame()) {
+                var state = ordinary(5, false, true);
+                assertTrue(frame.beginOrdinaryState(state));
+                assertTrue(state.beginOrdinaryReplayAttempt(5));
+                assertFalse(frame.storeOrdinaryState(state, target -> new Object()));
+                state.maskPreparedThisFrame = true;
+                assertFalse(frame.storeOrdinaryState(state, target -> null));
+                assertThrows(IllegalStateException.class, () -> frame.storeOrdinaryState(state, target -> {
+                    throw new IllegalStateException("copy failed");
+                }));
+                assertSame(allocations.get(0), frame.targetFor(state));
+                Object storage = new Object();
+                assertTrue(frame.storeOrdinaryState(state, target -> storage));
+                assertFalse(state.compositedThisFrame);
+                assertNull(frame.targetFor(state));
+                assertTrue(state.hasOrdinaryMaskStored(5, storage));
+                assertFalse(state.hasOrdinaryMaskStored(6, storage));
+                assertFalse(state.hasOrdinaryMaskStored(5, new Object()));
+                assertFalse(state.beginOrdinaryReplayAttempt(5));
+                var next = ordinary(5, true, false);
+                assertTrue(frame.beginOrdinaryState(next));
+                state.invalidateCapture();
+                assertFalse(state.hasOrdinaryMaskStored(5, storage));
+            }
+        }
+    }
+
+    @Test
+    void frameReplacementDuringCopyCannotIssueAStorageReceipt() {
+        var allocations = new ArrayList<Target>();
+        try (var owner = owner(allocations)) {
+            owner.beginFrame(5, 854, 480, "gl", () -> true);
+            try (var frame = owner.prepareOrdinaryFrame()) {
+                var state = ordinary(5, false, true);
+                assertTrue(frame.beginOrdinaryState(state));
+                assertTrue(state.beginOrdinaryReplayAttempt(5));
+                state.maskPreparedThisFrame = true;
+                Object storage = new Object();
+                assertFalse(frame.storeOrdinaryState(state, target -> {
+                    owner.beginFrame(6, 854, 480, "gl", () -> true);
+                    return storage;
+                }));
+                assertFalse(state.hasOrdinaryMaskStored(5, storage));
+                assertFalse(frame.valid());
+            }
+        }
+    }
+
+    @Test
     void ordinaryLeaseRejectsStaleOpenInvalidOrPreviouslyPreparedCaptures() {
         var allocations = new ArrayList<Target>();
         try (var owner = owner(allocations)) {

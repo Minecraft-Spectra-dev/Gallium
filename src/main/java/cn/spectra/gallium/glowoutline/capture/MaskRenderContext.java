@@ -4,6 +4,7 @@ import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.*;
 
@@ -131,6 +132,21 @@ public final class MaskRenderContext<T> implements AutoCloseable {
                     || !state.capturedThisFrame || !state.maskPreparedThisFrame || !state.compositedThisFrame
                     || (state.captureStage() != CaptureStage.CAPTURED
                     && state.captureStage() != CaptureStage.ELIGIBLE)) return false;
+            occupant = null;
+            return true;
+        }
+
+        /** An ordered copy into independently owned storage consumes the mask without claiming a composite. */
+        public boolean storeOrdinaryState(GlowCaptureState state, Function<T, Object> copy) {
+            if (use != FrameUse.ORDINARY || !valid() || occupant != state
+                    || state.captureEpoch != expectedEpoch || state.hasOpenCaptureScope()
+                    || state.streamingReplayPlan() != null || !state.hasPayloadReplayAttempted()
+                    || !state.capturedThisFrame || !state.maskPreparedThisFrame || state.compositedThisFrame
+                    || (state.captureStage() != CaptureStage.CAPTURED
+                    && state.captureStage() != CaptureStage.ELIGIBLE)) return false;
+            Object storage = copy.apply(mask);
+            if (storage == null || !valid() || occupant != state
+                    || !state.markOrdinaryMaskStored(expectedEpoch, storage)) return false;
             occupant = null;
             return true;
         }

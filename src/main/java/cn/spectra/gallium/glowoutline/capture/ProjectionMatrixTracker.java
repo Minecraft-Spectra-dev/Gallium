@@ -67,6 +67,12 @@ public final class ProjectionMatrixTracker {
         if (stored != null) stored.valid = false;
     }
 
+    /** Release the association when an owned projection buffer is destroyed. */
+    public static void remove(GpuBufferSlice slice) {
+        RenderSystem.assertOnRenderThread();
+        ASSOCIATIONS.remove(slice);
+    }
+
     /**
      * Returns a fresh copy of the matrix associated with {@code slice}, or {@code null} if no
      * valid upload proof exists for that slice. Callers should tolerate {@code null} by

@@ -36,7 +36,7 @@ public abstract class WorldGlowShaderSourceMixin {
         String originalPath = WorldGlowShader.originalPath(id.getNamespace(), id.getPath());
         if (originalPath == null) return;
         String source = getShaderSource(id.withPath(originalPath), type);
-        callback.setReturnValue(source == null ? null : WorldGlowShader.wrap(source, type == ShaderType.VERTEX));
+        callback.setReturnValue(source == null ? null : WorldGlowShader.wrapKnown(source, type == ShaderType.VERTEX, originalPath));
     }
 }
 //#else

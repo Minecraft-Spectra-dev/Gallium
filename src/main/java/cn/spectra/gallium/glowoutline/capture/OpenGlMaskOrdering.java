@@ -1,10 +1,13 @@
 package cn.spectra.gallium.glowoutline.capture;
 
-//#if MC==1_21_11 || MC==1_26_01
+//#if MC>=1_21_05
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.GpuDevice;
+//#else
+//$$ import org.lwjgl.opengl.GL;
+//#endif
 import com.mojang.blaze3d.systems.RenderSystem;
-//#if MC==1_21_11
+//#if MC>=1_21_05 && MC<1_26_01
 //$$ import com.mojang.blaze3d.opengl.GlDevice;
 //$$ import com.mojang.blaze3d.opengl.GlCommandEncoder;
 //#endif
@@ -19,14 +22,14 @@ import java.lang.reflect.Field;
  * clears in one context. No shared-image feedback loop or shader-image store is used here.
  */
 public final class OpenGlMaskOrdering {
-    //#if MC==1_26_01
+    //#if MC>=1_26_01
     private static final Field DEVICE_BACKEND = field(GpuDevice.class, "backend");
     private static final Field ENCODER_BACKEND = field(CommandEncoder.class, "backend");
     //#endif
 
     private OpenGlMaskOrdering() {}
 
-    //#if MC==1_26_01
+    //#if MC>=1_26_01
     private static Field field(Class<?> type, String name) {
         try {
             Field field = type.getDeclaredField(name);
@@ -37,9 +40,10 @@ public final class OpenGlMaskOrdering {
     }
     //#endif
 
+    //#if MC>=1_21_05
     private static boolean matchesInspectedBackend(GpuDevice device, CommandEncoder encoder)
             throws ReflectiveOperationException {
-        //#if MC==1_26_01
+        //#if MC>=1_26_01
         if (DEVICE_BACKEND == null || ENCODER_BACKEND == null
                 || device.getClass() != GpuDevice.class || encoder.getClass() != CommandEncoder.class) return false;
         Object nativeDevice = DEVICE_BACKEND.get(device), nativeEncoder = ENCODER_BACKEND.get(encoder);
@@ -52,9 +56,16 @@ public final class OpenGlMaskOrdering {
         //#endif
     }
 
+    //#endif
+
     public record Stamp(Object device, long context) {
         public boolean current() {
-            return RenderSystem.isOnRenderThread() && RenderSystem.getDevice() == device
+            return RenderSystem.isOnRenderThread()
+                    //#if MC>=1_21_05
+                    && RenderSystem.getDevice() == device
+                    //#else
+                    //$$ && GL.getCapabilities() == device
+                    //#endif
                     && context != 0L && GLFW.glfwGetCurrentContext() == context;
         }
     }
@@ -62,14 +73,17 @@ public final class OpenGlMaskOrdering {
     public static Stamp observe() {
         try {
             if (!RenderSystem.isOnRenderThread()) return null;
+            //#if MC>=1_21_05
             GpuDevice device = RenderSystem.getDevice();
             CommandEncoder encoder = device.createCommandEncoder();
             if (!matchesInspectedBackend(device, encoder)) return null;
+            //#else
+            //$$ Object device = GL.getCapabilities();
+            //#endif
             long context = GLFW.glfwGetCurrentContext();
             return context == 0L ? null : new Stamp(device, context);
-        } catch (ReflectiveOperationException | RuntimeException | LinkageError unavailable) {
+        } catch (Exception | LinkageError unavailable) {
             return null; // Unknown wrappers/backends retain independently owned masks.
         }
     }
 }
-//#endif

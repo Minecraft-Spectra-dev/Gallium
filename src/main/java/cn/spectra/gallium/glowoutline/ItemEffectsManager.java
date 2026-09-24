@@ -4,7 +4,7 @@ import cn.spectra.gallium.Gallium;
 import cn.spectra.gallium.glowoutline.shader.GlowResources;
 import cn.spectra.gallium.glowoutline.shader.GuiGlowElementPipeline;
 //#if MC<1_21_06
-import cn.spectra.gallium.glowoutline.shader.GuiImmediateGlowPipeline;
+//$$ import cn.spectra.gallium.glowoutline.shader.GuiImmediateGlowPipeline;
 //#endif
 import cn.spectra.gallium.glowoutline.shader.GlowPipeline;
 import com.google.gson.JsonArray;
@@ -43,8 +43,8 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
     public static final Identifier RELOAD_ID = Identifier.fromNamespaceAndPath("gallium", "item_effects");
     private static final Identifier RESOURCE_PATH = Identifier.fromNamespaceAndPath("gallium", "item_effects.json");
     //#else
-    //$$ public static final ResourceLocation RELOAD_ID = ResourceLocation.fromNamespaceAndPath("gallium", "item_effects");
-    //$$ private static final ResourceLocation RESOURCE_PATH = ResourceLocation.fromNamespaceAndPath("gallium", "item_effects.json");
+    //$$ public static final ResourceLocation RELOAD_ID = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "item_effects");
+    //$$ private static final ResourceLocation RESOURCE_PATH = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "item_effects.json");
     //#endif
 
     private static volatile List<ItemEffectRule> rules = List.of();
@@ -54,9 +54,14 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
 
     @Override
     public void onResourceManagerReload(ResourceManager manager) {
-        // Drop runtime GPU resources (mask targets, capture buffers). Pipelines are pruned
-        // incrementally below so unchanged shaders don't have to rebuild.
+        // Native pipeline descriptors survive reload because ShaderManager replaces their
+        // compiled programs. Legacy private programs own compiled GLSL directly, so an
+        // unchanged config must not preserve code from a previous resource pack revision.
+        //#if MC<1_21_05
+        //$$ GlowResources.disposeAll();
+        //#else
         GlowResources.disposeRuntime();
+        //#endif
 
         var resource = manager.getResource(RESOURCE_PATH);
         if (resource.isEmpty()) {
@@ -396,7 +401,7 @@ public class ItemEffectsManager implements ResourceManagerReloadListener {
     //#else
     //$$ private static ResourceLocation tryParseId(String raw, int ruleIndex, String kind) {
     //$$     try {
-    //$$         return ResourceLocation.parse(raw);
+    //$$         return net.minecraft.resources.ResourceLocation.parse(raw);
     //$$     } catch (ResourceLocationException e) {
     //$$         Gallium.LOGGER.warn("item_effects rule[{}]: invalid {} id '{}': {}", ruleIndex, kind, raw, e.getMessage());
     //$$         return null;

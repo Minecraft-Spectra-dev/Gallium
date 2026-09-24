@@ -1,10 +1,10 @@
 package cn.spectra.gallium.glowoutline.mixin;
 
-//#if MC==1_21_11 || MC==1_26_01
+//#if MC>=1_21_06
 import cn.spectra.gallium.glowoutline.capture.ProjectionMatrixTracker;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.systems.RenderSystem;
-//#if MC==1_21_11
+//#if MC<1_26_00
 //$$ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 //#endif
 import java.lang.reflect.Field;
@@ -38,7 +38,7 @@ class ProjectionCacheReturnTest {
     }
 
     private static Object bufferCallbacks() {
-        //#if MC==1_26_01
+        //#if MC>=1_26_00
         return new ProjectionMatrixBufferMixin();
         //#else
         //$$ return new CachedPerspectiveProjectionMatrixBufferMixin();
@@ -61,7 +61,7 @@ class ProjectionCacheReturnTest {
     }
 
     private static void createdWithoutSuccessfulReturn(Object callbacks, Matrix4f matrix) throws Exception {
-        //#if MC==1_26_01
+        //#if MC>=1_26_00
         invoke(callbacks, "galliumBeginUpload", returned(null));
         //#else
         //$$ invoke(callbacks, "galliumBeginCachedProjection", returned(null));
@@ -71,7 +71,7 @@ class ProjectionCacheReturnTest {
     }
 
     private static void uploaded(Object callbacks, Matrix4f matrix, GpuBufferSlice slice) throws Exception {
-        //#if MC==1_26_01
+        //#if MC>=1_26_00
         createdWithoutSuccessfulReturn(callbacks, matrix);
         invoke(callbacks, "galliumRememberMatrix", matrix, returned(slice));
         //#else
@@ -81,7 +81,7 @@ class ProjectionCacheReturnTest {
     }
 
     private static void cacheHit(Object callbacks, GpuBufferSlice slice) throws Exception {
-        //#if MC==1_26_01
+        //#if MC>=1_26_00
         invoke(callbacks, "galliumRestoreCachedMatrix", returned(slice));
         //#else
         //$$ invoke(callbacks, "galliumBeginCachedProjection", returned(null));
@@ -92,7 +92,7 @@ class ProjectionCacheReturnTest {
     @Test
     void actualUploadThenTrackerReloadThenCacheHitRestoresCapturedMatrix() throws Exception {
         Object callbacks = bufferCallbacks();
-        var slice = new GpuBufferSlice(null, 0L, 64L);
+        var slice = new GpuBufferSlice(null, 0, 64);
         var matrix = new Matrix4f().perspective(1.1f, 1.8f, 0.05f, 100.0f);
         var expected = new Matrix4f(matrix);
         uploaded(callbacks, matrix, slice);
@@ -107,8 +107,8 @@ class ProjectionCacheReturnTest {
     @Test
     void twoBufferInstancesRestoreOnlyTheirOwnLastSuccessfulUpload() throws Exception {
         Object world = bufferCallbacks(), hand = bufferCallbacks();
-        var worldSlice = new GpuBufferSlice(null, 0L, 64L);
-        var handSlice = new GpuBufferSlice(null, 0L, 64L);
+        var worldSlice = new GpuBufferSlice(null, 0, 64);
+        var handSlice = new GpuBufferSlice(null, 0, 64);
         var worldMatrix = new Matrix4f().perspective(1.0f, 1.8f, 0.05f, 1000.0f);
         var handMatrix = new Matrix4f().perspective(1.3f, 1.8f, 0.05f, 100.0f);
         uploaded(world, worldMatrix, worldSlice);
@@ -130,7 +130,7 @@ class ProjectionCacheReturnTest {
 
     @Test
     void cacheHitWithoutObservedUploadDoesNotInventAProjection() throws Exception {
-        var slice = new GpuBufferSlice(null, 0L, 64L);
+        var slice = new GpuBufferSlice(null, 0, 64);
         cacheHit(bufferCallbacks(), slice);
         assertNull(ProjectionMatrixTracker.lookup(slice));
     }
@@ -138,7 +138,7 @@ class ProjectionCacheReturnTest {
     @Test
     void failedUploadRevokesProofInsteadOfRestoringTheOldMatrix() throws Exception {
         Object callbacks = bufferCallbacks();
-        var slice = new GpuBufferSlice(null, 0L, 64L);
+        var slice = new GpuBufferSlice(null, 0, 64);
         var successful = new Matrix4f().perspective(1.0f, 1.8f, 0.05f, 100.0f);
         uploaded(callbacks, successful, slice);
         createdWithoutSuccessfulReturn(callbacks, new Matrix4f().zero());
@@ -156,8 +156,8 @@ class ProjectionCacheReturnTest {
     @Test
     void failedUploadRevokesOnlyThatBufferInstance() throws Exception {
         Object first = bufferCallbacks(), second = bufferCallbacks();
-        var firstSlice = new GpuBufferSlice(null, 0L, 64L);
-        var secondSlice = new GpuBufferSlice(null, 0L, 64L);
+        var firstSlice = new GpuBufferSlice(null, 0, 64);
+        var secondSlice = new GpuBufferSlice(null, 0, 64);
         var firstMatrix = new Matrix4f().perspective(1.0f, 1.8f, 0.05f, 100.0f);
         var secondMatrix = new Matrix4f().perspective(1.3f, 1.8f, 0.05f, 1000.0f);
         uploaded(first, firstMatrix, firstSlice);
@@ -175,8 +175,8 @@ class ProjectionCacheReturnTest {
     @Test
     void differentCachedSliceCannotBorrowAnOldBuffersMatrix() throws Exception {
         Object callbacks = bufferCallbacks();
-        var uploadedSlice = new GpuBufferSlice(null, 0L, 64L);
-        var unobservedSlice = new GpuBufferSlice(null, 0L, 64L);
+        var uploadedSlice = new GpuBufferSlice(null, 0, 64);
+        var unobservedSlice = new GpuBufferSlice(null, 0, 64);
         uploaded(callbacks, new Matrix4f(), uploadedSlice);
         cacheHit(callbacks, unobservedSlice);
         assertNull(ProjectionMatrixTracker.lookup(unobservedSlice));
@@ -184,7 +184,7 @@ class ProjectionCacheReturnTest {
 
     @Test
     void revokingAndReestablishingProofReusesTheAssociationAndMatrixStorage() throws Exception {
-        var slice = new GpuBufferSlice(null, 0L, 64L);
+        var slice = new GpuBufferSlice(null, 0, 64);
         var initial = new Matrix4f().perspective(1.0f, 1.8f, 0.05f, 100.0f);
         ProjectionMatrixTracker.remember(slice, initial);
         Field associations = ProjectionMatrixTracker.class.getDeclaredField("ASSOCIATIONS");

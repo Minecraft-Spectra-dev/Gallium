@@ -11,16 +11,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class LateReplayExecutionTest {
     @Test
-    void headGateMigratesOnly12111And261ACAndIgnoresBackendOrdering() {
+    void headGateMigratesSupportedAdaptersAndIgnoresBackendOrdering() {
         for (HookCapabilityState backend : HookCapabilityState.values()) {
             ModeCapability ready = new ModeCapability(HookCapabilityState.ENABLED,
                     HookCapabilityState.ENABLED, HookCapabilityState.ENABLED,
                     HookCapabilityState.ENABLED, backend);
-            assertFalse(SuperResolutionCompat.selectsLateReplayAtHead(true, CaptureMode.B, true, ready));
             assertFalse(SuperResolutionCompat.selectsLateReplayAtHead(false, CaptureMode.A, true, ready));
             assertFalse(SuperResolutionCompat.selectsLateReplayAtHead(true, CaptureMode.UNKNOWN, true, ready));
-            for (CaptureMode mode : List.of(CaptureMode.A, CaptureMode.C)) {
-                //#if MC==1_21_11 || MC==1_26_01
+            for (CaptureMode mode : List.of(CaptureMode.A, CaptureMode.B, CaptureMode.C)) {
+                //#if MC==1_21_01 || MC==1_21_11 || MC>=1_26_01
                 assertTrue(SuperResolutionCompat.selectsLateReplayAtHead(true, mode, true, ready));
                 //#else
                 //$$ assertFalse(SuperResolutionCompat.selectsLateReplayAtHead(true, mode, true, ready));

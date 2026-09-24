@@ -6,6 +6,11 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.opengl.DirectStateAccess;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+//#if MC<1_26_02
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import cn.spectra.gallium.glowoutline.capture.ModernMaskBounds;
+//#endif
 
 /**
  * Fixes a vanilla blit-coordinate bug in {@code GlCommandEncoder.copyTextureToTexture}:
@@ -32,6 +37,28 @@ import org.spongepowered.asm.mixin.injection.At;
 //$$ @Mixin(GlCommandEncoder.class)
 //#endif
 public class GlCommandEncoderMixin {
+
+    //#if MC<1_26_02
+    @Inject(method = "drawFromBuffers", at = @At("HEAD"))
+    private void galliumObserveNativeDraw(CallbackInfo callback) {
+        ModernMaskBounds.nativeDraw();
+        //#if MC==1_26_01
+        cn.spectra.gallium.glowoutline.capture.NativeMaskSeed.beforeNativeDraw();
+        //#endif
+        //#if MC>=1_21_06 && MC<1_26_02
+        cn.spectra.gallium.glowoutline.shader.NativeGlowInstances.beforeNativeDraw();
+        //#endif
+    }
+
+
+    @WrapOperation(method = "finishRenderPass", at = @At(value = "INVOKE",
+            target = "Lcom/mojang/blaze3d/opengl/GlStateManager;_glBindFramebuffer(II)V", remap = false))
+    private void galliumDeferFramebufferUnbind(int target, int framebuffer, Operation<Void> original) {
+        if (!cn.spectra.gallium.glowoutline.capture.SequentialFramebufferScope.deferUnbind(target, framebuffer)) {
+            original.call(target, framebuffer);
+        }
+    }
+    //#endif
 
     @WrapOperation(method = "copyTextureToTexture",
             expect = 1,

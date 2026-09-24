@@ -66,7 +66,8 @@ import org.jspecify.annotations.Nullable;
  * is written to it (color writes disabled, no clear). Reading from
  * {@code sceneDepthTarget} (already a copy of {@code srcDepth}) avoids a read-from-and-write-to
  * {@code mask.depth} hazard on the same texture. Independent masks share one pooled result via
- * depth copies. Ordinary shared-mask reuse on 1.21.11 and 26.1 reruns this existing pass before
+ * depth copies. The validated 1.21.8 shared path retains one immutable pooled snapshot per frame.
+ * Ordinary shared-mask reuse on 1.21.11 and 26.1 reruns this existing pass before
  * each applicable world state, so pooling work can scale with capture count while mask allocation
  * remains fixed.
  *
@@ -130,7 +131,7 @@ import org.jspecify.annotations.Nullable;
 //$$         return type == ShaderType.VERTEX ? VERTEX_SHADER
 //$$                 : type == ShaderType.FRAGMENT ? FRAGMENT_SHADER : null;
 //$$     }
-
+//$$
 //$$
 //$$     public static void precompile() {
 //$$         try {
@@ -351,7 +352,7 @@ public final class DepthMinPoolPipeline {
 //$$             Identifier.fromNamespaceAndPath("gallium", "internal/depth_minpool");
 //#else
 //$$     private static final ResourceLocation SHADER_ID =
-//$$             ResourceLocation.fromNamespaceAndPath("gallium", "internal/depth_minpool");
+//$$             net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("gallium", "internal/depth_minpool");
 //#endif
 //$$
 //$$     private static final String VERTEX_SHADER = """
@@ -472,6 +473,10 @@ public final class DepthMinPoolPipeline {
 //$$                     destDepthView, OptionalDouble.of(1.0))) {
 //$$                 pass.setPipeline(pipeline);
 //$$                 SamplerHelper.bindClampToEdge(pass, "Source", srcDepthView, FilterMode.NEAREST);
+//#if MC<1_21_09
+//$$                 // This backend binds a VAO even for gl_VertexID-only shaders.
+//$$                 pass.setVertexBuffer(0, RenderSystem.getQuadVertexBuffer());
+//#endif
 //$$                 pass.draw(0, 3);
 //$$             }
 //$$             return true;
