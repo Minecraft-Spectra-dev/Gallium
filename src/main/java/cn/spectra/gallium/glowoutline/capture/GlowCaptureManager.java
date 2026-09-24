@@ -937,7 +937,7 @@ public final class GlowCaptureManager {
             //$$ // TextureTarget. A sampled transfer preserves depth without requiring matching
             //$$ // depth-blit formats. Extents were validated above; this is a 1:1 copy.
             //$$ if (IrisCompat.isShaderActive()
-            //$$         && net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("super_resolution")) {
+            //$$         && cn.spectra.gallium.platform.PlatformServices.isModLoaded("super_resolution")) {
             //$$     sceneDepthReady = cn.spectra.gallium.glowoutline.shader.DepthResamplePipeline.resample(
             //$$             encoder, mainTarget.getDepthTextureView(), destination.getColorTextureView(),
             //$$             destination.getDepthTextureView());

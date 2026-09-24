@@ -723,14 +723,9 @@ public final class SrShaderPackResolver {
 
         private static boolean isSuperResolutionInstalled(ClassLoader loader) {
             try {
-                Class<?> fabricLoader = Class.forName(
-                        "net.fabricmc.loader.api.FabricLoader", false, loader);
-                Object instance = fabricLoader.getMethod("getInstance").invoke(null);
-                Object result = fabricLoader.getMethod("isModLoaded", String.class)
-                        .invoke(instance, "super_resolution");
-                if (result instanceof Boolean installed) return installed;
+                return cn.spectra.gallium.platform.PlatformServices.isModLoaded("super_resolution");
             } catch (Throwable ignored) {
-                // Unit tests and nonstandard launchers may not expose Fabric's singleton.
+                // Unit tests and nonstandard launchers may not expose the loader service.
             }
             return classPresent(PREPROCESSOR, loader) || classPresent(SR_API, loader);
         }

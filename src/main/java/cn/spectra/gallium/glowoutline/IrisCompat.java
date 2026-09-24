@@ -10,7 +10,7 @@ import java.util.function.IntSupplier;
 //#if MC>=1_26_02
 //$$ import com.mojang.blaze3d.systems.RenderSystem;
 //#endif
-import net.fabricmc.loader.api.FabricLoader;
+import cn.spectra.gallium.platform.PlatformServices;
 
 /**
  * Iris compatibility shim using cached MethodHandles for hot-path queries.
@@ -57,7 +57,7 @@ public final class IrisCompat {
     }
 
     static {
-        IRIS_LOADED = FabricLoader.getInstance().isModLoaded("iris");
+        IRIS_LOADED = PlatformServices.isModLoaded("iris");
 
         BooleanSupplier shaderActive = () -> false;
         BooleanSupplier shadowPass = () -> false;

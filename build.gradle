@@ -1,78 +1,74 @@
 plugins {
     id 'base'
     id 'maven-publish'
-    id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
-    id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
-    id 'com.replaymod.preprocess' version 'c5abb4fb12'
+    id 'dev.architectury.loom-no-remap' version "${loom_version}" apply false
+    id 'dev.architectury.loom-remap' version "${loom_version}" apply false
+    id 'com.replaymod.preprocess' version '2441400cbf'
+}
+
+subprojects {
+    def target = gradle.ext.galliumTargets[project.name]
+    ext.minecraft_line = target.minecraftLine
+    ext.mod_loader = target.loader
 }
 
 preprocess {
     strictExtraMappings = false
 
-    def mc12101 = createNode('1.21.1', 1_21_01, 'mojang')
-    def mc12103 = createNode('1.21.3', 1_21_03, 'mojang')
-    def mc12104 = createNode('1.21.4', 1_21_04, 'mojang')
-    def mc12105 = createNode('1.21.5', 1_21_05, 'mojang')
-    def mc12108 = createNode('1.21.8', 1_21_08, 'mojang')
-    def mc12110 = createNode('1.21.10', 1_21_10, 'mojang')
-    def mc12111 = createNode('1.21.11', 1_21_11, 'mojang')
-    def mc26010 = createNode('26.1', 1_26_01, 'mojang')
-    def mc26020 = createNode('26.2', 1_26_02, 'mojang')
-
-    mc26010.link(mc26020, null)
-    mc26010.link(mc12111, null)
-    mc12111.link(mc12110, null)
-    mc12110.link(mc12108, null)
-    mc12108.link(mc12105, null)
-    mc12105.link(mc12104, null)
-    mc12104.link(mc12103, null)
-    mc12103.link(mc12101, null)
-
-    for (final def node in getNodes()) {
-        findProject(node.project).ext.mcVersion = node.mcVersion
+    def nodes = [:]
+    gradle.ext.galliumTargets.each { String name, target ->
+        int mcVersion = encodeMinecraftLine(target.minecraftLine)
+        nodes[name] = createNode(name, mcVersion, 'mojang')
+        project(":${name}").ext.mcVersion = mcVersion
     }
+    def fabricTargets = gradle.ext.galliumTargets.findAll { name, target -> target.loader == 'fabric' }
+            .keySet().sort { a, b -> encodeMinecraftLine(a) <=> encodeMinecraftLine(b) }
+    fabricTargets.collate(2, 1, false).each { pair -> nodes[pair[0]].link(nodes[pair[1]], null) }
+    gradle.ext.galliumTargets.findAll { name, target -> target.loader != 'fabric' }.each { name, target ->
+        nodes[target.minecraftLine].link(nodes[name], null)
+    }
+}
+
+// Loader variants share Mojang names within a Minecraft version.
+// Keep conditional preprocessing without remapping loader-specific overloads.
+gradle.projectsEvaluated {
+    def core = file('versions/mainProject').text.trim()
+    def graph = extensions.getByName('preprocess').getRootNode(core)
+    subprojects.each { target ->
+        def node = graph.findNode(target.name)
+        if (node.project != core) {
+            def link = node.links.find { it.first.findNode(core) != null } ?: graph.findParent(node)
+            if (node.mcVersion == link.first.mcVersion && node.mappings == 'mojang'
+                    && link.first.mappings == 'mojang' && link.second.first == null) {
+                target.tasks.withType(com.replaymod.gradle.preprocess.PreprocessTask).configureEach {
+                    sourceMappings = null
+                    destinationMappings = null
+                    intermediateMappingsName.unset()
+                }
+            }
+        }
+    }
+}
+
+static int encodeMinecraftLine(String line) {
+    def parts = line.tokenize('.').collect { it as int }
+    if (parts[0] == 1) return 10_000 + parts[1] * 100 + (parts.size() > 2 ? parts[2] : 0)
+    return 10_000 + parts[0] * 100 + parts[1]
 }
 
 tasks.named('build') {
     dependsOn 'buildAndGather'
 }
 
-tasks.register('buildAndGather') {
+tasks.register('buildAndGather', Sync) {
     group = 'build'
-    description = 'Builds all versions and gathers them into root build/libs'
+    description = 'Builds the declared loader/version matrix and gathers its production jars'
+    into layout.buildDirectory.dir('libs')
+    duplicatesStrategy = DuplicatesStrategy.FAIL
 
-    subprojects {
-        dependsOn project.tasks.named('build').get()
-    }
-
-    doLast {
-        def rootBuildLibs = rootProject.layout.buildDirectory.dir('libs').get().asFile
-        rootBuildLibs.mkdirs()
-
-        subprojects {
-            def subprojectLibs = project.layout.buildDirectory.dir('libs').get().asFile
-
-            def minecraftDep = project.findProperty("minecraft_dependency")?.toString() ?: project.name
-            def versionSuffix = convertDependencyToSuffix(minecraftDep)
-
-            copy {
-                from(subprojectLibs) {
-                    include '*.jar'
-                    exclude '*-dev.jar', '*-sources.jar', '*-shadow.jar'
-                }
-                into rootBuildLibs
-
-                rename { filename ->
-                    def baseName = filename.replaceAll(/\.jar$/, '')
-                    if (!baseName.contains("-mc")) {
-                        return "${baseName}-mc${versionSuffix}.jar"
-                    }
-                    return filename
-                }
-
-                duplicatesStrategy = DuplicatesStrategy.INCLUDE
-            }
-        }
+    subprojects.each { target ->
+        dependsOn target.tasks.named('build')
+        from target.ext.productionJar.flatMap { it.archiveFile }
     }
 }
 

@@ -1,0 +1,49 @@
+// Fabric-only dependencies and metadata. Common game code must not import Fabric APIs.
+configurations {
+    if (!project.unobfuscated) {
+        modRuntimeOnly.exclude group: 'net.fabricmc', module: 'fabric-loader'
+    }
+}
+
+dependencies {
+    def fabricDependency = { String coordinate ->
+        def dependency = project.unobfuscated ? implementation(coordinate) : modImplementation(coordinate)
+        if (dependency instanceof ModuleDependency && dependency.name != 'fabric-loader') {
+            dependency.exclude group: 'net.fabricmc', module: 'fabric-loader'
+        }
+    }
+    fabricDependency "net.fabricmc:fabric-loader:${project.loader_version}"
+    fabricDependency "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+}
+
+processResources {
+    exclude 'META-INF/neoforge.mods.toml', 'META-INF/mods.toml', 'gallium-neoforge.mixins.json'
+    inputs.property 'loader', 'fabric'
+    inputs.property 'minecraftDependency', project.minecraft_dependency
+    inputs.property 'sodiumConfigEntrypoint', project.mcVersion >= 1_21_11
+    filesMatching('fabric.mod.json') {
+        expand(
+            description: project.mod_description,
+            homepage: project.mod_homepage,
+            id: project.mod_id,
+            name: project.mod_name,
+            license: project.mod_license,
+            version: project.mod_version,
+            minecraft_dependency: project.minecraft_dependency,
+            java_version: project.javaCompatibility.majorVersion,
+            sources: project.mod_sources
+        )
+    }
+    doLast {
+        if (project.mcVersion < 1_21_11) {
+            def metadataFile = new File(destinationDir, 'fabric.mod.json')
+            def metadata = new groovy.json.JsonSlurper().parse(metadataFile, 'UTF-8')
+            metadata.entrypoints.remove('sodium:config_api_user')
+            metadataFile.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(metadata)), 'UTF-8')
+        }
+    }
+    doFirst {
+        // processResources is incremental; remove metadata from the previous core loader.
+        delete new File(destinationDir, 'META-INF/neoforge.mods.toml'), new File(destinationDir, 'META-INF/mods.toml'), new File(destinationDir, 'gallium-neoforge.mixins.json')
+    }
+}

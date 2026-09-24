@@ -1,37 +1,33 @@
-// project.mcVersion is the integer encoding declared in root build.gradle's
-// preprocess block. Format: <major:1><minor:2><patch:2>, always 5 digits.
-// Mojang dropped the leading "1." at MC 26, but we keep the implicit "1."
-// in our encoding so all integers stay 5 digits and comparisons stay
-// monotonic 鈥?e.g. MC "26.1" is encoded as 1_26_01 (= 12601), NOT 26_01_00.
+// MC is the monotonic version-line encoding from the shared preprocessor graph.
 final int mcVersion = project.mcVersion
 final boolean unobfuscated = mcVersion >= 1_26_00
+ext.unobfuscated = unobfuscated
+ext.set('loom.platform', project.mod_loader)
 
 apply plugin: 'maven-publish'
-apply plugin: unobfuscated ? 'net.fabricmc.fabric-loom' : 'net.fabricmc.fabric-loom-remap'
+apply plugin: unobfuscated ? 'dev.architectury.loom-no-remap' : 'dev.architectury.loom-remap'
 apply plugin: 'com.replaymod.preprocess'
 
-configurations {
-    // On <1_26_00 (loom-remap mode) CFM-style remap pulls fabric-loader as a transitive
-    // mod dep, which then double-loads at runtime. Excluding it from modRuntimeOnly
-    // keeps the dev runtime clean. On 26.1+ Loom never transitively pulls a second
-    // copy, so no exclude is needed 鈥?and excluding from runtimeClasspath would strip
-    // KnotClient from :runClient's launch classpath.
-    if (!unobfuscated) {
-        modRuntimeOnly.exclude group: 'net.fabricmc', module: 'fabric-loader'
+preprocess {
+    vars.put('MC', mcVersion)
+    ['fabric', 'neoforge', 'forge'].each { loader ->
+        vars.put(loader.toUpperCase(Locale.ROOT), project.mod_loader == loader ? 1 : 0)
     }
 }
 
 version = project.mod_version
 group = project.maven_group
+ext.productionJar = tasks.named(unobfuscated ? 'jar' : 'remapJar')
 
 base {
-    archivesName = project.archives_base_name
+    archivesName = "${project.archives_base_name}-${project.mod_loader}-mc${rootProject.convertDependencyToSuffix(project.minecraft_dependency)}"
 }
 
 repositories {
     maven {
-        name = "Modrinth"
-        url = "https://api.modrinth.com/maven"
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
     }
 }
 
@@ -52,26 +48,16 @@ dependencies {
         mappings loom.officialMojangMappings()
     }
 
-    // from https://github.com/TISUnion/Carpet-TIS-Addition/blob/master/common.gradle#L41-L54
-    def processDependency = { dep ->
-        // https://github.com/FabricMC/fabric-loader/issues/783
-        if (dep instanceof ModuleDependency) {
-            if (!(dep.group == 'net.fabricmc' && dep.name == 'fabric-loader')) {
-                dep.exclude group: 'net.fabricmc', module: 'fabric-loader'
-            }
+    if (project.mod_loader == 'fabric') {
+        if (unobfuscated) {
+            implementation "maven.modrinth:sodium:${project.sodium_dependency}"
+        } else {
+            modImplementation "maven.modrinth:sodium:${project.sodium_dependency}"
         }
-        return dep
     }
-    def autoImplementation = { Object... args -> processDependency(unobfuscated ? implementation(*args) : modImplementation(*args)) }
-
-    autoImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    autoImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    autoImplementation "maven.modrinth:sodium:${project.sodium_dependency}"
-
-    // Keep the optional 0.8 config UI compilable while Iris on 1.21.1 requires
-    // Sodium 0.6 at runtime. This dependency must not enter the runtime classpath.
-    if (mcVersion == 1_21_01) {
-        modCompileOnly "maven.modrinth:sodium:mc1.21.1-0.8.13-fabric"
+    // Sodium 0.8's optional config interface must not replace 0.6 at runtime.
+    if (mcVersion == 1_21_01 && project.mod_loader == 'fabric') {
+        modCompileOnly "maven.modrinth:sodium:mc1.21.1-0.8.13-${project.mod_loader}"
     }
 
     // Annotation-only (CLASS retention). MC 1.21.11+ pulls jspecify in transitively;
@@ -82,6 +68,26 @@ dependencies {
     testImplementation platform("org.junit:junit-bom:6.1.3")
     testImplementation "org.junit.jupiter:junit-jupiter"
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+ext.javaCompatibility = JAVA_COMPATIBILITY
+apply from: rootProject.file("gradle/loaders/${project.mod_loader}.gradle")
+
+// Inactive platform files are preprocessed to stubs so switching the core version
+// preserves their source; exclude those stubs from compilation and source artifacts.
+sourceSets.main.java {
+    ['fabric', 'neoforge', 'forge'].findAll { it != project.mod_loader }.each { loader ->
+        exclude "cn/spectra/gallium/platform/${loader}/**"
+    }
+}
+
+sourceSets.main.resources {
+    exclude 'META-INF/mods.toml'
+    if (project.mod_loader == 'fabric') {
+        exclude 'META-INF/neoforge.mods.toml', 'gallium-neoforge.mixins.json'
+    } else {
+        exclude 'fabric.mod.json'
+    }
 }
 
 test {
@@ -230,10 +236,22 @@ if (!srMainlineMinecraft) {
     ACTIVE_STUB_MIXINS += STUB_MIXIN_CLASSES_NON_SR_MAINLINE
 }
 
+// Shared run/ may contain SR builds for a different Minecraft line.
+// Disable only discovery of SR on unsupported Fabric development targets; shader definitions remain readable.
+def srRunOverride = providers.gradleProperty('galliumLoadSr').orNull
+if (srRunOverride != null && !(srRunOverride in ['true', 'false'])) {
+    throw new GradleException('galliumLoadSr must be true or false')
+}
+boolean disableSrForClient = project.mod_loader == 'fabric'
+        && (srRunOverride == null ? !srMainlineMinecraft : srRunOverride == 'false')
+
 loom {
     runConfigs.configureEach {
         ideConfigGenerated = true
         runDir '../../run'
+        if (name == 'client' && disableSrForClient) {
+            vmArg '-Dfabric.debug.disableModIds=super_resolution'
+        }
     }
 
     if (!unobfuscated) {
@@ -258,35 +276,6 @@ processResources {
     // Declare the stub list as an input so changes to it (or to the mcVersion
     // gating that picks the list) invalidate the task and re-run the strip.
     inputs.property "stubMixins", ACTIVE_STUB_MIXINS
-
-    // The Sodium config_api_user entrypoint targets net.caffeinemc.mods.sodium.api.config,
-    // which is the Sodium 0.8.x configuration API. Sodium 0.6.x / 0.7.x (used on
-    // 1.21.3-1.21.10) don't ship it. On 1.21.1 the entrypoint is NOT emitted even
-    // though GalliumSodiumConfig is compiled against the compile-only 0.8 API
-    // (the dev runtime uses 0.6); instead Gallium.onInitializeClient reflectively calls
-    // ConfigManager.registerConfigEntryPoint() when Sodium 0.8 is detected at runtime.
-    // This prevents NoClassDefFoundError on Sodium 0.6 (ConfigEntryPoint interface absent).
-    // Strip on versions without the 0.8 API to keep fabric.mod.json valid; the
-    // leading comma + interpolation lives in the template.
-    final String sodiumConfigEntrypoint = (mcVersion >= 1_21_11) ? ''',
-		"sodium:config_api_user": [
-			"cn.spectra.gallium.compat.sodium.GalliumSodiumConfig"
-		]''' : ''
-
-    filesMatching("fabric.mod.json") {
-        expand(
-                "description": project.mod_description,
-                "homepage": project.mod_homepage,
-                "id": project.mod_id,
-                "name": project.mod_name,
-                "license": project.mod_license,
-                "version": project.mod_version,
-                "minecraft_dependency": project.minecraft_dependency,
-                "java_version": JAVA_COMPATIBILITY.majorVersion,
-                "sources": project.mod_sources,
-                "sodium_config_entrypoint": sodiumConfigEntrypoint
-        )
-    }
 
     filesMatching(MIXIN_CONFIG_PATHS) {
         filter { s ->
@@ -390,7 +379,7 @@ jar {
 publishing {
     publications {
         create('mavenJava', MavenPublication) {
-            artifactId = base.archivesName.get()
+            artifactId = "${project.archives_base_name}-${project.mod_loader}-mc${project.minecraft_version}"
             from components.java
         }
     }
@@ -398,3 +387,5 @@ publishing {
     repositories {
     }
 }
+
+apply from: rootProject.file('gradle/verify-jar.gradle')

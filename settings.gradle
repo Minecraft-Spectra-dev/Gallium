@@ -1,10 +1,29 @@
 import groovy.json.JsonSlurper
 
 pluginManagement {
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == 'com.replaymod.preprocess') {
+                useModule("com.github.Fallen-Breath:preprocessor:${requested.version}")
+            }
+        }
+    }
     repositories {
+        maven {
+            name = 'Architectury'
+            url = 'https://maven.architectury.dev/'
+        }
         maven {
             name = 'Fabric'
             url = 'https://maven.fabricmc.net/'
+        }
+        maven {
+            name = 'Forge'
+            url = 'https://maven.minecraftforge.net/'
+        }
+        maven {
+            name = 'NeoForge'
+            url = 'https://maven.neoforged.net/releases/'
         }
         maven {
             name = 'Jitpack'
@@ -13,23 +32,30 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
-    resolutionStrategy {
-        eachPlugin {
-            switch (requested.id.id) {
-                case "com.replaymod.preprocess": {
-                    useModule("com.github.Fallen-Breath:preprocessor:${requested.version}")
-                    break
-                }
-            }
+}
+
+def matrix = new JsonSlurper().parseText(file('settings.json').getText('UTF-8')).versions
+if (!(matrix instanceof Map) || matrix.isEmpty()) {
+    throw new GradleException('settings.json must declare a nonempty Minecraft version -> loader list matrix')
+}
+def targets = [:]
+matrix.each { String minecraftLine, loaders ->
+    if (!(minecraftLine ==~ /(?:1\.)?\d+\.\d+(?:\.\d+)?/)
+            || !(loaders instanceof List) || loaders.isEmpty()
+            || loaders.toSet().size() != loaders.size()
+            || !loaders.contains('fabric')) {
+        throw new GradleException("Invalid target matrix entry: ${minecraftLine} = ${loaders}; every line needs its Fabric backbone")
+    }
+    loaders.each { String loader ->
+        if (!(loader in ['fabric', 'forge', 'neoforge']) || (loader == 'forge' && minecraftLine != '1.20.1')) {
+            throw new GradleException("Unsupported loader target: ${minecraftLine} / ${loader}")
         }
+        String targetName = loader == 'fabric' ? minecraftLine : "${minecraftLine}-${loader}"
+        include(":${targetName}")
+        def descriptor = project(":${targetName}")
+        descriptor.projectDir = file("versions/${targetName}")
+        descriptor.buildFileName = '../../common.gradle'
+        targets[targetName] = [minecraftLine: minecraftLine, loader: loader]
     }
 }
-
-def settings = new JsonSlurper().parseText(file('settings.json').text)
-for (String version : settings.versions) {
-    include(":$version")
-
-    def proj = project(":$version")
-    proj.projectDir = file("versions/$version")
-    proj.buildFileName = "../../common.gradle"
-}
+gradle.ext.galliumTargets = targets

@@ -26,7 +26,9 @@ jobs:
       - name: setup jdk
         uses: actions/setup-java@v4
         with:
-          java-version: '25'
+          java-version: |
+            21
+            25
           distribution: 'microsoft'
 
       - name: Setup Gradle
@@ -37,7 +39,7 @@ jobs:
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
       - name: build
-        run: ./gradlew build
+        run: ./gradlew build -Dorg.gradle.java.installations.fromEnv=JAVA_HOME_21_X64,JAVA_HOME_25_X64
       - name: capture build artifacts
         uses: actions/upload-artifact@v4
         with:

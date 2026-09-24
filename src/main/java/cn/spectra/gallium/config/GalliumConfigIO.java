@@ -9,7 +9,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import net.fabricmc.loader.api.FabricLoader;
+import cn.spectra.gallium.platform.PlatformServices;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -32,7 +32,7 @@ public final class GalliumConfigIO {
     private GalliumConfigIO() {}
 
     private static Path configPath() {
-        return FabricLoader.getInstance().getConfigDir().resolve(FILE_NAME);
+        return PlatformServices.configDirectory().resolve(FILE_NAME);
     }
 
     public static void load() {

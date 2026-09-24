@@ -1,0 +1,77 @@
+import groovy.json.JsonSlurper
+import java.nio.charset.StandardCharsets
+import java.util.zip.ZipFile
+
+// Validate the actual distributable, including remapping and resource transforms.
+tasks.register('verifyProductionJar') {
+    group = 'verification'
+    description = 'Checks loader isolation, metadata and registered mixins in the production jar'
+    dependsOn project.ext.productionJar
+    inputs.file(project.ext.productionJar.flatMap { it.archiveFile })
+    doLast {
+        File artifact = project.ext.productionJar.get().archiveFile.get().asFile
+        def require = { boolean condition, String message ->
+            if (!condition) throw new GradleException("${artifact.name}: ${message}")
+        }
+        new ZipFile(artifact).withCloseable { zip ->
+            def names = zip.entries().collect { it.name } as Set
+            def text = { String name ->
+                def entry = zip.getEntry(name)
+                require(entry != null, "missing ${name}")
+                zip.getInputStream(entry).getText('UTF-8')
+            }
+            if (project.mod_loader == 'fabric') {
+                require(!names.contains('META-INF/neoforge.mods.toml') && !names.contains('gallium-neoforge.mixins.json'), 'NeoForge metadata leaked into Fabric')
+                def metadata = new JsonSlurper().parseText(text('fabric.mod.json'))
+                require(metadata.id == project.mod_id && metadata.version == project.mod_version, 'incorrect mod identity')
+                require(metadata.environment == 'client', 'Fabric environment must be client')
+                require(metadata.depends.minecraft == project.minecraft_dependency, 'incorrect Minecraft range')
+                require(metadata.entrypoints.client == ['cn.spectra.gallium.platform.fabric.FabricEntrypoint'], 'incorrect Fabric entrypoint')
+                require(metadata.entrypoints.containsKey('sodium:config_api_user') == (project.mcVersion >= 1_21_11), 'incorrect Sodium entrypoint gating')
+            } else if (project.mod_loader == 'neoforge') {
+                require(!names.contains('fabric.mod.json'), 'Fabric metadata leaked into NeoForge')
+                String metadata = text('META-INF/neoforge.mods.toml')
+                Set<String> lines = metadata.readLines().collect { it.trim() } as Set
+                [
+                    'modLoader="javafml"',
+                    "modId=\"${project.mod_id}\"",
+                    "version=\"${project.mod_version}\"",
+                    "versionRange=\"[${project.minecraft_version}]\"",
+                    "versionRange=\"${project.neoforge_dependency}\"",
+                    "[modproperties.${project.mod_id}]",
+                    '"sodium:config_api_user"="cn.spectra.gallium.compat.sodium.GalliumSodiumConfig"',
+                    'config="gallium-glowoutline.mixins.json"'
+                ].each { expected -> require(lines.contains(expected.toString()), "missing NeoForge metadata: ${expected}") }
+                require(!metadata.contains('${'), 'unexpanded NeoForge metadata')
+                require(!(metadata =~ /modId\s*=\s*"(?:fabricloader|fabric-api|architectury)"/).find(), 'unexpected runtime loader/API requirement')
+            }
+            require(!names.contains('META-INF/mods.toml'), 'unexpected Forge metadata')
+            require(!names.any { it.endsWith('.jar') && (it.toLowerCase(Locale.ROOT).contains('sodium') || it.contains('preprocessor')) }, 'build/compile-only dependency was bundled')
+            names.findAll { it.endsWith('.class') }.each { String name ->
+                ['fabric', 'neoforge', 'forge'].findAll { it != project.mod_loader }.each { String other ->
+                    require(!name.startsWith("cn/spectra/gallium/platform/${other}/"), "inactive ${other} implementation: ${name}")
+                }
+                if (project.mod_loader == 'neoforge' && name.startsWith('cn/spectra/gallium/')) {
+                    String bytecode = new String(zip.getInputStream(zip.getEntry(name)).bytes, StandardCharsets.ISO_8859_1)
+                    require(!bytecode.contains('net/fabricmc/') && !bytecode.contains('net.fabricmc.'), "Fabric reference in ${name}")
+                }
+            }
+            def configs = ['gallium-glowoutline.mixins.json']
+            if (project.mod_loader == 'neoforge') configs += 'gallium-neoforge.mixins.json'
+            configs.each { config ->
+                def mixins = new JsonSlurper().parseText(text(config))
+                require(mixins.compatibilityLevel == "JAVA_${project.javaCompatibility.majorVersion}", 'incorrect Mixin Java compatibility')
+                require(!(mixins.mixins ?: []) && !(mixins.server ?: []), 'client mod contains non-client mixin registrations')
+                mixins.client.each { String mixin ->
+                    String path = "${mixins.package}.${mixin}".replace('.', '/') + '.class'
+                    require(names.contains(path), "missing registered mixin ${mixin}")
+                    String bytecode = new String(zip.getInputStream(zip.getEntry(path)).bytes, StandardCharsets.ISO_8859_1)
+                    require(bytecode.contains('Lorg/spongepowered/asm/mixin/Mixin;'), "registered mixin is a stub: ${mixin}")
+                }
+                if (mixins.refmap) require(names.contains(mixins.refmap), 'missing referenced refmap')
+            }
+            logger.lifecycle("Verified ${artifact.name}")
+        }
+    }
+}
+tasks.named('check') { dependsOn tasks.named('verifyProductionJar') }

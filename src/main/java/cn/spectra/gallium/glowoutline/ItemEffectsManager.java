@@ -24,11 +24,7 @@ import net.minecraft.resources.Identifier;
 //$$ import net.minecraft.resources.ResourceLocation;
 //#endif
 import net.minecraft.server.packs.resources.ResourceManager;
-//#if MC>=1_21_09
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
-//#else
-//$$ import net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener;
-//#endif
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -41,25 +37,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-//#if MC>=1_21_09
 public class ItemEffectsManager implements ResourceManagerReloadListener {
 
+    //#if MC>=1_21_09
     public static final Identifier RELOAD_ID = Identifier.fromNamespaceAndPath("gallium", "item_effects");
     private static final Identifier RESOURCE_PATH = Identifier.fromNamespaceAndPath("gallium", "item_effects.json");
-//#else
-//$$ // 1.21.6–1.21.8 register through ResourceManagerHelper, which wants an
-//$$ // IdentifiableResourceReloadListener. SimpleSynchronousResourceReloadListener
-//$$ // supplies both the sync onResourceManagerReload contract and getFabricId().
-//$$ public class ItemEffectsManager implements SimpleSynchronousResourceReloadListener {
-//$$
-//$$     public static final ResourceLocation RELOAD_ID = ResourceLocation.fromNamespaceAndPath("gallium", "item_effects");
-//$$     private static final ResourceLocation RESOURCE_PATH = ResourceLocation.fromNamespaceAndPath("gallium", "item_effects.json");
-//$$
-//$$     @Override
-//$$     public ResourceLocation getFabricId() {
-//$$         return RELOAD_ID;
-//$$     }
-//#endif
+    //#else
+    //$$ public static final ResourceLocation RELOAD_ID = ResourceLocation.fromNamespaceAndPath("gallium", "item_effects");
+    //$$ private static final ResourceLocation RESOURCE_PATH = ResourceLocation.fromNamespaceAndPath("gallium", "item_effects.json");
+    //#endif
 
     private static volatile List<ItemEffectRule> rules = List.of();
     private static volatile boolean active = false;

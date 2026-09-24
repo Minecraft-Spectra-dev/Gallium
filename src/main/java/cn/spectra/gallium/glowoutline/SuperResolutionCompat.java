@@ -29,7 +29,7 @@ import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.Snapsh
 import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.SrFramePlan;
 import cn.spectra.gallium.glowoutline.sr.streaming.SrStreamingCoordinator.WorldDomainSnapshot;
 import com.mojang.blaze3d.pipeline.RenderTarget;
-import net.fabricmc.loader.api.FabricLoader;
+import cn.spectra.gallium.platform.PlatformServices;
 import net.minecraft.client.Minecraft;
 
 import java.lang.reflect.Method;
@@ -1360,9 +1360,8 @@ public final class SuperResolutionCompat {
         // Minecraft lines. This is a compile-time property and therefore cannot be bypassed by a
         // misleading backport version string.
         if (!hasMainlineRenderingLayer()) return false;
-        if (!FabricLoader.getInstance().isModLoaded(MOD_ID)) return false;
-        String installedVersion = FabricLoader.getInstance().getModContainer(MOD_ID)
-                .map(container -> container.getMetadata().getVersion().getFriendlyString())
+        if (!PlatformServices.isModLoaded(MOD_ID)) return false;
+        String installedVersion = PlatformServices.modVersion(MOD_ID)
                 .orElse("");
         if (!isMainlineVersion(installedVersion)) {
             Gallium.LOGGER.info(

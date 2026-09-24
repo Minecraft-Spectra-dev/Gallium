@@ -17,8 +17,9 @@
 	"environment": "client",
 	"entrypoints": {
 		"client": [
-			"cn.spectra.gallium.Gallium"
-		]${sodium_config_entrypoint}
+			"cn.spectra.gallium.platform.fabric.FabricEntrypoint"
+		],
+        "sodium:config_api_user": ["cn.spectra.gallium.compat.sodium.GalliumSodiumConfig"]
 	},
 	"mixins": [
 		"gallium-glowoutline.mixins.json"
