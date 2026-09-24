@@ -1,0 +1,124 @@
+// Native NeoForge build: no Fabric API or Architectury API runtime dependency.
+repositories {
+    maven { url = 'https://maven.neoforged.net/releases/' }
+}
+def runtimeSodium = project.findProperty('neoforgeSodiumRuntime')?.toString()
+if (runtimeSodium != null && !(runtimeSodium in ['none', '0.6.13', '0.8.13'])) {
+    throw new GradleException("neoforgeSodiumRuntime must be none, 0.6.13 or 0.8.13 (received '${runtimeSodium}')")
+}
+dependencies {
+    // Preserve JarJar service metadata: NeoForge distributions are already Mojmap.
+    // The optional config API is compiled separately below, independent of this runtime.
+    if (runtimeSodium != 'none' && runtimeSodium != '0.8.13') {
+        String version = runtimeSodium == null ? project.sodium_dependency : "mc${project.minecraft_version}-${runtimeSodium}-neoforge"
+        runtimeOnly "maven.modrinth:sodium:${version}"
+    }
+    neoForge "net.neoforged:neoforge:${project.neoforge_version}"
+}
+
+// Sodium 0.8.13 ships its implementation/API in a nested, already-Mojmap jar.
+// Loom 1.17 strips NeoForge JarJar metadata when remapping the outer distribution,
+// so expose the inner jar explicitly on compileOnly, never on a runtime configuration.
+if (project.mcVersion == 1_21_01) {
+    def apiBundle = configurations.create('sodiumConfigApiBundle') {
+        canBeConsumed = false
+        transitive = false
+    }
+    dependencies.add(apiBundle.name, 'maven.modrinth:sodium:mc1.21.1-0.8.13-neoforge')
+    def apiJar = layout.buildDirectory.file('compile-only/sodium-config-api.jar')
+    def extractApi = tasks.register('extractSodiumConfigApi') {
+        inputs.files(apiBundle)
+        outputs.file(apiJar)
+        doLast {
+            new java.util.zip.ZipFile(apiBundle.singleFile).withCloseable { zip ->
+                def entries = zip.entries().findAll {
+                    it.name.startsWith('META-INF/jarjar/') && it.name.contains('sodium-neoforge-') && it.name.endsWith('-mod.jar')
+                }
+                if (entries.size() != 1) {
+                    throw new GradleException('Expected one nested Sodium implementation jar in the pinned 0.8.13 distribution')
+                }
+                File destination = apiJar.get().asFile
+                destination.parentFile.mkdirs()
+                destination.bytes = zip.getInputStream(entries[0]).bytes
+                new java.util.zip.ZipFile(destination).withCloseable { inner ->
+                    if (inner.getEntry('net/caffeinemc/mods/sodium/api/config/ConfigEntryPoint.class') == null) {
+                        throw new GradleException('The extracted Sodium jar does not contain its config API')
+                    }
+                }
+            }
+        }
+    }
+    dependencies.add('compileOnly', files(apiJar).builtBy(extractApi))
+    if (runtimeSodium == '0.8.13') {
+        // This distribution supplies an early-loading LIBRARY and a custom mod
+        // locator. Load the unmodified bundle through the real mods directory,
+        // not the later userdev classpath locator, so both services and the mod run.
+        def runtimeJar = rootProject.layout.projectDirectory.file('run/mods/sodium-neoforge-0.8.13+mc1.21.1.jar')
+        boolean stagedForRun = false
+        def prepareRuntime = tasks.register('prepareSodiumRuntime') {
+            inputs.files(apiBundle)
+            doLast {
+                File destination = runtimeJar.asFile
+                byte[] distribution = apiBundle.singleFile.bytes
+                if (destination.exists()) {
+                    if (!Arrays.equals(destination.bytes, distribution)) {
+                        throw new GradleException("Refusing to overwrite existing Sodium jar: ${destination}")
+                    }
+                } else {
+                    destination.parentFile.mkdirs()
+                    destination.bytes = distribution
+                    stagedForRun = true
+                }
+            }
+        }
+        def cleanupRuntime = tasks.register('cleanupSodiumRuntime') {
+            doLast {
+                File destination = runtimeJar.asFile
+                // Leave pre-existing or subsequently changed user files alone.
+                if (stagedForRun && destination.exists()
+                        && Arrays.equals(destination.bytes, apiBundle.singleFile.bytes)) {
+                    if (!destination.delete()) throw new GradleException("Could not remove staged Sodium jar: ${destination}")
+                }
+            }
+        }
+        tasks.matching { it.name == 'runClient' }.configureEach {
+            dependsOn prepareRuntime
+            finalizedBy cleanupRuntime
+        }
+    }
+
+}
+
+processResources {
+    exclude 'fabric.mod.json', 'META-INF/mods.toml'
+    inputs.property 'loader', 'neoforge'
+    inputs.property 'minecraftVersion', project.minecraft_version
+    inputs.property 'neoforgeDependency', project.neoforge_dependency
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand(
+            description: project.mod_description,
+            homepage: project.mod_homepage,
+            id: project.mod_id,
+            name: project.mod_name,
+            license: project.mod_license,
+            version: project.mod_version,
+            minecraft_version: project.minecraft_version,
+            neoforge_dependency: project.neoforge_dependency,
+            sources: project.mod_sources
+        )
+    }
+    filesMatching('gallium-neoforge.mixins.json') {
+        filter { line -> line.replace('{{COMPATIBILITY_LEVEL}}', "JAVA_${project.javaCompatibility.majorVersion}") }
+    }
+    doLast {
+        if (project.mcVersion != 1_21_01) {
+            File file = new File(destinationDir, 'gallium-neoforge.mixins.json')
+            def json = new groovy.json.JsonSlurper().parse(file, 'UTF-8')
+            json.client.remove('NeoForgeArmorLayerMixin')
+            file.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json)), 'UTF-8')
+        }
+    }
+    doFirst {
+        delete new File(destinationDir, 'fabric.mod.json'), new File(destinationDir, 'META-INF/mods.toml')
+    }
+}

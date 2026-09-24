@@ -154,7 +154,11 @@ package cn.spectra.gallium.glowoutline.shader;
 //$$         ResourceProvider provider = new SynthProvider(rm, coreLoc(jsonName + ".json"), jsonText,
 //$$                 anchorPack, rewrite, world);
 //$$         try {
+            //#if NEOFORGE
+//$$             return new ShaderInstance(provider, ResourceLocation.parse(jsonName), format);
+            //#else
 //$$             return new ShaderInstance(provider, jsonName, format);
+            //#endif
 //$$         } catch (Exception e) {
 //$$             Gallium.LOGGER.error("Failed to build 1.21.1 glow ShaderInstance '{}'", jsonName, e);
 //$$             return null;

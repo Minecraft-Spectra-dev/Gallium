@@ -113,6 +113,7 @@ public class HumanoidArmorLayerMixin {
 //$$     }
 //$$ }
 //#else
+//#if FABRIC
 //$$ // 1.21.1 (pre-1.21.2): no EquipmentLayerRenderer. HumanoidArmorLayer.renderArmorPiece reads
 //$$ // the slot item from the entity and draws armor in three passes inside the same private method:
 //$$ //   1. renderModel per ArmorMaterial.Layer  — base mesh, the silhouette source
@@ -143,7 +144,7 @@ public class HumanoidArmorLayerMixin {
 //$$ @Mixin(HumanoidArmorLayer.class)
 //$$ public class HumanoidArmorLayerMixin {
 //$$
-//$$     @WrapOperation(method = "renderArmorPiece", at = @At(value = "INVOKE",
+//$$     @WrapOperation(method = "renderArmorPiece(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/entity/EquipmentSlot;ILnet/minecraft/client/model/HumanoidModel;)V", at = @At(value = "INVOKE",
 //$$             target = "Lnet/minecraft/client/renderer/entity/layers/HumanoidArmorLayer;renderModel(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ILnet/minecraft/client/model/HumanoidModel;ILnet/minecraft/resources/ResourceLocation;)V"))
 //$$     private void galliumWrapArmorModel(HumanoidArmorLayer self, PoseStack poseStack, MultiBufferSource multiBufferSource,
 //$$                                        int light, HumanoidModel model, int color, ResourceLocation texture,
@@ -161,4 +162,7 @@ public class HumanoidArmorLayerMixin {
 //$$         }
 //$$     }
 //$$ }
+//#else
+//$$ public final class HumanoidArmorLayerMixin {}
+//#endif
 //#endif

@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "package": "cn.spectra.gallium.platform.neoforge.mixin",
+  "compatibilityLevel": "{{COMPATIBILITY_LEVEL}}",
+  "client": [
+    "NeoForgeArmorLayerMixin"
+  ],
+  "injectors": { "defaultRequire": 1 }
+}
